@@ -2,6 +2,6 @@
 
 int main()
 {
-	std::cout << "Hello CMake." << std::endl;
+	std::cout << "Hello Gal Language." << std::endl;
 	return 0;
 }

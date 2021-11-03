@@ -6,55 +6,44 @@
 #include <string>
 #include <cstdint>
 
-namespace yy
-{
-	struct location;
-}
-
 namespace gal
 {
 	/*! Type of the AST node */
-	enum class node_type
+	enum class ast_type
 	{
 		// todo: fill it!
-		node_expression,
-		node_integer,
-		node_number,
-		node_string,
-		node_boolean,
-	};
-
-	class ast_node
-	{
-	public:
-		ast_node() = default;
-
-		virtual ~ast_node() = 0;
-		ast_node(const ast_node&) = default;
-		ast_node(ast_node&&) = default;
-		ast_node& operator=(const ast_node&) = default;
-		ast_node& operator=(ast_node&&) = default;
-
-		/*! Returns the type of the node. */
-		constexpr virtual node_type get_type() = 0;
-
-		/*! Returns the textual representation. */
-		virtual std::string to_string() { return "ast_node"; }
+		expression_t,
+		integer_t,
+		number_t,
+		string_t,
+		boolean_t,
 	};
 
 	/*! Represents an expression. */
-	class ast_expression : public ast_node
+	class ast_expression
 	{
 	public:
-		std::string to_string() override { return "ast_expression"; }
+		ast_expression() = default;
+
+		virtual ~ast_expression() = 0;
+		ast_expression(const ast_expression&) = default;
+		ast_expression(ast_expression&&) = default;
+		ast_expression& operator=(const ast_expression&) = default;
+		ast_expression& operator=(ast_expression&&) = default;
+
+		/*! Returns the type of the node. */
+		constexpr virtual ast_type		  get_type() = 0;
+
+		/*! Returns the textual representation. */
+		[[nodiscard]] virtual std::string to_string() const noexcept { return "ast_expression"; }
 	};
 
 	/*! Represents a statement. */
 	class ast_statement : public ast_expression
 	{
 	public:
-		constexpr node_type get_type() override { return node_type::node_expression; }
-		std::string to_string() override { return "ast_statement"; }
+		constexpr ast_type		  get_type() override { return ast_type::expression_t; }
+		[[nodiscard]] std::string to_string() const noexcept override { return "ast_statement"; }
 	};
 
 	/*! Represents an integer. */
@@ -69,8 +58,8 @@ namespace gal
 	public:
 		constexpr explicit ast_integer(value_type value) : value_(value) {}
 
-		constexpr node_type get_type() override { return node_type::node_integer; }
-		std::string to_string() override;
+		constexpr ast_type		  get_type() override { return ast_type::integer_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
 	};
 
 	/*! Represents a double. */
@@ -85,8 +74,8 @@ namespace gal
 	public:
 		constexpr explicit ast_double(value_type value) : value_(value) {}
 
-		constexpr node_type get_type() override { return node_type::node_number; }
-		std::string to_string() override;
+		constexpr ast_type		  get_type() override { return ast_type::number_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
 	};
 
 	/*! Represents a string. */
@@ -101,8 +90,8 @@ namespace gal
 	public:
 		explicit ast_string(value_type value) : value_(std::move(value)) {}
 
-		constexpr node_type get_type() override { return node_type::node_string; }
-		std::string to_string() override;
+		constexpr ast_type		  get_type() override { return ast_type::string_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
 	};
 
 	/*! Represents a boolean. */
@@ -117,9 +106,9 @@ namespace gal
 	public:
 		constexpr explicit ast_boolean(value_type value) : value_(value) {}
 
-		constexpr node_type get_type() override { return node_type::node_boolean; }
-		std::string to_string() override;
+		constexpr ast_type		  get_type() override { return ast_type::boolean_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
 	};
-};
+}
 
 #endif//GAL_LANG_AST_NODE_HPP
