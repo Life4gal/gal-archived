@@ -13,11 +13,22 @@ namespace gal
 	{
 		// todo: fill it!
 		statement_t,
+
 		integer_t,
 		number_t,
 		string_t,
 		boolean_t,
+
+		identifier_t,
 	};
+
+	class ast_expression;
+	class ast_statement;
+	class ast_integer;
+	class ast_number;
+	class ast_string;
+	class ast_boolean;
+	class ast_identifier;
 
 	/*! Represents an expression. */
 	class ast_expression
@@ -63,7 +74,7 @@ namespace gal
 	};
 
 	/*! Represents a double. */
-	class ast_double final : public ast_expression
+	class ast_number final : public ast_expression
 	{
 	public:
 		using value_type = long double;
@@ -72,7 +83,7 @@ namespace gal
 		value_type value_;
 
 	public:
-		constexpr explicit ast_double(value_type value) : value_(value) {}
+		constexpr explicit ast_number(value_type value) : value_(value) {}
 
 		constexpr ast_expression_type get_type() override { return ast_expression_type::number_t; }
 		[[nodiscard]] std::string to_string() const noexcept override;
@@ -107,6 +118,19 @@ namespace gal
 		constexpr explicit ast_boolean(value_type value) : value_(value) {}
 
 		constexpr ast_expression_type get_type() override { return ast_expression_type::boolean_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
+	};
+
+	/*! Represents an identifier. */
+	class ast_identifier final : public ast_expression
+	{
+	private:
+		std::string name_;
+
+	public:
+		explicit ast_identifier(std::string name) : name_(std::move(name)) {}
+
+		constexpr ast_expression_type get_type() override { return ast_expression_type::identifier_t; }
 		[[nodiscard]] std::string to_string() const noexcept override;
 	};
 }// namespace gal

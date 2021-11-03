@@ -11,9 +11,9 @@ namespace gal
 		return std::string{"ast_integer("} + typeid(value_).name() + "): " + std::to_string(value_);
 	}
 
-	std::string ast_double::to_string() const noexcept
+	std::string ast_number::to_string() const noexcept
 	{
-		return std::string{"ast_double("} + typeid(value_).name() + "): " + std::to_string(value_);
+		return std::string{"ast_number("} + typeid(value_).name() + "): " + std::to_string(value_);
 	}
 
 	std::string ast_string::to_string() const noexcept
@@ -24,5 +24,10 @@ namespace gal
 	std::string ast_boolean::to_string() const noexcept
 	{
 		return std::string{"ast_boolean("} + typeid(value_).name() + "): " + std::to_string(value_);
+	}
+
+	std::string ast_identifier::to_string() const noexcept
+	{
+		return std::string{"ast_identifier: "} + name_;
 	}
 }
