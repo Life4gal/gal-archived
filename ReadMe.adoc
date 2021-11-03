@@ -11,7 +11,7 @@ gal language (WIP)
 == Requirements
 
 - [*] CMake v3.13+
-- [*] A c++ compiler (defaults to gcc)(need C++ 20 support)
+- [*] A cxx compiler (defaults to gcc)(need CXX 20 support)
 - [*] Bison
 - [*] Re2c
 - [ ] make
@@ -19,8 +19,8 @@ gal language (WIP)
 == My Environment
 
 - [*] WSL2 Ubuntu2004
-- [*] gcc 12.0.0 20211101
-- [*] cmake 3.21.4
+- [*] gcc 12.0.0 20211101 (build from source)
+- [*] cmake 3.21.4 (build from source)
 - [*] bison (GNU Bison) 3.5.1
 - [*] re2c 1.3
 
