@@ -5,6 +5,8 @@ project(
 
 set(
 		${PROJECT_NAME}_SOURCE
+		src/ast_node.cpp
+
 		src/gal.cpp
 )
 
