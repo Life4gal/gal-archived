@@ -8,6 +8,13 @@
 
 namespace gal
 {
+	using integer_type = std::int64_t;
+	using number_type  = double;
+	using string_type = std::string;
+	using boolean_type = std::uint_fast8_t;
+
+	using identifier_type = std::string;
+
 	/*! Type of the AST node */
 	enum class ast_expression_type
 	{
@@ -61,7 +68,7 @@ namespace gal
 	class ast_integer final : public ast_expression
 	{
 	public:
-		using value_type = std::int64_t;
+		using value_type = integer_type;
 
 	private:
 		value_type value_;
@@ -77,7 +84,7 @@ namespace gal
 	class ast_number final : public ast_expression
 	{
 	public:
-		using value_type = long double;
+		using value_type = number_type;
 
 	private:
 		value_type value_;
@@ -93,7 +100,7 @@ namespace gal
 	class ast_string final : public ast_expression
 	{
 	public:
-		using value_type = std::string;
+		using value_type = string_type;
 
 	private:
 		value_type value_;
@@ -109,7 +116,7 @@ namespace gal
 	class ast_boolean final : public ast_expression
 	{
 	public:
-		using value_type = std::uint_fast8_t;
+		using value_type = boolean_type;
 
 	private:
 		value_type value_;
@@ -124,11 +131,14 @@ namespace gal
 	/*! Represents an identifier. */
 	class ast_identifier final : public ast_expression
 	{
+	public:
+		using value_type = identifier_type;
+
 	private:
-		std::string name_;
+		value_type name_;
 
 	public:
-		explicit ast_identifier(std::string name) : name_(std::move(name)) {}
+		explicit ast_identifier(value_type name) : name_(std::move(name)) {}
 
 		constexpr ast_expression_type get_type() override { return ast_expression_type::identifier_t; }
 		[[nodiscard]] std::string to_string() const noexcept override;
