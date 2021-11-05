@@ -5,16 +5,16 @@
 
 	#include <cstdint>
 	#include <string>
+#include <memory>
+#include <vector>
+#include <map>
+#include <set>
+#include <optional>
+#include <string_view>
+#include <variant>
 
 namespace gal
 {
-	using integer_type = std::int64_t;
-	using number_type  = double;
-	using string_type = std::string;
-	using boolean_type = std::uint_fast8_t;
-
-	using identifier_type = std::string;
-
 	/*! Type of the AST node */
 	enum class ast_expression_type
 	{
@@ -27,6 +27,12 @@ namespace gal
 		boolean_t,
 
 		identifier_t,
+		scope_t,
+		args_pack_t,
+		prototype_t,
+		function_t,
+		if_branch_t,
+		else_branch_t,
 	};
 
 	class ast_expression;
@@ -36,6 +42,34 @@ namespace gal
 	class ast_string;
 	class ast_boolean;
 	class ast_identifier;
+	class ast_scope;
+	class ast_args_pack;
+	class ast_prototype;
+	class ast_function;
+	class ast_else_expr;
+	class ast_if_expr;
+
+	template<typename T, typename... Args>
+	std::unique_ptr<ast_expression> make_expression(Args&&... args)
+	{
+		return std::make_unique<T>(std::forward<Args>(args)...);
+	}
+
+	/*! Represents an integer value. */
+	using integer_type = std::int64_t;
+	/*! Represents a number value. */
+	using number_type  = double;
+	/*! Represents a string value. */
+	using string_type = std::string;
+	/*! Represents a boolean value. */
+	using boolean_type = std::uint_fast8_t;
+
+	/*! Represents an identifier. */
+	using identifier_type = std::string;
+	/*! Represents an identifier view. */
+	using identifier_view_type = std::string_view;
+	/*! Represents an expression. */
+	using expression_type = std::unique_ptr<ast_expression>;
 
 	/*! Represents an expression. */
 	class ast_expression
@@ -142,6 +176,154 @@ namespace gal
 
 		constexpr ast_expression_type get_type() override { return ast_expression_type::identifier_t; }
 		[[nodiscard]] std::string to_string() const noexcept override;
+	};
+
+	/*! Represents a scope. */
+	class ast_scope final : public ast_expression
+	{
+	private:
+		identifier_type name_;
+
+		std::vector<identifier_view_type> named_values_;
+
+		std::optional<std::reference_wrapper<ast_scope>> parent_;
+		std::set<ast_scope> children_;
+
+	public:
+		explicit ast_scope(identifier_type name, std::optional<std::reference_wrapper<ast_scope>> parent = std::nullopt)
+			: name_(std::move(name)), parent_(parent) {}
+
+		constexpr ast_expression_type get_type() override { return ast_expression_type::scope_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
+
+		/*! Get current scope name. */
+		[[nodiscard]] const identifier_type& get_scope_name() const noexcept
+		{
+			return name_;
+		}
+
+		/*! Does current scope has a parent. */
+		[[nodiscard]] bool has_parent() const noexcept
+		{
+			return parent_.has_value();
+		}
+
+		/*! Get parent scope name, regardless the parent valid or not(if parent is not valid, throw std::bad_optional_access). */
+		[[nodiscard]] const identifier_type& get_parent_name() const noexcept
+		{
+			return parent_.value().get().get_scope_name();
+		}
+
+		/*! Used by std::set. */
+		friend bool operator<(const ast_scope& s1, const ast_scope& s2) noexcept
+		{
+			return s1.name_ < s2.name_;
+		}
+	};
+
+	/*! Represents a args_pack. */
+	class ast_args_pack final : public ast_expression
+	{
+	public:
+		using value_type = identifier_type;
+		using args_pack_type = std::vector<value_type>;
+
+	private:
+		args_pack_type args_;
+
+	public:
+		explicit ast_args_pack(args_pack_type args = {}) : args_(std::move(args)) {}
+
+		constexpr ast_expression_type get_type() override { return ast_expression_type::args_pack_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
+
+		/*! Push more args if needed. */
+		decltype(auto) push_arg(value_type arg)
+		{
+			return args_.emplace_back(std::move(arg));
+		}
+	};
+
+	/*! Represents a prototype for a function. */
+	class ast_prototype final : public ast_expression
+	{
+	private:
+		identifier_type name_;
+		ast_args_pack args_;
+
+	public:
+		explicit ast_prototype(identifier_type name, ast_args_pack args = ast_args_pack{})
+			: name_(std::move(name)), args_(std::move(args)) {}
+
+		constexpr ast_expression_type get_type() override { return ast_expression_type::prototype_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
+
+		[[nodiscard]] const identifier_type& get_prototype_name() const noexcept
+		{
+			return name_;
+		}
+
+		/*! Push more args if needed. */
+		decltype(auto) push_arg(ast_args_pack::value_type&& arg)
+		{
+			return args_.push_arg(std::forward<ast_args_pack::value_type>(arg));
+		}
+	};
+
+	/*! Represents a function. */
+	class ast_function final : public ast_expression
+	{
+	public:
+		using prototype_type = std::unique_ptr<ast_prototype>;
+
+	private:
+		prototype_type prototype_;
+		expression_type body_;
+
+	public:
+		ast_function(prototype_type prototype, expression_type body)
+			: prototype_(std::move(prototype)), body_(std::move(body)) {}
+
+		constexpr ast_expression_type get_type() override { return ast_expression_type::function_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
+	};
+
+	/*! Represents a else branch. */
+	class ast_else_expr final : public ast_expression
+	{
+	private:
+		expression_type body_;
+
+	public:
+		explicit ast_else_expr(expression_type body) : body_(std::move(body)) {}
+
+		constexpr ast_expression_type get_type() override { return ast_expression_type::else_branch_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
+	};
+
+	/*! Represents a if-expression. */
+	class ast_if_expr final : public ast_expression
+	{
+	public:
+		using chain_type = std::vector<expression_type>;
+
+	private:
+		expression_type condition_;
+		expression_type branch_then_;
+
+		/*! ast_if_expr/ast_else_expr */
+		chain_type branch_chain_;
+
+		explicit ast_if_expr(expression_type branch_then, expression_type condition)
+			: condition_(std::move(condition)), branch_then_(std::move(branch_then)) {}
+
+		constexpr ast_expression_type get_type() override { return ast_expression_type::if_branch_t; }
+		[[nodiscard]] std::string to_string() const noexcept override;
+
+		void add_branch(expression_type branch)
+		{
+			branch_chain_.push_back(std::move(branch));
+		}
 	};
 }// namespace gal
 

@@ -15,13 +15,14 @@
 {
 	// todo: add necessary files
 	#include <string>
+	#include <ast_node.hpp>
 } //%code requires
 
-%param { gal::lexer::context& context }//%param
+%param { gal::context& context }//%param
 
 %code
 {
-	namespace yy { gal_parser::symbol_type yylex(gal::lexer::context& context); }
+	namespace yy { gal_parser::symbol_type yylex(gal::context& context); }
 }//%code
 
 %token
@@ -30,12 +31,24 @@
 
 		IF "if"
 		ELSE "else"
+		ELIF "elif"
 
 		FOR "for"
-		WHILE "while"
 		IN "in"
 
-		DEF "def"
+		WHILE "while"
+
+		FROM "from"
+		TO "to"
+
+		NOT "not"
+		IS "is"
+		// typeof(value) get type of value
+		TYPEOF "typeof"
+		// put in global scope
+		GLOBAL "global"
+		// promote_as<value> -> promote as value's scope
+		PROMOTE "promote_as"
 
 		ARROW_LEFT "<-"
 		ARROW_RIGHT "->"
@@ -43,8 +56,8 @@
 		// ROCKET_LEFT "<="
 		ROCKET_RIGHT "=>"
 		ROCKET_SHIP "<=>"
-		PARENTHESE_OPEN "("
-		PARENTHESE_CLOSE ")"
+		PARENTHESES_OPEN "("
+		PARENTHESES_CLOSE ")"
 		SQUARE_BRACKET_OPEN "["
 		SQUARE_BRACKET_CLOSE "]"
 		CURLY_BRACKET_OPEN "{"
@@ -73,20 +86,21 @@
 		BITWISE_XOR "^"
 		BITWISE_AND "&"
 		EQUAL "=="
-		NOT_EQAUL "!="
+		NOT_EQUAL "!="
 		LESS_THAN "<"
 		LESS_EQUAL "<="
 		GREATER_THAN ">"
 		GREATER_EQUAL ">="
 		LEFT_SHIFT "<<"
 		RIGHT_SHIFT ">>"
-		// also represent as unary-plus
+		// also represent as unary-plus which has higher precedence
 		ADDITION "+"
-		// also represent as unary-minus
-		SUBSTRACTION "-"
+		// also represent as unary-minus which has higher precedence
+		SUBTRACTION "-"
 		MULTIPLICATION "*"
 		DIVISION "/"
 		REMAINDER "%"
+		BITWISE_NOT "~"
 
 // the higher the line number of the declaration (lower on the page or screen), the higher the precedence
 %left COMMA
@@ -97,27 +111,210 @@
 %right QUESTION_MARK COLON
 %left LOGICAL_OR LOGICAL_AND LOGICAL_AND
 %left BITWISE_OR BITWISE_AND BITWISE_AND
-%left EQUAL NOT_EQAUL
+%left EQUAL NOT_EQUAL
 %left LESS_THAN LESS_EQUAL GREATER_THAN GREATER_EQUAL
 %left LEFT_SHIFT RIGHT_SHIFT
 // need to determine whether it is a unary operator, unary operators' associativity is right-to-left
-%left ADDITION SUBSTRACTION
-%left MULTIPLICATION DIVISION
+%left ADDITION SUBTRACTION
+%left MULTIPLICATION DIVISION REMAINDER
+%left BITWISE_NOT
 
-%token<gal::integer_type> INTEGER
-%token<gal::number_type> NUMBER
-%token<gal::string_type> STRING
-%token<gal::boolean_type> BOOLEAN
-%token<gal::identifier_type> IDENTIFIER i_identifier
+%type<gal::integer_type> INTEGER
+%type<gal::number_type> NUMBER
+%type<gal::string_type> STRING
+%type<gal::boolean_type> BOOLEAN
+%type<gal::identifier_type> IDENTIFIER e_identifier
+
+%type<gal::expression_type> e_expressions e_expression
+// { expressions } [ expressions ] ( expressions )
+%type<gal::expression_type> e_bracketed_expression
+// expression1, expression2, expression3 ...
+%type<gal::expression_type> e_comma_expression
+%type<gal::expression_type> expression
+
+%type<gal::expression_type> e_statement
+%type<gal::expression_type> statement
+
+
 
 %%
 
-library: { [[maybe_unused]] auto scope = context.new_scope(); } functions { /* s destruct, scope finished */ };
+library:
+	{
+		// build current local scope
+		// todo: better scope manager
+		[[maybe_unused]] auto scope = gal::make_expression<gal::ast_scope>("global scope");
+	}
+	functions
+	{
+		/* scope destructed, scope finished */
+	};
+
+e_parentheses_close:
+	error{}
+	|
+	// expected ')'
+	PARENTHESES_CLOSE;
+
+e_square_bracket_close:
+	error{}
+	|
+	// expected ']'
+	SQUARE_BRACKET_CLOSE;
+
+e_curly_bracket_close:
+	error{}
+	|
+	CURLY_BRACKET_CLOSE;
+
 functions:
 	/* nothing here */
 	%empty
 	|
-	functions // todo
+	functions
+	/* `[`FUNCTION_NAME`]` `=>` (PARAMETERS) `=>` RETURN_TYPE `:` e_statement */
+	SQUARE_BRACKET_OPEN e_identifier e_square_bracket_close ROCKET_RIGHT
+	{
+		// build current local scope
+		// todo: add global scope as parent
+        [[maybe_unused]] auto scope = gal::make_expression<gal::ast_scope>("scope-" + $3);
+	}
+	PARENTHESES_OPEN parameter_declarations e_parentheses_close function_return
+	e_statement
+	{
+		// pass -> function_name, parameters, return_type, function_body
+		context.add_function(std::move($3), std::move($7), std::move($9), std::move($10));
+		/* scope destructed, scope finished */
+	};
+
+e_identifier:
+	error{}
+	|
+	IDENTIFIER
+	{
+		$$ = std::move($1);
+	};
+
+parameter_declarations:
+	%empty
+	|
+	parameter_declaration;
+
+parameter_declaration:
+	// only one parameter
+	e_identifier
+	{
+		$$ = gal::make_expression<gal::ast_args_pack>();
+		$$.push_arg(std::move($1));
+	}
+	// parameter1, parameter2, parameter3 ...
+	parameter_declaration COMMA e_identifier
+	{
+		$$ = std::move($1);
+		// push parameters
+		$$.push_arg(std::move($3));
+	};
+
+function_return:
+	%empty
+	|
+	ROCKET_RIGHT IDENTIFIER
+	{
+		$$ = std::move($2);
+	};
+
+e_expressions:
+	error{}
+	|
+	expressions
+	{
+		$$ = std::move($1);
+	};
+
+e_expression:
+	error{}
+	|
+	expression
+	{
+		$$ = std::move($1);
+	}
+
+e_bracketed_expression:
+	error{}
+	|
+	PARENTHESES_BRACKET_OPEN e_expressions e_parentheses_close
+	{
+		$$ = std::move($2);
+	}
+	|
+	SQUARE_BRACKET_OPEN e_expressions e_square_bracket_close
+	{
+    	$$ = std::move($2);
+    }
+	|
+	CURLY_BRACKET_OPEN e_expressions e_curly_bracket_close
+	{
+    	$$ = std::move($2);
+    };
+
+e_comma_expression:
+	e_expression
+	{
+		$$ = gal::make_expression<gal::ast_prototype>(std::move($1));
+	}
+	|
+	e_comma_expression COMMA e_expression
+	{
+		$$ = std::move($1);
+		$$.push_arg(std::move($3));
+	};
+
+e_statement:
+	error{}
+	|
+	statement
+	{
+		$$ = std::move($1);
+	};
+
+e_if_statement:
+	error{}
+	|
+	if_statement
+	{
+		$$ = std::move($1);
+	};
+
+else_statement:
+	%empty
+	|
+	// else: balabala
+	ELSE COLON e_statement
+	{
+		$$ = gal::make_expression<ast_else_expr>(std::move($3));
+	};
+
+if_statement:
+	if_statement
+	// if xxx: balabala
+	IF e_expression COLON e_statement
+	{
+		$$ = gal::make_expression<ast_if_expr>(std::move($5), std::move($3));
+	}
+	|
+	// elif xxx: balabala
+	ELIF e_expression COLON e_statement
+	{
+		$$.add_branch(std::move(gal::make_expression<ast_if_expr>(std::move($4), std::move($2));
+	}
+	|
+	else_statement
+	{
+		$$.add_branch(std::move($1));
+	};
+
+statement:
+    // todo
 
 %%
 
