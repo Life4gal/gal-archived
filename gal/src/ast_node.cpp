@@ -2,7 +2,6 @@
 
 #include <typeinfo>
 #include <utility>
-#include <ranges>
 
 namespace gal
 {
@@ -31,11 +30,6 @@ namespace gal
 	std::string ast_identifier::to_string() const noexcept
 	{
 		return std::string{"ast_identifier: "} + name_;
-	}
-
-	std::string ast_scope::to_string() const noexcept
-	{
-		return std::string{"ast_scope: "} + name_;
 	}
 
 	std::string ast_args_pack::to_string() const noexcept

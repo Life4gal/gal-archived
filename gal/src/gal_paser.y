@@ -143,7 +143,7 @@ library:
 	{
 		// build current local scope
 		// todo: better scope manager
-		[[maybe_unused]] auto scope = gal::make_expression<gal::ast_scope>("global scope");
+		[[maybe_unused]] auto scope = gal::make_expression<gal::context_scope>("global scope");
 	}
 	functions
 	{
@@ -177,7 +177,7 @@ functions:
 	{
 		// build current local scope
 		// todo: add global scope as parent
-        [[maybe_unused]] auto scope = gal::make_expression<gal::ast_scope>("scope-" + $3);
+        [[maybe_unused]] auto scope = gal::make_expression<gal::context_scope>("scope-" + $3);
 	}
 	PARENTHESES_OPEN parameter_declarations e_parentheses_close function_return
 	e_statement

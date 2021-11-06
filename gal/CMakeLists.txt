@@ -8,6 +8,7 @@ set(
 		src/ast_node.cpp
 
 		src/gal.cpp
+		src/context.cpp
 )
 
 add_executable(
