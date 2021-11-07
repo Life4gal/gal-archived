@@ -3,7 +3,7 @@
 #ifndef GAL_LANG_SCOPE_HPP
 	#define GAL_LANG_SCOPE_HPP
 
-	#include <ast_node.hpp>
+	#include <node.hpp>
 	#include <function.hpp>
 	#include <object.hpp>
 	#include <map>

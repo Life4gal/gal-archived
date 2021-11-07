@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_AST_NODE_HPP
-	#define GAL_LANG_AST_NODE_HPP
+#ifndef GAL_LANG_NODE_HPP
+	#define GAL_LANG_NODE_HPP
 
 	#include <string>
 	#include <string_view>
@@ -83,4 +83,4 @@ namespace gal
 	};
 }// namespace gal
 
-#endif//GAL_LANG_AST_NODE_HPP
+#endif//GAL_LANG_NODE_HPP

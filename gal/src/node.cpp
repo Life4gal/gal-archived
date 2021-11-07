@@ -1,4 +1,4 @@
-#include "ast_node.hpp"
+#include "node.hpp"
 
 namespace gal
 {

@@ -5,8 +5,8 @@ project(
 
 set(
 		${PROJECT_NAME}_SOURCE
-		src/ast_node.cpp
 
+		src/node.cpp
 		src/gal.cpp
 		src/context.cpp
 		src/object.cpp

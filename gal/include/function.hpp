@@ -3,7 +3,7 @@
 #ifndef GAL_LANG_FUNCTION_HPP
 	#define GAL_LANG_FUNCTION_HPP
 
-	#include <ast_node.hpp>
+	#include <node.hpp>
 	#include <vector>
 
 namespace gal
