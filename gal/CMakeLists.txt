@@ -9,6 +9,10 @@ set(
 
 		src/gal.cpp
 		src/context.cpp
+		src/object.cpp
+		src/function.cpp
+		src/scope.cpp
+		src/branch.cpp
 )
 
 add_executable(
