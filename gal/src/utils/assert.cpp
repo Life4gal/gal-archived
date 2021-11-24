@@ -11,9 +11,9 @@
 namespace gal
 {
 	void gal_assert(
-			bool					   condition,
-			std::string_view		   message,
-			const std_source_location& location) noexcept
+			[[maybe_unused]] bool						condition,
+			[[maybe_unused]] std::string_view			message,
+			[[maybe_unused]] const std_source_location& location) noexcept
 	{
 #ifndef NDEBUG
 		if (not condition)

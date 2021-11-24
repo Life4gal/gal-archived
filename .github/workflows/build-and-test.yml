@@ -16,7 +16,8 @@ jobs:
             fail-fast: false
             matrix:
                 platform: [ x64 ]
-                os: [ ubuntu-latest, windows-latest, macos-latest ]
+                # os: [ ubuntu-latest, windows-latest, macos-latest ]
+                os: [ ubuntu-latest, windows-latest ] # AppleClang 12.0.0.12000032 not support source_location yet!
                 configuration: [ Debug, Release, MinSizeRel, RelWithDebInfo ]
         
         steps:
