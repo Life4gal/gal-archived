@@ -16,6 +16,12 @@ add_executable(
 		${${PROJECT_NAME}_SOURCE}
 )
 
+target_compile_features(
+		${PROJECT_NAME}
+		PRIVATE
+		cxx_std_20
+)
+
 include(${GAL_3RDPARTY_PATH}/google-test.cmake)
 
 target_link_libraries(
@@ -28,11 +34,5 @@ target_link_libraries(
 # for gtest_discover_tests
 include(GoogleTest)
 gtest_discover_tests(${PROJECT_NAME})
-
-target_compile_features(
-		${PROJECT_NAME}
-		PRIVATE
-		cxx_std_20
-)
 
 include(${GAL_MODULE_PATH}/config_build_type.cmake)

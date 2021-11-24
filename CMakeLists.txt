@@ -41,6 +41,7 @@ add_subdirectory(gal)
 
 if (${BUILD_GAL_TEST_CASES})
 	message("${PROJECT_NAME} info: build ${PROJECT_NAME}'s test cases.")
+	enable_testing()
 	add_subdirectory(test)
 else ()
 	message("${PROJECT_NAME} info: drop ${PROJECT_NAME}'s test cases.")
