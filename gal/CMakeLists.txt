@@ -10,6 +10,9 @@ set(
 		include/gal.hpp
 
 		src/utils/assert.cpp
+		src/utils/utils.cpp
+
+		src/vm/value.cpp
 )
 
 if (${BUILD_GAL_AS_SHARED})
