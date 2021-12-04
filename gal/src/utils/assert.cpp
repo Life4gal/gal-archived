@@ -25,7 +25,7 @@ namespace gal
 	#else
 			std::cerr << std::format("[FILE: {} -> FUNCTION: {} -> LINE: {}] assert failed: {}\n", location.file_name(), location.function_name(), location.line(), message);
 	#endif
-			std::exit(-1);
+			std::abort();
 		}
 #endif
 	}

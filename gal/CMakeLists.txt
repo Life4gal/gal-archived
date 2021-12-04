@@ -6,6 +6,9 @@ project(
 set(
 		${PROJECT_NAME}_SOURCE
 
+		include/allocator.hpp
+		include/gal.hpp
+
 		src/utils/assert.cpp
 )
 
@@ -60,7 +63,7 @@ else ()
 	message("${PROJECT_NAME} info: current compiler ${CMAKE_CXX_COMPILER} not support std::format, use fmtlib instead now.")
 	target_compile_definitions(
 			${PROJECT_NAME}
-			PRIVATE
+			PUBLIC # todo: should be PRIVATE
 			GAL_FMT_NOT_SUPPORT
 	)
 	include(${GAL_3RDPARTY_PATH}/fmtlib.cmake)

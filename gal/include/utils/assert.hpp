@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_ASSERT_HPP
-	#define GAL_LANG_ASSERT_HPP
+#ifndef GAL_LANG_UTILS_ASSERT_HPP
+	#define GAL_LANG_UTILS_ASSERT_HPP
 
 	#if __has_include(<source_location>)
 		#include <source_location>

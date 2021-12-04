@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(
 		${PROJECT_NAME}_SOURCE
-		src/test_assert.cpp
+		src/test_allocator.cpp
 )
 
 add_executable(
