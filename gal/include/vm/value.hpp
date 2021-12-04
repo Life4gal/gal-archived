@@ -88,10 +88,7 @@ namespace gal
 	public:
 		virtual ~object() noexcept = 0;
 
-		constexpr object(object_type type, object_class* object_class) noexcept
-			: type_(type),
-			  dark_(false),
-			  object_class_(object_class) {}
+		object(gal_virtual_machine_state& state, object_type type, object_class* object_class) noexcept;
 
 		[[nodiscard]] constexpr object_type	  type() const noexcept { return type_; }
 		[[nodiscard]] constexpr object_class* get_class() const noexcept { return object_class_; }
@@ -103,27 +100,18 @@ namespace gal
 		void								  gray(gal_virtual_machine_state& state);
 
 		/**
-		 * @brief Releases all memory owned by [object], including [object] itself.
-		 */
-		void								  free(gal_virtual_machine_state& state)
-		{
-			destroy(state);
-		}
-
-		/**
 		 * @brief Processes every object in the gray stack until all reachable objects have
 		 * been marked. After that, all objects are either white (free-able) or black
 		 * (in use and fully traversed).
 		  *
 		  * todo: move it to state
 		 */
-		static void blacken_all(gal_virtual_machine_state& state);
+		static void							  blacken_all(gal_virtual_machine_state& state);
 
-		explicit	operator magic_value() const noexcept;
+		explicit							  operator magic_value() const noexcept;
 
 	private:
 		virtual void blacken(gal_virtual_machine_state& state) = 0;
-		virtual void destroy(gal_virtual_machine_state& state) = 0;
 	};
 
 	/**
@@ -195,24 +183,24 @@ namespace gal
 		/**
 		 * @brief Masks out the tag bits used to identify the singleton value.
 		 */
-		constexpr static value_type tag_mask{(1 << 3) - 1};// 7
+		constexpr static value_type			  tag_mask{(1 << 3) - 1};// 7
 
 		/**
 		 * @brief Tag values for the different singleton values.
 		 */
-		constexpr static value_type tag_nan{0};
-		constexpr static value_type tag_null{1};
-		constexpr static value_type tag_false{2};
-		constexpr static value_type tag_true{3};
-		constexpr static value_type tag_undefined{4};
-		constexpr static value_type tag_reserve1{5};
-		constexpr static value_type tag_reserve2{6};
-		constexpr static value_type tag_reserve3{7};
+		constexpr static value_type			  tag_nan{0};
+		constexpr static value_type			  tag_null{1};
+		constexpr static value_type			  tag_false{2};
+		constexpr static value_type			  tag_true{3};
+		constexpr static value_type			  tag_undefined{4};
+		constexpr static value_type			  tag_reserve1{5};
+		constexpr static value_type			  tag_reserve2{6};
+		constexpr static value_type			  tag_reserve3{7};
 
 		/**
 		 * @brief A mask that selects the sign bit.
 		 */
-		constexpr static value_type sign_bit{value_type{1} << 63};
+		constexpr static value_type			  sign_bit{value_type{1} << 63};
 
 		/**
 		 * @brief The bits that must be set to indicate a quiet NaN.
@@ -221,26 +209,19 @@ namespace gal
 		 *  it's: 0 111 1111 1111 1100 000000000000000000000000000000000000000000000000
 		 *  not : 0 111 1111 1111 1000 000000000000000000000000000000000000000000000000
 		 */
-		constexpr static value_type quiet_nan{0x7ffc000000000000};
+		constexpr static value_type			  quiet_nan{0x7ffc000000000000};
 
-		constexpr static value_type pointer_mask{quiet_nan | sign_bit};
+		constexpr static value_type			  pointer_mask{quiet_nan | sign_bit};
 
 		/**
 		 * @brief Singleton values.
 		 */
-		constexpr static value_type null_val{quiet_nan | tag_nan};
-		constexpr static value_type false_val{quiet_nan | tag_false};
-		constexpr static value_type true_val{quiet_nan | tag_true};
-		constexpr static value_type undefined_val{quiet_nan | tag_undefined};
+		constexpr static value_type			  null_val{quiet_nan | tag_nan};
+		constexpr static value_type			  false_val{quiet_nan | tag_false};
+		constexpr static value_type			  true_val{quiet_nan | tag_true};
+		constexpr static value_type			  undefined_val{quiet_nan | tag_undefined};
 
-	private:
-		value_type data_;
-
-	public:
-		constexpr explicit magic_value() noexcept : magic_value(null_val) {}
-		constexpr explicit magic_value(value_type d) noexcept : data_(d) {}
-		constexpr explicit magic_value(bool b) noexcept : data_(b ? true_val : false_val) {}
-		constexpr explicit magic_value(double d) noexcept : magic_value(double_to_bits(d)) {}
+		value_type							  data_;
 
 		/**
 		 * @brief Gets the singleton type tag for a magic_value (which must be a singleton).
@@ -334,7 +315,23 @@ namespace gal
 	constexpr magic_value magic_value_true{magic_value::true_val};
 	constexpr magic_value magic_value_undefined{magic_value::undefined_val};
 
-	object::			  operator magic_value() const noexcept
+	// move magic_value's constructor here so that our magic_value is a POD type
+	constexpr magic_value to_magic_value(magic_value::value_type data) noexcept
+	{
+		return {data};
+	}
+
+	constexpr magic_value to_magic_value(bool b) noexcept
+	{
+		return b ? magic_value_true : magic_value_false;
+	}
+
+	constexpr magic_value to_magic_value(double data) noexcept
+	{
+		return {double_to_bits(data)};
+	}
+
+	object::operator magic_value() const noexcept
 	{
 		/**
 		 * @brief The triple casting is necessary here to satisfy some compilers:
@@ -361,8 +358,9 @@ namespace gal
 		using const_iterator  = buffer_type::const_iterator;
 
 	private:
-		buffer_type						  buffer_;
+		buffer_type buffer_;
 
+	public:
 		[[nodiscard]] constexpr reference operator[](size_type index) noexcept
 		{
 			return buffer_[index];
@@ -416,6 +414,11 @@ namespace gal
 			}
 		}
 
+		[[nodiscard]] constexpr gal_size_type memory_usage() const noexcept
+		{
+			return sizeof(value_type) * buffer_.capacity();
+		}
+
 		/**
 		 * @brief Mark the values in [this] as reachable and still in use. This should only
 		 * be called during the sweep phase of a garbage collection.
@@ -423,24 +426,6 @@ namespace gal
 		void gray(gal_virtual_machine_state& state);
 	};
 
-}// namespace gal
-
-namespace std
-{
-	template<>
-	struct hash<::gal::magic_value>
-	{
-		std::size_t operator()(const ::gal::magic_value& value) const
-		{
-			// todo
-			(void)value;
-			return 0;
-		}
-	};
-}// namespace std
-
-namespace gal
-{
 	/**
 	 * @brief A heap-allocated string object.
 	 */
@@ -448,7 +433,18 @@ namespace gal
 	{
 	public:
 		using string_type				= std::basic_string<char, std::char_traits<char>, gal_allocator<char>>;
+
+		using value_type				= string_type::value_type;
 		using size_type					= string_type::size_type;
+
+		using pointer					= string_type::pointer;
+		using const_pointer				= string_type::const_pointer;
+
+		using reference					= string_type::reference;
+		using const_reference			= string_type::const_reference;
+
+		using iterator					= string_type::iterator;
+		using const_iterator			= string_type::const_iterator;
 
 		constexpr static size_type npos = string_type::npos;
 
@@ -456,6 +452,11 @@ namespace gal
 		string_type string_;
 
 	public:
+		/**
+		 * @brief Creates a new string object of [length] and init with [c].
+		 */
+		object_string(gal_virtual_machine_state& state, size_type length, value_type c = 0);
+
 		/**
 		 * @brief Creates a new string object of [length] and copies [text] into it.
 		 */
@@ -466,12 +467,12 @@ namespace gal
 		* The range starts at [begin], contains [count] bytes, and increments by
 		* [step].
 		 */
-		object_string(const object_string& source, size_type begin, size_type count, size_type step = 1);
+		object_string(gal_virtual_machine_state& state, const object_string& source, size_type begin, size_type count, size_type step = 1);
 
 		/**
 		 * @brief Produces a string representation of [value].
 		 */
-		object_string(double value);
+		object_string(gal_virtual_machine_state& state, double value);
 
 		/**
 		 * @brief Creates a new formatted string from [format] and any additional arguments
@@ -483,41 +484,166 @@ namespace gal
 		 *
 		 * $ - A const char* string.
 		 * @ - A GAL string object.
+		 *
+		 * todo: remove it!
 		 */
-		object_string(const char* format, ...);
+		object_string(gal_virtual_machine_state& state, const char* format, ...);
 
 		/**
 		 * @brief Creates a new string containing the UTF-8 encoding of [value].
 		 */
-		object_string(int value);
+		object_string(gal_virtual_machine_state& state, int value);
 
 		/**
 		 * @brief Creates a new string from the integer representation of a byte
 		 */
-		object_string(std::uint8_t value);
+		object_string(gal_virtual_machine_state& state, std::uint8_t value);
 
 		/**
 		 * @brief Creates a new string containing the code point in [string] starting at byte
 		 * [index]. If [index] points into the middle of a UTF-8 sequence, returns an
 		 * empty string.
 		 */
-		object_string(object_string& string, size_type index);
+		object_string(gal_virtual_machine_state& state, object_string& string, size_type index);
+
+		[[nodiscard]] constexpr size_type size() const noexcept
+		{
+			return string_.size();
+		}
+
+		[[nodiscard]] constexpr pointer data() noexcept
+		{
+			return string_.data();
+		}
+
+		[[nodiscard]] constexpr const_pointer data() const noexcept
+		{
+			return string_.data();
+		}
+
+		[[nodiscard]] reference operator[](size_type index) noexcept
+		{
+			return string_[index];
+		}
+
+		[[nodiscard]] const_reference operator[](size_type index) const noexcept
+		{
+			return string_[index];
+		}
+
+		[[nodiscard]] constexpr iterator begin() noexcept
+		{
+			return string_.begin();
+		}
+
+		[[nodiscard]] constexpr const_iterator begin() const noexcept
+		{
+			return string_.begin();
+		}
+
+		[[nodiscard]] constexpr iterator end() noexcept
+		{
+			return string_.end();
+		}
+
+		[[nodiscard]] constexpr const_iterator end() const noexcept
+		{
+			return string_.end();
+		}
+
+		constexpr void clear()
+		{
+			string_.clear();
+		}
 
 		/**
 		 * @brief Search for the first occurrence of [needle] and returns its
 		 * zero-based offset. Returns `npos` if string does not contain [needle].
 		 */
-		size_type	find(object_string& needle, size_type start);
+		size_type	   find(object_string& needle, size_type start);
+
+		object_string& append(const char* text, size_type length)
+		{
+			string_.append(text, length);
+			return *this;
+		}
+
+		object_string& append(const char* text)
+		{
+			string_.append(text);
+			return *this;
+		}
+
+		object_string& append(size_type count, value_type c)
+		{
+			string_.append(count, c);
+			return *this;
+		}
+
+		object_string& append(const object_string& string)
+		{
+			string_.append(string.string_);
+			return *this;
+		}
+
+		object_string& operator+=(const object_string& string)
+		{
+			string_ += string.string_;
+			return *this;
+		}
+
+		void push_back(value_type c)
+		{
+			string_.push_back(c);
+		}
+
+		[[nodiscard]] std::size_t hash() const noexcept
+		{
+			// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
+			static_assert(sizeof(size_type) == sizeof(std::uint64_t));
+			constexpr std::uint64_t hash_init{14695981039346656037ull};
+			constexpr std::uint64_t hash_prime{1099511628211ull};
+
+			auto					hash = hash_init;
+			for (auto c: string_)
+			{
+				hash ^= c;
+				hash *= hash_prime;
+			}
+			return hash;
+		}
+
+		/**
+		 * @brief Returns true if [text] and [string] represent the same string.
+		 */
+		friend bool operator==(const object_string& string, const_pointer text)
+		{
+			return string.string_ == text;
+		}
+
+		/**
+		 * @brief Returns true if [text] and [string] represent the same string.
+		 */
+		friend bool operator==(const_pointer text, const object_string& string)
+		{
+			return string.string_ == text;
+		}
 
 		/**
 		 * @brief Returns true if [text] and [this] represent the same string.
 		 */
-		bool		operator==(const char* text) const;
+		bool equal(size_type begin, size_type length, const_pointer text) const
+		{
+			return string_.compare(begin, length, text);
+		}
 
 		/**
 		 * @brief Returns true if [text] and [this] represent the same string.
 		 */
-		bool		equal(const char* text, size_type length) const;
+		bool equal(size_type length, const_pointer text) const
+		{
+			return equal(0, length, text);
+		}
 
 		friend bool operator==(const object_string& lhs, const object_string& rhs)
 		{
@@ -526,7 +652,6 @@ namespace gal
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
 	class symbol_table
@@ -589,9 +714,9 @@ namespace gal
 			table_.clear();
 		}
 
-		void push(const char* name, object_string::size_type length)
+		void push(gal_virtual_machine_state& state, const char* name, object_string::size_type length)
 		{
-			table_.emplace_back(name, length);
+			table_.emplace_back(state, name, length);
 		}
 
 		void push(object_string string)
@@ -602,9 +727,9 @@ namespace gal
 		/**
 		 * @brief Adds name to the symbol table. Returns the index of it in the table.
 		 */
-		[[nodiscard]] gal_index_type add(const char* name, object_string::size_type length)
+		[[nodiscard]] gal_index_type add(gal_virtual_machine_state& state, const char* name, object_string::size_type length)
 		{
-			table_.emplace_back(name, length);
+			table_.emplace_back(state, name, length);
 			return static_cast<gal_index_type>(table_.size() - 1);
 		}
 
@@ -631,13 +756,13 @@ namespace gal
 		 * @brief Adds name to the symbol table. Returns the index of it in the table.
 		 * Will use an existing symbol if already present.
 		 */
-		[[nodiscard]] gal_index_type ensure(const char* name, object_string::size_type length)
+		[[nodiscard]] gal_index_type ensure(gal_virtual_machine_state& state, const char* name, object_string::size_type length)
 		{
 			// See if the symbol is already defined.
 			if (auto index = find(name, length); index == gal_index_not_exist)
 			{
 				// New symbol, so add it.
-				return add(name, length);
+				return add(state, name, length);
 			}
 			else
 			{
@@ -689,14 +814,16 @@ namespace gal
 		/**
 		 * @brief Creates a new open upvalue pointing to [value] on the stack.
 		 */
-		constexpr explicit object_upvalue(magic_value& value)
-			: object(object_type::UPVALUE_TYPE, nullptr),
-			  value_(&value),
-			  closed_(magic_value_null) {}
+		explicit object_upvalue(gal_virtual_machine_state& state, magic_value& value)
+			// Upvalues are never used as first-class objects, so don't need a class.
+			: object{state, object_type::UPVALUE_TYPE, nullptr},
+			  value_{&value},
+			  closed_{magic_value_null}
+		{
+		}
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
 	/**
@@ -714,19 +841,26 @@ namespace gal
 	  */
 	struct debug_function
 	{
-		using source_line_buffer_type = std::vector<int>;
+		using source_line_buffer_type = std::vector<int, gal_allocator<int>>;
+		using line_type				  = source_line_buffer_type::value_type;
 
 		/**
 		  * @brief The name of the function.
 		  */
-		std::string				name;
+		std::string					name;
 
 		/**
 		  * @brief An array of line numbers. There is one element in this array for each
 		  * bytecode in the function's bytecode array. The value of that element is
 		  * the line in the source code that generated that instruction.
 		  */
-		source_line_buffer_type source_lines;
+		source_line_buffer_type		source_lines;
+
+		[[nodiscard]] gal_size_type memory_usage() const noexcept
+		{
+			// todo: What about the function name?
+			return sizeof(line_type) * source_lines.capacity();
+		}
 	};
 
 	/**
@@ -752,22 +886,21 @@ namespace gal
 		/**
 		  * @brief The name of the module.
 		  */
-		object_string&	   name_;
+		object_string	   name_;
 
 	public:
 		/**
 		 * @brief Creates a new module.
 		 */
-		explicit object_module(object_string& name)
+		explicit object_module(gal_virtual_machine_state& state, object_string name)
 			// Modules are never used as first-class objects, so don't need a class.
-			: object{object_type::MODULE_TYPE, nullptr},
-			  name_{name}
+			: object{state, object_type::MODULE_TYPE, nullptr},
+			  name_{std::move(name)}
 		{
 		}
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
 	/**
@@ -812,14 +945,14 @@ namespace gal
 		 * methods or scripts.
 		 */
 		gal_size_type		  arity_;
-		debug_function&		  debug_;
+		debug_function		  debug_;
 
 	public:
 		/**
 		 * @brief Creates a new empty function. Before being used, it must have code,
 		 * constants, etc. added to it.
 		 */
-		object_function(gal_virtual_machine_state& state, object_module& module, gal_slot_type max_slots, debug_function& debug);
+		object_function(gal_virtual_machine_state& state, object_module& module, gal_slot_type max_slots);
 
 		void set_name(const char* name)
 		{
@@ -831,9 +964,13 @@ namespace gal
 			return max_slots_;
 		}
 
+		[[nodiscard]] gal_size_type get_upvalues_size() const noexcept
+		{
+			return num_upvalues_;
+		}
+
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
 	/**
@@ -842,19 +979,23 @@ namespace gal
 	 */
 	class object_closure : public object
 	{
+	public:
+		using upvalue_type		= std::reference_wrapper<object_upvalue>;
+		using upvalue_container = std::vector<upvalue_type, gal_allocator<upvalue_type>>;
+
 	private:
 		/**
 		 * @brief The function that this closure is an instance of.
 		 */
-		object_function&											 function_;
-		std::vector<object_upvalue*, gal_allocator<object_upvalue*>> upvalues_;
+		object_function	  function_;
+		upvalue_container upvalues_;
 
 	public:
 		/**
 		 * @brief Creates a new closure object that invokes [function]. Allocates room for its
 		 * upvalues, but assumes outside code will populate it.
 		 */
-		object_closure(gal_virtual_machine_state& state, object_function& function);
+		object_closure(gal_virtual_machine_state& state, object_function&& function);
 
 		[[nodiscard]] object_function& get_function() noexcept
 		{
@@ -868,7 +1009,6 @@ namespace gal
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
 	struct call_frame
@@ -1013,7 +1153,6 @@ namespace gal
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
 	enum class method_type
@@ -1123,7 +1262,6 @@ namespace gal
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
 	class object_outer : public object
@@ -1135,12 +1273,10 @@ namespace gal
 		data_buffer_type data_;
 
 	public:
-		explicit object_outer(object_class& obj_class)
-			: object{object_type::OUTER_TYPE, &obj_class} {}
+		explicit object_outer(gal_virtual_machine_state& state, object_class& obj_class);
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
 	class object_instance : public object
@@ -1152,14 +1288,10 @@ namespace gal
 		field_buffer_type fields_;
 
 	public:
-		explicit object_instance(object_class& obj_class)
-			: object(object_type::INSTANCE_TYPE, &obj_class)
-		{
-		}
+		explicit object_instance(gal_virtual_machine_state& state, object_class& obj_class);
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
 	class object_list : public object
@@ -1193,9 +1325,26 @@ namespace gal
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
+}// namespace gal
+
+namespace std
+{
+	template<>
+	struct hash<::gal::magic_value>
+	{
+		std::size_t operator()(const ::gal::magic_value& value) const
+		{
+			// todo
+			(void)value;
+			return 0;
+		}
+	};
+}// namespace std
+
+namespace gal
+{
 	/**
 	 * @brief A hash table mapping keys to values.
 	 */
@@ -1301,7 +1450,6 @@ namespace gal
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
-		void destroy(gal_virtual_machine_state& state) override;
 	};
 
 	inline object* magic_value::as_object() const noexcept
