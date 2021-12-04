@@ -13,6 +13,8 @@ set(
 		src/utils/utils.cpp
 
 		src/vm/value.cpp
+		src/vm/vm.cpp
+		src/vm/compiler.cpp
 )
 
 if (${BUILD_GAL_AS_SHARED})

@@ -93,18 +93,19 @@ namespace gal
 			  dark_(false),
 			  object_class_(object_class) {}
 
-		[[nodiscard]] constexpr object_type type() const noexcept { return type_; }
+		[[nodiscard]] constexpr object_type	  type() const noexcept { return type_; }
+		[[nodiscard]] constexpr object_class* get_class() const noexcept { return object_class_; }
 
 		/**
 		 * @brief Mark [this] as reachable and still in use. This should only be called
 		 * during the sweep phase of a garbage collection.
 		 */
-		void								gray(gal_virtual_machine_state& state);
+		void								  gray(gal_virtual_machine_state& state);
 
 		/**
 		 * @brief Releases all memory owned by [object], including [object] itself.
 		 */
-		void								free(gal_virtual_machine_state& state)
+		void								  free(gal_virtual_machine_state& state)
 		{
 			destroy(state);
 		}
@@ -825,6 +826,11 @@ namespace gal
 			debug_.name = name;
 		}
 
+		[[nodiscard]] gal_slot_type get_slots_size() const noexcept
+		{
+			return max_slots_;
+		}
+
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
 		void destroy(gal_virtual_machine_state& state) override;
@@ -849,6 +855,16 @@ namespace gal
 		 * upvalues, but assumes outside code will populate it.
 		 */
 		object_closure(gal_virtual_machine_state& state, object_function& function);
+
+		[[nodiscard]] object_function& get_function() noexcept
+		{
+			return function_;
+		}
+
+		[[nodiscard]] const object_function& get_function() const noexcept
+		{
+			return function_;
+		}
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
@@ -965,12 +981,27 @@ namespace gal
 		/**
 		 * @brief Adds a new [call_frame] to [fiber] invoking [closure] whose stack starts at [stack_start].
 		 */
-		void					  add_call_frame(object_closure& closure, magic_value& stack_start);
+		void						add_call_frame(object_closure& closure, magic_value& stack_start);
 
 		/**
 		 * @brief Ensures [fiber]'s stack has at least [needed] slots.
 		 */
-		void					  ensure_stack(gal_virtual_machine_state& state, gal_size_type needed);
+		void						ensure_stack(gal_virtual_machine_state& state, gal_size_type needed);
+
+		[[nodiscard]] gal_size_type get_current_stack_size(magic_value* buttom) const noexcept
+		{
+			return stack_top_ - buttom;
+		}
+
+		[[nodiscard]] gal_size_type get_current_stack_size() const noexcept
+		{
+			return stack_top_ - stack_;
+		}
+
+		[[nodiscard]] magic_value* get_stack_point(gal_size_type offset) const noexcept
+		{
+			return stack_top_ - offset;
+		}
 
 		[[nodiscard]] bool		  has_error() const;
 
