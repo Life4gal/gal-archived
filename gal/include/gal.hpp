@@ -81,9 +81,9 @@ namespace gal
 	/**
 	 * @brief A function callable from GAL code, but implemented in C++.
 	 *
-	 * Should be a gal_virtual_machine pointer(not reference because we maybe need convert it to void*)
+	 * Should be a gal_virtual_machine_state pointer(not reference because we maybe need convert it to void*)
 	 */
-	using gal_outer_method_function_type		 = void (*)(gal_virtual_machine*);
+	using gal_outer_method_function_type		 = void (*)(gal_virtual_machine_state*);
 
 	/**
 	 * @brief A finalizer function for freeing resources owned by an instance of a outer
@@ -140,9 +140,9 @@ namespace gal
 		/**
 		 * @brief Returns a pointer to a outer method on [class_name] in [module] with [signature].
 		 */
-		using bind_outer_method_function_type	   = gal_outer_method_function_type (*)(gal_virtual_machine& virtual_machine, const char* module, const char* class_name, bool is_static, const char* signature);
+		using bind_outer_method_function_type	   = gal_outer_method_function_type (*)(gal_virtual_machine_state& state, const char* module, const char* class_name, bool is_static, const char* signature);
 
-		using bind_outer_class_function_type	   = gal_outer_class_method (*)(gal_virtual_machine& virtual_machine, const char* module, const char* class_name);
+		using bind_outer_class_function_type	   = gal_outer_class_method (*)(gal_virtual_machine_state& state, const char* module, const char* class_name);
 
 		/**
 		 * @brief The callback GAL uses to display text when `print()` or the other

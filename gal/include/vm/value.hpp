@@ -95,6 +95,7 @@ namespace gal
 		object(gal_virtual_machine_state& state, object_type type, std::shared_ptr<object_class> object_class) noexcept;
 
 		[[nodiscard]] constexpr object_type			type() const noexcept { return type_; }
+		[[nodiscard]] constexpr object_class*		get_class() noexcept { return object_class_.get(); }
 		[[nodiscard]] constexpr const object_class* get_class() const noexcept { return object_class_.get(); }
 
 		/**
@@ -436,26 +437,34 @@ namespace gal
 	class object_string : public object
 	{
 	public:
-		using string_type				= std::basic_string<char, std::char_traits<char>, gal_allocator<char>>;
+		using string_type												 = std::basic_string<char, std::char_traits<char>, gal_allocator<char>>;
 
-		using value_type				= string_type::value_type;
-		using size_type					= string_type::size_type;
+		using value_type												 = string_type::value_type;
+		using size_type													 = string_type::size_type;
 
-		using pointer					= string_type::pointer;
-		using const_pointer				= string_type::const_pointer;
+		using pointer													 = string_type::pointer;
+		using const_pointer												 = string_type::const_pointer;
 
-		using reference					= string_type::reference;
-		using const_reference			= string_type::const_reference;
+		using reference													 = string_type::reference;
+		using const_reference											 = string_type::const_reference;
 
-		using iterator					= string_type::iterator;
-		using const_iterator			= string_type::const_iterator;
+		using iterator													 = string_type::iterator;
+		using const_iterator											 = string_type::const_iterator;
 
-		constexpr static size_type npos = string_type::npos;
+		// todo: different allocator?
+		using std_string_type [[deprecated("use get_appender instead")]] = std::basic_string<value_type, std::char_traits<value_type>>;
+
+		constexpr static size_type npos									 = string_type::npos;
 
 	private:
 		string_type string_;
 
 	public:
+		/**
+		 * @brief Creates a new empty string object
+		 */
+		explicit object_string(gal_virtual_machine_state& state);
+
 		/**
 		 * @brief Creates a new string object of [length] and init with [c].
 		 */
@@ -464,7 +473,19 @@ namespace gal
 		/**
 		 * @brief Creates a new string object of [length] and copies [text] into it.
 		 */
-		object_string(gal_virtual_machine_state& state, const char* text, size_type length);
+		object_string(gal_virtual_machine_state& state, const_pointer text, size_type length);
+
+		/**
+		 * @brief Move an exist string into [this]
+		 */
+		object_string(gal_virtual_machine_state& state, string_type string);
+
+		/**
+		 * @brief Move an exist string into [this]
+		 *
+		 * @warning different allocator
+		 */
+		[[deprecated("use get_appender instead")]] object_string(gal_virtual_machine_state& state, std_string_type string);
 
 		/**
 		 * @brief Creates a new string object by taking a range of characters from [source].
@@ -488,10 +509,8 @@ namespace gal
 		 *
 		 * $ - A const char* string.
 		 * @ - A GAL string object.
-		 *
-		 * todo: remove it!
 		 */
-		object_string(gal_virtual_machine_state& state, const char* format, ...);
+		[[deprecated("use get_appender instead")]] object_string(gal_virtual_machine_state& state, const char* format, ...);
 
 		/**
 		 * @brief Creates a new string containing the UTF-8 encoding of [value].
@@ -509,6 +528,11 @@ namespace gal
 		 * empty string.
 		 */
 		object_string(gal_virtual_machine_state& state, object_string& string, size_type index);
+
+		[[nodiscard]] constexpr bool empty() const noexcept
+		{
+			return string_.empty();
+		}
 
 		[[nodiscard]] constexpr size_type size() const noexcept
 		{
@@ -588,6 +612,11 @@ namespace gal
 		{
 			string_.append(string.string_);
 			return *this;
+		}
+
+		auto get_appender()
+		{
+			return std::back_inserter(string_);
 		}
 
 		object_string& operator+=(const object_string& string)
@@ -834,6 +863,12 @@ namespace gal
 		void reset_value(magic_value* value) noexcept
 		{
 			value_ = value;
+		}
+
+		void close() noexcept
+		{
+			closed_ = *value_;
+			value_	= &closed_;
 		}
 
 	private:
@@ -1113,44 +1148,44 @@ namespace gal
 		 * temporaries while the fiber is executing. It is heap-allocated and grown
 		 * as needed.
 		 */
-		std::unique_ptr<magic_value[]>									   stack_;
+		std::unique_ptr<magic_value[]>									 stack_;
 
 		/**
 		 * @brief A pointer to one past the top-most value on the stack.
 		 */
-		magic_value*													   stack_top_;
+		magic_value*													 stack_top_;
 
 		/**
 		 * @brief The number of allocated slots in the stack array.
 		 */
-		gal_size_type													   stack_capacity_;
+		gal_size_type													 stack_capacity_;
 
 		/**
 		 * @brief The stack of call frames. This is a dynamic array that grows as needed but
 		 * never shrinks.
 		 */
-		frames_buffer_type												   frames_;
+		frames_buffer_type												 frames_;
 
 		/**
 		 * @brief The linked list of open upvalues that are pointing to values
-		 * still on the stack. The head of the list will be the upvalue closest
-		 * to the top of the stack, and then the list works downwards.
+		 * still on the stack. The tail of the list will be the upvalue closest
+		 * to the top of the stack, and then the list works upwards.
 		 */
-		std::forward_list<object_upvalue*, gal_allocator<object_upvalue*>> open_upvalues_;
+		std::forward_list<object_upvalue, gal_allocator<object_upvalue>> open_upvalues_;
 
 		/**
 		 * @brief The fiber that ran this one. If this fiber is yielded, control will resume
 		 * to this one. May be `nullptr`.
 		 */
-		object_fiber*													   caller_;
+		object_fiber*													 caller_;
 
 		/**
 		 * @brief If the fiber failed because of a runtime error, this will contain the
-		 * error object. Otherwise, it will be null.
+		 * error object. Otherwise, it will be nullptr.
 		 */
-		magic_value														   error_;
+		std::shared_ptr<object_string>									 error_message_;
 
-		fiber_state														   state_;
+		fiber_state														 state_;
 
 	public:
 		/**
@@ -1178,21 +1213,78 @@ namespace gal
 			return stack_top_ - stack_.get();
 		}
 
-		[[nodiscard]] magic_value* get_stack_point(gal_size_type offset) const noexcept
+		[[nodiscard]] magic_value* get_stack_point(gal_size_type offset) noexcept
 		{
 			return stack_top_ - offset;
 		}
 
-		[[nodiscard]] bool has_error() const noexcept
+		[[nodiscard]] const magic_value* get_stack_point(gal_size_type offset) const noexcept
 		{
-			return not error_.is_null();
+			return stack_top_ - offset;
 		}
 
-		void					  push(magic_value value) { *stack_top_++ = value; }
-		magic_value				  pop() { return *--stack_top_; }
-		void					  drop() { --stack_top_; }
-		[[nodiscard]] magic_value peek() const { return *(stack_top_ - 1); }
-		[[nodiscard]] magic_value peek2() const { return *(stack_top_ - 2); }
+		void set_stack_point(gal_size_type offset, magic_value value)
+		{
+			stack_top_[-offset] = value;
+		}
+
+		void set_stack_top(magic_value* new_top) noexcept
+		{
+			stack_top_ = new_top;
+		}
+
+		/**
+		 * @brief Captures the local variable [local] into an [object_upvalue]. If that local is
+		 * already in an upvalue, the existing one will be used. (This is important to
+		 * ensure that multiple closures closing over the same variable actually see
+		 * the same variable.) Otherwise, it will create a new open upvalue and add it
+		 * the fiber's list of upvalues.
+		 */
+		object_upvalue& capature_upvalue(gal_virtual_machine_state& state, magic_value& local);
+
+		/**
+		 * @brief Closes any open upvalues that have been created for stack slots at [last]
+		 * and above.
+		 */
+		void			close_upvalue(magic_value& last);
+
+		void			set_error(const object_string& error)
+		{
+			error_message_ = std::make_shared<object_string>(error);
+		}
+
+		void set_error(object_string&& error)
+		{
+			error_message_ = std::make_shared<object_string>(std::move(error));
+		}
+
+		void set_error(std::shared_ptr<object_string> error)
+		{
+			error_message_ = std::move(error);
+		}
+
+		[[nodiscard]] const object_string& get_error() const noexcept
+		{
+			return *error_message_;
+		}
+
+		void clear_error()
+		{
+			error_message_.reset();
+		}
+
+		[[nodiscard]] bool has_error() const noexcept
+		{
+			return error_message_.operator bool();
+		}
+
+		[[nodiscard]] object_fiber* raise_error();
+
+		void						push(magic_value value) { *stack_top_++ = value; }
+		magic_value					pop() { return *--stack_top_; }
+		void						drop() { --stack_top_; }
+		[[nodiscard]] magic_value	peek() const { return *(stack_top_ - 1); }
+		[[nodiscard]] magic_value	peek2() const { return *(stack_top_ - 2); }
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
@@ -1327,7 +1419,7 @@ namespace gal
 			return num_fields_;
 		}
 
-		[[nodiscard]] const object_string& get_function_name() const noexcept
+		[[nodiscard]] const object_string& get_class_name() const noexcept
 		{
 			return name_;
 		}
@@ -1454,23 +1546,23 @@ namespace std
 				const auto* obj = value.as_object();
 				switch (obj->type())
 				{
-					case gal::object_type::CLASS_TYPE:
+					case ::gal::object_type::CLASS_TYPE:
 					{
 						// Classes just use their name.
-						return dynamic_cast<const gal::object_class&>(*obj).get_function_name().hash();
+						return dynamic_cast<const ::gal::object_class&>(*obj).get_class_name().hash();
 					}
-					case gal::object_type::FUNCTION_TYPE:
+					case ::gal::object_type::FUNCTION_TYPE:
 					{
 						// Allow bare (non-closure) functions so that we can use a map to find
 						// existing constants in a function's constant table. This is only used
 						// internally. Since user code never sees a non-closure function, they
 						// cannot use them as map keys.
-						const auto& function = dynamic_cast<const gal::object_function&>(*obj);
+						const auto& function = dynamic_cast<const ::gal::object_function&>(*obj);
 						return hash_bits(function.get_parameters_arity()) ^ hash_bits(function.get_code_size());
 					}
-					case gal::object_type::STRING_TYPE:
+					case ::gal::object_type::STRING_TYPE:
 					{
-						return dynamic_cast<const gal::object_string&>(*obj).hash();
+						return dynamic_cast<const ::gal::object_string&>(*obj).hash();
 					}
 					default:
 					{

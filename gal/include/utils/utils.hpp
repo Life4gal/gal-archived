@@ -4,6 +4,8 @@
 	#define GAL_LANG_UTILS_UTILS_HPP
 
 	#include <cstdint>
+	#include <limits>
+	#include <utility>
 	#include <gal.hpp>
 
 /**
@@ -40,12 +42,46 @@ namespace gal
 	 * If the character at that index is not the beginning of a UTF-8 sequence,
 	 * returns 0.
 	 */
-	int			  utf8_decode_num_bytes(const std::uint8_t byte);
+	int			  utf8_decode_num_bytes(std::uint8_t byte);
 
 	/**
 	 * @brief Returns the smallest power of two that is equal to or greater than [n].
 	 */
 	gal_size_type bit_ceil(gal_size_type n);
+
+	/**
+	 * @brief get the real index if `size_type` and `index_type` has different type
+	 *
+	 * Bounded:
+	 *      [1,    2,    3,    4,    5]
+	 *       ^0    ^1    ^2    ^3    ^4
+	 *       ^-5   ^-4   ^-3   ^-2   ^-1
+	 * Unbounded:
+	 *      [1,    2,    3,    4,    5]    [insertable position here]
+	 *       ^0    ^1    ^2    ^3    ^4    ^5
+	 *       ^-6   ^-5   ^-4   ^-3   ^-2   ^-1
+	 */
+	template<bool Bounded = true>
+	[[nodiscard]] constexpr auto index_to_size(std::integral auto target_size, std::integral auto index) noexcept -> decltype(target_size)
+	{
+		using size_type = decltype(target_size);
+		using index_type = decltype(index);
+
+		auto ret = static_cast<size_type>(index);
+		if (std::cmp_greater(ret, index))
+		{
+			// negative index
+			if constexpr (Bounded)
+			{
+				ret = target_size - (std::numeric_limits<size_type>::max() - ret + 1);
+			}
+			else
+			{
+				ret = target_size - (std::numeric_limits<size_type>::max() - ret + 1) + 1;
+			}
+		}
+		return ret;
+	}
 
 	/**
 	 * @brief A union to let us reinterpret a double as raw bits and back.

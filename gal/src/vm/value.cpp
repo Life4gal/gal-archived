@@ -3,6 +3,7 @@
 #include <utility>
 #include <utils/assert.hpp>
 #include <utils/utils.hpp>
+#include <vm/debugger.hpp>
 #include <vm/value.hpp>
 #include <vm/vm.hpp>
 
@@ -96,6 +97,11 @@ namespace gal
 							  { value.gray(state); });
 	}
 
+	object_string::object_string(gal_virtual_machine_state& state)
+		: object{state, object_type::STRING_TYPE, state.string_class_}
+	{
+	}
+
 	object_string::object_string(gal_virtual_machine_state& state, size_type length, char c)
 		: object{state, object_type::STRING_TYPE, state.string_class_},
 		  string_(length, c)
@@ -105,6 +111,18 @@ namespace gal
 	object_string::object_string(gal_virtual_machine_state& state, const char* text, object_string::size_type length)
 		: object{state, object_type::STRING_TYPE, state.string_class_},
 		  string_{text, length}
+	{
+	}
+
+	object_string::object_string(gal_virtual_machine_state& state, string_type string)
+		: object{state, object_type::STRING_TYPE, state.string_class_},
+		  string_{std::move(string)}
+	{
+	}
+
+	object_string::object_string(gal_virtual_machine_state& state, std_string_type string)
+		: object{state, object_type::STRING_TYPE, state.string_class_},
+		  string_{std::move(string)}
 	{
 	}
 
@@ -136,7 +154,10 @@ namespace gal
 	object_string::object_string(gal_virtual_machine_state& state, double value)
 		: object{state, object_type::STRING_TYPE, state.string_class_}
 	{
-		string_ = std_format::format("{:<-.14f}", value);
+		// todo: different allocator?
+		// string_ = std_format::format("{:<-.14f}", value);
+
+		std_format::format_to(get_appender(), "{:<-.14f}", value);
 	}
 
 	object_string::object_string(gal_virtual_machine_state& state, const char* format, ...)
@@ -380,7 +401,7 @@ namespace gal
 		  frames_{initial_call_frames},
 		  open_upvalues_{},
 		  caller_{nullptr},
-		  error_{magic_value_null},
+		  error_message_{nullptr},
 		  state_{fiber_state::other_state}
 	{
 		if (closure)
@@ -436,12 +457,96 @@ namespace gal
 		// Open upvalues.
 		for (auto& upvalue: open_upvalues_)
 		{
-			upvalue->reset_value(stack_.get() + (upvalue->get_value() - old_stack.get()));
+			upvalue.reset_value(stack_.get() + (upvalue.get_value() - old_stack.get()));
 		}
 
 		stack_top_ = stack_.get() + (stack_top_ - old_stack.get());
 
 		// old_stack discard in here
+	}
+
+	object_upvalue& object_fiber::capature_upvalue(gal_virtual_machine_state& state, magic_value& local)
+	{
+		// If there are no open upvalues at all, we must need a new one.
+		if (open_upvalues_.empty())
+		{
+			return open_upvalues_.emplace_front(state, local);
+		}
+
+		// Walk towards the bottom of the stack until we find a previously existing
+		// upvalue or pass where it should be.
+		auto prev_upvalue = open_upvalues_.before_begin();
+		auto upvalue	  = open_upvalues_.begin();
+
+		// Walk towards the top of the stack until we find a previously existing
+		// upvalue or pass where it should be.
+		while (upvalue != open_upvalues_.end() && upvalue->get_value() < &local)
+		{
+			prev_upvalue = upvalue;
+			++upvalue;
+		}
+
+		// Found an existing upvalue for this local.
+		if (upvalue != open_upvalues_.end() && upvalue->get_value() == &local)
+		{
+			return *upvalue;
+		}
+
+		// We've walked past this local on the stack, so there must not be an
+		// upvalue for it already. Make a new one and link it in the right
+		// place to keep the list sorted.
+		return *open_upvalues_.emplace_after(prev_upvalue, state, local);
+	}
+
+	void object_fiber::close_upvalue(magic_value& last)
+	{
+		if (not open_upvalues_.empty())
+		{
+			auto prev	 = open_upvalues_.before_begin();
+			auto current = open_upvalues_.begin();
+			for (
+					;
+					current != open_upvalues_.end() && current->get_value() < &last;
+					++current, ++prev)
+			{
+			}
+
+			for (auto i = current; i != open_upvalues_.end(); ++i)
+			{
+				// Move the value into the upvalue itself and point the upvalue to it.
+				i->close();
+			}
+
+			open_upvalues_.erase_after(prev, open_upvalues_.end());
+		}
+	}
+
+	object_fiber* object_fiber::raise_error()
+	{
+		gal_assert(has_error(), "Should only call this after an error.");
+
+		auto* current = this;
+		auto  error	  = error_message_;
+
+		do {
+			// Every fiber along the call chain gets aborted with the same error.
+			current->set_error(error);
+
+			// If the caller ran this fiber using "try", give it the error and stop.
+			if (current->state_ == fiber_state::try_state)
+			{
+				// Make the caller's try method return the error message.
+				current->caller_->set_stack_point(1, error->operator magic_value());
+				return current->caller_;
+			}
+
+			// Otherwise, unhook the caller since we will never resume and return to it.
+			auto* caller	 = current->caller_;
+			current->caller_ = nullptr;
+			current			 = caller;
+		} while (current);
+
+		return nullptr;
 	}
 
 	void object_fiber::blacken(gal_virtual_machine_state& state)
@@ -461,13 +566,13 @@ namespace gal
 		// Open upvalues.
 		for (auto& upvalue: open_upvalues_)
 		{
-			upvalue->gray(state);
+			upvalue.gray(state);
 		}
 
 		// The caller.
 		gal_assert(caller_, "Caller should not be nullptr.");
 		caller_->gray(state);
-		error_.gray(state);
+		error_message_.gray(state);
 
 		// Keep track of how much memory is still in use.
 		state.bytes_allocated_ += sizeof(object_fiber);

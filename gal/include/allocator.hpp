@@ -30,23 +30,8 @@
 
 	#ifdef GAL_ALLOCATOR_NEED_TRACE
 		#include <iostream>
-		#if __has_include(<source_location>)
-			#include <source_location>
-			using std_source_location = std::source_location;
-		#elif __has_include(<experimental/source_location>)
-			#include <experimental/source_location>
-			using std_source_location = std::experimental::source_location;
-		#else
-			#error "assert requires <source_location>"
-		#endif
-
-		#ifdef GAL_FMT_NOT_SUPPORT
-			#include <fmt/format.h>
-			namespace std_format = fmt;
-		#else
-			#include <format>
-			namespace std_format	  = std;
-		#endif
+		#include <utils/source_location.hpp>
+		#include <utils/format.hpp>
 	#endif
 
 namespace gal
@@ -192,7 +177,7 @@ namespace std
 		using propagate_on_container_copy_assignment = typename internal_allocator_traits::propagate_on_container_copy_assignment;
 		using propagate_on_container_move_assignment = typename internal_allocator_traits::propagate_on_container_move_assignment;
 		using propagate_on_container_swap			 = typename internal_allocator_traits::propagate_on_container_swap;
-		constexpr static bool is_always_equal		 = internal_allocator_traits::is_always_equal;
+		using is_always_equal						 = typename internal_allocator_traits::is_always_equal;
 
 		template<typename T>
 		using rebind_alloc = ::gal::gal_allocator<T>;

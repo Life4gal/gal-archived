@@ -20,7 +20,10 @@ namespace gal
 	#include <vm/opcodes.config>
 	};
 
-	std::uint8_t code_to_scalar(opcodes_type code);
+	std::uint8_t code_to_scalar(opcodes_type code)
+	{
+		return static_cast<std::uint8_t>(code);
+	}
 
 	/**
 	 * @brief A handle to a value, basically just a linked list of extra GC roots.
@@ -29,7 +32,7 @@ namespace gal
 	 */
 	struct gal_handle
 	{
-		magic_value value;
+		magic_value value{};
 
 		gal_handle* prev{nullptr};
 		gal_handle* next{nullptr};
@@ -50,17 +53,17 @@ namespace gal
 		constexpr static gal_size_type max_temp_roots = GAL_MAX_TEMP_ROOTS;
 	#endif
 
-		std::shared_ptr<object_class>													  boolean_class_;
-		std::shared_ptr<object_class>									class_class_;
-		std::shared_ptr<object_class>													  fiber_class_;
-		std::shared_ptr<object_class>													  function_class_;
-		std::shared_ptr<object_class>													  list_class_;
-		std::shared_ptr<object_class>													  map_class_;
-		std::shared_ptr<object_class>													  null_class_;
-		std::shared_ptr<object_class>													  number_class_;
-		std::shared_ptr<object_class>													  object_class_;
-		std::shared_ptr<object_class>													  range_class_;
-		std::shared_ptr<object_class>													  string_class_;
+		std::shared_ptr<object_class>									  boolean_class_;
+		std::shared_ptr<object_class>									  class_class_;
+		std::shared_ptr<object_class>									  fiber_class_;
+		std::shared_ptr<object_class>									  function_class_;
+		std::shared_ptr<object_class>									  list_class_;
+		std::shared_ptr<object_class>									  map_class_;
+		std::shared_ptr<object_class>									  null_class_;
+		std::shared_ptr<object_class>									  number_class_;
+		std::shared_ptr<object_class>									  object_class_;
+		std::shared_ptr<object_class>									  range_class_;
+		std::shared_ptr<object_class>									  string_class_;
 
 		/**
 		 * @brief The fiber that is currently running.
@@ -295,27 +298,27 @@ namespace gal
 		/**
 		 * @brief Marks [obj] as a GC root so that it doesn't get collected.
 		 */
-		void						push_root(object& obj);
+		void							  push_root(object& obj);
 
 		/**
 		 * @brief Removes the most recently pushed temporary root.
 		 */
-		void						pop_root();
+		void							  pop_root();
 
 		/**
 		 * @brief Returns the class of [value].
 		 */
-		[[nodiscard]] object_class* get_class(magic_value value) const
+		[[nodiscard]] const object_class* get_class(magic_value value) const
 		{
-			if (value.is_number()) { return number_class_; }
+			if (value.is_number()) { return number_class_.get(); }
 			if (value.is_object()) { return value.as_object()->get_class(); }
 
 			switch (value.get_tag())
 			{
-				case magic_value::tag_nan: return number_class_;
-				case magic_value::tag_null: return null_class_;
+				case magic_value::tag_nan: return number_class_.get();
+				case magic_value::tag_null: return null_class_.get();
 				case magic_value::tag_false:
-				case magic_value::tag_true: return boolean_class_;
+				case magic_value::tag_true: return boolean_class_.get();
 				case magic_value::tag_undefined: UNREACHABLE();
 			}
 
@@ -323,21 +326,6 @@ namespace gal
 		}
 
 	private:
-		/**
-		 * @brief Captures the local variable [local] into an [object_upvalue]. If that local is
-		 * already in an upvalue, the existing one will be used. (This is important to
-		 * ensure that multiple closures closing over the same variable actually see
-		 * the same variable.) Otherwise, it will create a new open upvalue and add it
-		 * the fiber's list of upvalues.
-		 */
-		object_upvalue*				   capture_upvalue(object_fiber& fiber, magic_value& local);
-
-		/**
-		 * @brief Closes any open upvalues that have been created for stack slots at [last]
-		 * and above.
-		 */
-		static void					   close_upvalue(object_fiber& fiber, magic_value& last);
-
 		/**
 		 * @brief Looks up a outer method in [module_name] on [class_name] with [signature].
 		 *
