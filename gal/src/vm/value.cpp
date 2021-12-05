@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdarg>
+#include <utility>
 #include <utils/assert.hpp>
 #include <utils/utils.hpp>
 #include <vm/value.hpp>
@@ -9,10 +10,10 @@ namespace gal
 {
 	object::~object() noexcept = default;
 
-	object::object(gal_virtual_machine_state& state, object_type type, object_class* object_class) noexcept
+	object::object(gal_virtual_machine_state& state, object_type type, std::shared_ptr<object_class> object_class) noexcept
 		: type_{type},
 		  dark_{false},
-		  object_class_{object_class}
+		  object_class_{std::move(object_class)}
 	{
 		state.objects_.push_front(this);
 	}
@@ -368,5 +369,300 @@ namespace gal
 		// Keep track of how much memory is still in use.
 		state.bytes_allocated_ += sizeof(object_closure);
 		state.bytes_allocated_ += sizeof(upvalue_type) * upvalues_.capacity();
+	}
+
+	object_fiber::object_fiber(gal_virtual_machine_state& state, object_closure* closure)
+		: object{state, object_type::FIBER_TYPE, state.fiber_class_},
+		  // Add one slot for the unused implicit receiver slot that the compiler assumes all functions have.
+		  stack_{std::make_unique<magic_value[]>(closure ? bit_ceil(closure->get_function().get_slots_size() + 1) : 1)},
+		  stack_top_{stack_.get()},
+		  stack_capacity_{closure ? bit_ceil(closure->get_function().get_slots_size() + 1) : 1},
+		  frames_{initial_call_frames},
+		  open_upvalues_{},
+		  caller_{nullptr},
+		  error_{magic_value_null},
+		  state_{fiber_state::other_state}
+	{
+		if (closure)
+		{
+			// Initialize the first call frame.
+			add_call_frame(*closure, stack_[0]);
+
+			// The first slot always holds the closure.
+			stack_top_[0] = closure->operator magic_value();
+			++stack_top_;
+		}
+	}
+
+	void object_fiber::add_call_frame(object_closure& closure, magic_value& stack_start)
+	{
+		call_frame a{closure.get_function().get_code_data(), &closure, &stack_start};
+		frames_.push_back(a);
+
+		// frames_.emplace_back(closure.get_function().get_code_data(), &closure, &stack_start);
+	}
+
+	void object_fiber::ensure_stack(gal_virtual_machine_state& state, gal_size_type needed)
+	{
+		if (stack_capacity_ >= needed) return;
+
+		const auto new_capacity = bit_ceil(needed);
+
+		const auto old_stack	= std::move(stack_);
+
+		stack_					= std::make_unique<magic_value[]>(new_capacity);
+		stack_capacity_			= new_capacity;
+
+		/**
+		 * @brief we need to recalculate every pointer that points into the old stack
+		 * to into the same relative distance in the new stack. We have to be a little
+		 * careful about how these are calculated because pointer subtraction is only
+		 * well-defined within a single array, hence the slightly redundant-looking
+		 * arithmetic below.
+		 */
+
+		// Top of the stack.
+		if (const auto* bottom = state.get_stack_bottom(); bottom >= old_stack.get() && bottom <= stack_top_)
+		{
+			state.set_stack_bottom(stack_.get() + (bottom - old_stack.get()));
+		}
+
+		// Stack pointer for each call frame.
+		for (auto& frame: frames_)
+		{
+			frame.stack_start = stack_.get() + (frame.stack_start - old_stack.get());
+		}
+
+		// Open upvalues.
+		for (auto& upvalue: open_upvalues_)
+		{
+			upvalue->reset_value(stack_.get() + (upvalue->get_value() - old_stack.get()));
+		}
+
+		stack_top_ = stack_.get() + (stack_top_ - old_stack.get());
+
+		// old_stack discard in here
+	}
+
+	void object_fiber::blacken(gal_virtual_machine_state& state)
+	{
+		// Stack functions.
+		for (auto& frame: frames_)
+		{
+			frame.closure->gray(state);
+		}
+
+		// Stack variables.
+		for (auto* slot = stack_.get(); slot < stack_top_; ++slot)
+		{
+			slot->gray(state);
+		}
+
+		// Open upvalues.
+		for (auto& upvalue: open_upvalues_)
+		{
+			upvalue->gray(state);
+		}
+
+		// The caller.
+		gal_assert(caller_, "Caller should not be nullptr.");
+		caller_->gray(state);
+		error_.gray(state);
+
+		// Keep track of how much memory is still in use.
+		state.bytes_allocated_ += sizeof(object_fiber);
+		state.bytes_allocated_ += sizeof(frames_buffer_value_type) * frames_.capacity();
+		state.bytes_allocated_ += sizeof(magic_value) * stack_capacity_;
+	}
+
+	void object_class::bind_super_class(object_class& superclass)
+	{
+		superclass_ = &superclass;
+
+		// Include the superclass in the total number of fields.
+		if (not is_outer_class())
+		{
+			num_fields_ += superclass.num_fields_;
+		}
+		else
+		{
+			gal_assert(superclass.is_interface_class(), "A outer class cannot inherit from a class with fields.");
+		}
+
+		// Inherit methods from its superclass.
+		// todo: Do we need to support multiple inheritance?
+		methods_ = superclass_->methods_;
+	}
+
+	std::shared_ptr<object_class> object_class::create_derived_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_string& name)
+	{
+		// Create the metaclass.
+		auto meta_class_name = name;
+		meta_class_name.append("@metaclass@");
+
+		auto meta_class			  = std::make_shared<object_class>(state, 0, std::move(meta_class_name));
+		meta_class->object_class_ = state.class_class_;
+
+		// Meta-classes always inherit Class and do not parallel the non-metaclass
+		// hierarchy.
+		meta_class->bind_super_class(*state.class_class_);
+
+		auto ret		   = std::make_shared<object_class>(state, num_fields, name);
+		ret->object_class_ = std::move(meta_class);
+		ret->bind_super_class(*this);
+
+		return ret;
+	}
+
+	void object_class::blacken(gal_virtual_machine_state& state)
+	{
+		// The metaclass.
+		object_class_->gray(state);
+
+		// The superclass.
+		superclass_->gray(state);
+
+		// Method function objects.
+		for (auto& m: methods_)
+		{
+			if (m.type == method_type::block_type)
+			{
+				m.as.closure->gray(state);
+			}
+		}
+
+		name_.gray(state);
+
+		if (not attributes_.is_null())
+		{
+			attributes_.as_object()->gray(state);
+		}
+
+		// Keep track of how much memory is still in use.
+		state.bytes_allocated_ += sizeof(object_class);
+		state.bytes_allocated_ += sizeof(method_buffer_value_type) * methods_.capacity();
+	}
+
+	void object_instance::blacken(gal_virtual_machine_state& state)
+	{
+		object_class_->gray(state);
+
+		// Mark the fields.
+		for (auto& field: fields_)
+		{
+			field.gray(state);
+		}
+
+		// Keep track of how much memory is still in use.
+		state.bytes_allocated_ += sizeof(object_instance);
+		state.bytes_allocated_ += sizeof(field_buffer_value_type) * fields_.capacity();
+	}
+
+	object_list::object_list(gal_virtual_machine_state& state)
+		: object{state, object_type::LIST_TYPE, state.list_class_},
+		  elements_{}
+	{
+	}
+
+	void object_list::insert(gal_virtual_machine_state& state, magic_value value, list_buffer_size_type index)
+	{
+		if (value.is_object())
+		{
+			state.push_root(*value.as_object());
+		}
+
+		// Store the new element.
+		elements_.insert(std::next(elements_.begin(), static_cast<list_buffer_difference_type>(index)), value);
+
+		if (value.is_object())
+		{
+			state.pop_root();
+		}
+	}
+
+	magic_value object_list::remove(gal_virtual_machine_state& state, list_buffer_size_type index)
+	{
+		auto removed = elements_[index];
+
+		if (removed.is_object())
+		{
+			state.push_root(*removed.as_object());
+		}
+
+		elements_.erase(std::next(elements_.begin(), static_cast<list_buffer_difference_type>(index)));
+
+		if (removed.is_object())
+		{
+			state.pop_root();
+		}
+
+		return removed;
+	}
+
+	gal_index_type object_list::index_of(magic_value value) const
+	{
+		const auto it = std::ranges::find(elements_, value);
+		if (it != elements_.end())
+		{
+			return std::distance(elements_.begin(), it);
+		}
+		return gal_index_not_exist;
+	}
+
+	void object_list::blacken(gal_virtual_machine_state& state)
+	{
+		// Mark the elements.
+		for (auto& value: elements_)
+		{
+			value.gray(state);
+		}
+
+		// Keep track of how much memory is still in use.
+		state.bytes_allocated_ += sizeof(object_list);
+		state.bytes_allocated_ += sizeof(list_buffer_value_type) * elements_.capacity();
+	}
+
+	object_map::object_map(gal_virtual_machine_state& state)
+		: object{state, object_type::MAP_TYPE, state.map_class_},
+		  entries_{}
+	{
+	}
+
+	magic_value object_map::remove(gal_virtual_machine_state& state, magic_value key)
+	{
+		auto it = find(key);
+		if (it == entries_.end())
+		{
+			return magic_value_null;
+		}
+
+		auto value = it->second;
+
+		if (value.is_object())
+		{
+			state.push_root(*value.as_object());
+		}
+
+		entries_.erase(it);
+
+		if (value.is_object())
+		{
+			state.pop_root();
+		}
+		return value;
+	}
+
+	void object_map::blacken(gal_virtual_machine_state& state)
+	{
+		// Mark the entries.
+		for (auto& [k, v]: entries_)
+		{
+			k.gray(state);
+			v.gray(state);
+		}
+
+		// Keep track of how much memory is still in use.
+		state.bytes_allocated_ += sizeof(object_map);
+		state.bytes_allocated_ += sizeof(value_type) * entries_.size();
 	}
 }// namespace gal

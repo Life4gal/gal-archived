@@ -8,6 +8,7 @@
 	#include <forward_list>
 	#include <gal.hpp>
 	#include <stack>
+	#include <memory>
 	#include <vm/common.hpp>
 	#include <vm/compiler.hpp>
 	#include <vm/value.hpp>
@@ -49,17 +50,17 @@ namespace gal
 		constexpr static gal_size_type max_temp_roots = GAL_MAX_TEMP_ROOTS;
 	#endif
 
-		object_class*													  boolean_class_;
-		object_class*													  class_class_;
-		object_class*													  fiber_class_;
-		object_class*													  function_class_;
-		object_class*													  list_class_;
-		object_class*													  map_class_;
-		object_class*													  null_class_;
-		object_class*													  number_class_;
-		object_class*													  object_class_;
-		object_class*													  range_class_;
-		object_class*													  string_class_;
+		std::shared_ptr<object_class>													  boolean_class_;
+		std::shared_ptr<object_class>									class_class_;
+		std::shared_ptr<object_class>													  fiber_class_;
+		std::shared_ptr<object_class>													  function_class_;
+		std::shared_ptr<object_class>													  list_class_;
+		std::shared_ptr<object_class>													  map_class_;
+		std::shared_ptr<object_class>													  null_class_;
+		std::shared_ptr<object_class>													  number_class_;
+		std::shared_ptr<object_class>													  object_class_;
+		std::shared_ptr<object_class>													  range_class_;
+		std::shared_ptr<object_class>													  string_class_;
 
 		/**
 		 * @brief The fiber that is currently running.
@@ -164,6 +165,16 @@ namespace gal
 			}
 
 			return 0;
+		}
+
+		[[nodiscard]] const magic_value* get_stack_bottom() const noexcept
+		{
+			return api_stack_;
+		}
+
+		void set_stack_bottom(magic_value* new_bottom) noexcept
+		{
+			api_stack_ = new_bottom;
 		}
 
 		void					  validate_slot(gal_slot_type slot) const;

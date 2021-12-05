@@ -6,12 +6,15 @@
 	#include <gal.hpp>
 	#include <allocator.hpp>
 	#include <vm/common.hpp>
+	#include <utility>
 	#include <utils/utils.hpp>
 
 	#include <limits>
 	#include <vector>
 	#include <string>
 	#include <unordered_map>
+	#include <memory>
+	#include <forward_list>
 
 /**
  * @brief
@@ -77,27 +80,28 @@ namespace gal
 	class object
 	{
 	private:
-		object_type	  type_;
-		bool		  dark_;
+		object_type type_;
+		bool		dark_;
 
+	protected:
 		/**
 		 * @brief The object's class.
 		 */
-		object_class* object_class_;
+		std::shared_ptr<object_class> object_class_;
 
 	public:
 		virtual ~object() noexcept = 0;
 
-		object(gal_virtual_machine_state& state, object_type type, object_class* object_class) noexcept;
+		object(gal_virtual_machine_state& state, object_type type, std::shared_ptr<object_class> object_class) noexcept;
 
-		[[nodiscard]] constexpr object_type	  type() const noexcept { return type_; }
-		[[nodiscard]] constexpr object_class* get_class() const noexcept { return object_class_; }
+		[[nodiscard]] constexpr object_type			type() const noexcept { return type_; }
+		[[nodiscard]] constexpr const object_class* get_class() const noexcept { return object_class_.get(); }
 
 		/**
 		 * @brief Mark [this] as reachable and still in use. This should only be called
 		 * during the sweep phase of a garbage collection.
 		 */
-		void								  gray(gal_virtual_machine_state& state);
+		void										gray(gal_virtual_machine_state& state);
 
 		/**
 		 * @brief Processes every object in the gray stack until all reachable objects have
@@ -106,9 +110,9 @@ namespace gal
 		  *
 		  * todo: move it to state
 		 */
-		static void							  blacken_all(gal_virtual_machine_state& state);
+		static void									blacken_all(gal_virtual_machine_state& state);
 
-		explicit							  operator magic_value() const noexcept;
+		explicit									operator magic_value() const noexcept;
 
 	private:
 		virtual void blacken(gal_virtual_machine_state& state) = 0;
@@ -822,6 +826,16 @@ namespace gal
 		{
 		}
 
+		[[nodiscard]] const magic_value* get_value() const noexcept
+		{
+			return value_;
+		}
+
+		void reset_value(magic_value* value) noexcept
+		{
+			value_ = value;
+		}
+
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
 	};
@@ -899,6 +913,11 @@ namespace gal
 		{
 		}
 
+		[[nodiscard]] const object_string& get_name() const noexcept
+		{
+			return name_;
+		}
+
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
 	};
@@ -916,8 +935,13 @@ namespace gal
 	class object_function : public object
 	{
 	public:
-		using code_buffer_type		= std::vector<std::uint8_t, gal_allocator<std::uint8_t>>;
-		using constants_buffer_type = magic_value_buffer;
+		using code_buffer_type			= std::vector<std::uint8_t, gal_allocator<std::uint8_t>>;
+		using code_buffer_value_type	= code_buffer_type::value_type;
+		using code_buffer_size_type		= code_buffer_type::size_type;
+		using code_buffer_pointer		= code_buffer_type::pointer;
+		using code_buffer_const_pointer = code_buffer_type::const_pointer;
+
+		using constants_buffer_type		= magic_value_buffer;
 
 	private:
 		code_buffer_type	  code_;
@@ -969,6 +993,21 @@ namespace gal
 			return num_upvalues_;
 		}
 
+		[[nodiscard]] code_buffer_const_pointer get_code_data() const noexcept
+		{
+			return code_.data();
+		}
+
+		[[nodiscard]] code_buffer_size_type get_code_size() const noexcept
+		{
+			return code_.size();
+		}
+
+		[[nodiscard]] gal_size_type get_parameters_arity() const noexcept
+		{
+			return arity_;
+		}
+
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
 	};
@@ -1017,19 +1056,19 @@ namespace gal
 		 * @brief Pointer to the current (really next-to-be-executed) instruction in the
 		 * function's bytecode.
 		 */
-		std::uint8_t*	ip;
+		object_function::code_buffer_const_pointer ip;
 
 		/**
 		 * @brief The closure being executed.
 		 */
-		object_closure* closure;
+		object_closure*							   closure;
 
 		/**
 		 * @brief Pointer to the first stack slot used by this call frame. This will contain
 		 * the receiver, followed by the function's parameters, then local variables
 		 * and temporaries.
 		 */
-		magic_value*	stack_start;
+		magic_value*							   stack_start;
 	};
 
 	enum class fiber_state
@@ -1058,6 +1097,7 @@ namespace gal
 	{
 	public:
 		using frames_buffer_type									 = std::vector<call_frame, gal_allocator<call_frame>>;
+		using frames_buffer_value_type								 = frames_buffer_type::value_type;
 		using frames_buffer_size_type								 = frames_buffer_type::size_type;
 
 		/**
@@ -1073,44 +1113,44 @@ namespace gal
 		 * temporaries while the fiber is executing. It is heap-allocated and grown
 		 * as needed.
 		 */
-		magic_value*	   stack_;
+		std::unique_ptr<magic_value[]>									   stack_;
 
 		/**
 		 * @brief A pointer to one past the top-most value on the stack.
 		 */
-		magic_value*	   stack_top_;
+		magic_value*													   stack_top_;
 
 		/**
 		 * @brief The number of allocated slots in the stack array.
 		 */
-		gal_size_type	   stack_capacity_;
+		gal_size_type													   stack_capacity_;
 
 		/**
 		 * @brief The stack of call frames. This is a dynamic array that grows as needed but
 		 * never shrinks.
 		 */
-		frames_buffer_type frames_;
+		frames_buffer_type												   frames_;
 
 		/**
-		 * @brief Pointer to the first node in the linked list of open upvalues that are
-		 * pointing to values still on the stack. The head of the list will be the
-		 * upvalue closest to the top of the stack, and then the list works downwards.
+		 * @brief The linked list of open upvalues that are pointing to values
+		 * still on the stack. The head of the list will be the upvalue closest
+		 * to the top of the stack, and then the list works downwards.
 		 */
-		object_upvalue*	   open_upvalues_;
+		std::forward_list<object_upvalue*, gal_allocator<object_upvalue*>> open_upvalues_;
 
 		/**
 		 * @brief The fiber that ran this one. If this fiber is yielded, control will resume
 		 * to this one. May be `nullptr`.
 		 */
-		object_fiber*	   caller_;
+		object_fiber*													   caller_;
 
 		/**
 		 * @brief If the fiber failed because of a runtime error, this will contain the
 		 * error object. Otherwise, it will be null.
 		 */
-		magic_value		   error_;
+		magic_value														   error_;
 
-		fiber_state		   state_;
+		fiber_state														   state_;
 
 	public:
 		/**
@@ -1128,14 +1168,14 @@ namespace gal
 		 */
 		void						ensure_stack(gal_virtual_machine_state& state, gal_size_type needed);
 
-		[[nodiscard]] gal_size_type get_current_stack_size(magic_value* buttom) const noexcept
+		[[nodiscard]] gal_size_type get_current_stack_size(magic_value* bottom) const noexcept
 		{
-			return stack_top_ - buttom;
+			return stack_top_ - bottom;
 		}
 
 		[[nodiscard]] gal_size_type get_current_stack_size() const noexcept
 		{
-			return stack_top_ - stack_;
+			return stack_top_ - stack_.get();
 		}
 
 		[[nodiscard]] magic_value* get_stack_point(gal_size_type offset) const noexcept
@@ -1143,7 +1183,10 @@ namespace gal
 			return stack_top_ - offset;
 		}
 
-		[[nodiscard]] bool		  has_error() const;
+		[[nodiscard]] bool has_error() const noexcept
+		{
+			return not error_.is_null();
+		}
 
 		void					  push(magic_value value) { *stack_top_++ = value; }
 		magic_value				  pop() { return *--stack_top_; }
@@ -1203,9 +1246,12 @@ namespace gal
 	class object_class : public object
 	{
 	public:
-		using method_buffer_type = std::vector<method, gal_allocator<method>>;
+		using method_buffer_type	   = std::vector<method, gal_allocator<method>>;
+		using method_buffer_value_type = method_buffer_type::value_type;
+		using method_buffer_size_type  = method_buffer_type::size_type;
 
 	private:
+		// todo: Do we need to support multiple inheritance?
 		object_class*	   superclass_;
 
 		/**
@@ -1229,7 +1275,7 @@ namespace gal
 		/**
 		 * @brief The name of the class.
 		 */
-		object_string&	   name_;
+		object_string	   name_;
 
 		/**
 		 * @brief The ClassAttribute for the class, if any
@@ -1242,23 +1288,52 @@ namespace gal
 		 * This is only used for bootstrapping the initial Object and Class classes,
 		 * which are a little special.
 		 */
-		object_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_string& name);
+		object_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_string name)
+			: object{state, object_type::CLASS_TYPE, nullptr},
+			  superclass_{nullptr},
+			  num_fields_{num_fields},
+			  methods_{},
+			  name_{std::move(name)},
+			  attributes_{magic_value_null} {}
 
 		/**
 		 * @brief Makes [superclass] the superclass of [subclass], and causes subclass to
 		 * inherit its methods. This should be called before any methods are defined
 		 * on subclass.
 		 */
-		void			   bind_super_class(gal_virtual_machine_state& state, object_class& superclass);
+		void						  bind_super_class(object_class& superclass);
 
 		/**
 		 * @brief Creates a new class object as well as its associated metaclass.
 		 */
-		object_class*	   create_derived_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_string& name);
+		std::shared_ptr<object_class> create_derived_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_string& name);
 
-		void			   set_method(gal_virtual_machine_state& state, gal_index_type symbol, method m);
+		void						  set_method(method_buffer_size_type symbol, method m)
+		{
+			// Make sure the buffer is big enough to contain the symbol's index.
+			if (symbol >= methods_.size())
+			{
+				method none{.type = method_type::none_type, .as{.closure = nullptr}};
+				for (auto i = symbol - methods_.size(); i > 0; --i)
+				{
+					methods_.push_back(none);
+				}
+			}
+			methods_.push_back(m);
+		}
 
-		[[nodiscard]] bool is_outer_class() const noexcept { return num_fields_ == gal_size_not_exist; }
+		[[nodiscard]] gal_size_type get_field_size() const noexcept
+		{
+			return num_fields_;
+		}
+
+		[[nodiscard]] const object_string& get_function_name() const noexcept
+		{
+			return name_;
+		}
+
+		[[nodiscard]] bool is_outer_class() const noexcept { return num_fields_ == gal_size_type(-1); }
+		[[nodiscard]] bool is_interface_class() const noexcept { return num_fields_ == gal_size_type(0); }
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
@@ -1267,28 +1342,53 @@ namespace gal
 	class object_outer : public object
 	{
 	public:
-		using data_buffer_type = std::vector<std::uint8_t, gal_allocator<std::uint8_t>>;
+		using data_buffer_type		 = std::vector<std::uint8_t, gal_allocator<std::uint8_t>>;
+		using data_buffer_value_type = data_buffer_type::value_type;
+		using data_buffer_size_type	 = data_buffer_type::size_type;
 
 	private:
 		data_buffer_type data_;
 
 	public:
-		explicit object_outer(gal_virtual_machine_state& state, object_class& obj_class);
+		explicit object_outer(gal_virtual_machine_state& state, std::shared_ptr<object_class> obj_class)
+			: object{state, object_type::OUTER_TYPE, std::move(obj_class)},
+			  data_{} {}
 
 	private:
-		void blacken(gal_virtual_machine_state& state) override;
+		void blacken(gal_virtual_machine_state& state) override
+		{
+			(void)state;
+			// todo: Keep track of how much memory the outer object uses. We can store
+			// this in each outer object, but it will balloon the size. We may not want
+			// that much overhead. One option would be to let the outer class register
+			// a C++ function that returns a size for the object. That way the VM doesn't
+			// always have to explicitly store it.
+		}
 	};
 
 	class object_instance : public object
 	{
 	public:
-		using field_buffer_type = std::vector<magic_value, gal_allocator<magic_value>>;
+		using field_buffer_type		  = std::vector<magic_value, gal_allocator<magic_value>>;
+		using field_buffer_value_type = field_buffer_type::value_type;
+		using field_buffer_size_type  = field_buffer_type::size_type;
 
 	private:
 		field_buffer_type fields_;
 
 	public:
-		explicit object_instance(gal_virtual_machine_state& state, object_class& obj_class);
+		explicit object_instance(gal_virtual_machine_state& state, std::shared_ptr<object_class> obj_class)
+			: object{state, object_type::OUTER_TYPE, std::move(obj_class)},
+			  fields_{}
+		{
+			// Initialize fields to null.
+			const auto size = object_class_->get_field_size();
+			fields_.reserve(size);
+			for (auto i = size; i > 0; --i)
+			{
+				fields_.push_back(magic_value_null);
+			}
+		}
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
@@ -1297,10 +1397,12 @@ namespace gal
 	class object_list : public object
 	{
 	public:
-		using list_buffer_type	 = std::vector<magic_value, gal_allocator<magic_value>>;
-		using list_value_type	 = list_buffer_type::value_type;
-		using list_size_type	 = list_buffer_type::size_type;
-		using list_value_pointer = list_buffer_type::pointer;
+		// todo: use vector or list?
+		using list_buffer_type			  = std::vector<magic_value, gal_allocator<magic_value>>;
+		using list_buffer_value_type	  = list_buffer_type::value_type;
+		using list_buffer_size_type		  = list_buffer_type::size_type;
+		using list_buffer_difference_type = list_buffer_type::difference_type;
+		using list_buffer_value_pointer	  = list_buffer_type::pointer;
 
 	private:
 		list_buffer_type elements_;
@@ -1311,12 +1413,12 @@ namespace gal
 		/**
 		 * @brief Inserts [value] in [list] at [index], shifting down the other elements.
 		 */
-		void						 insert(gal_virtual_machine_state& state, magic_value value, list_size_type index);
+		void						 insert(gal_virtual_machine_state& state, magic_value value, list_buffer_size_type index);
 
 		/**
 		 * @brief Removes and returns the item at [index] from [list].
 		 */
-		magic_value					 remove(gal_virtual_machine_state& state, list_size_type index);
+		magic_value					 remove(gal_virtual_machine_state& state, list_buffer_size_type index);
 
 		/**
 		 * @brief Searches for [value] in [list], returns the index or gal_index_not_exist if not found.
@@ -1336,9 +1438,51 @@ namespace std
 	{
 		std::size_t operator()(const ::gal::magic_value& value) const
 		{
-			// todo
-			(void)value;
-			return 0;
+			constexpr static auto hash_bits = [](std::size_t hash) constexpr noexcept
+			{
+				hash = ~hash + (hash << 18);// hash = (hash << 18) - hash - 1;
+				hash = hash ^ (hash >> 31);
+				hash = hash * 21;// hash = (hash + (hash << 2)) + (hash << 4);
+				hash = hash ^ (hash >> 11);
+				hash = hash + (hash << 6);
+				hash = hash ^ (hash >> 22);
+				return hash & 0x3fffffff;
+			};
+
+			if (value.is_object())
+			{
+				const auto* obj = value.as_object();
+				switch (obj->type())
+				{
+					case gal::object_type::CLASS_TYPE:
+					{
+						// Classes just use their name.
+						return dynamic_cast<const gal::object_class&>(*obj).get_function_name().hash();
+					}
+					case gal::object_type::FUNCTION_TYPE:
+					{
+						// Allow bare (non-closure) functions so that we can use a map to find
+						// existing constants in a function's constant table. This is only used
+						// internally. Since user code never sees a non-closure function, they
+						// cannot use them as map keys.
+						const auto& function = dynamic_cast<const gal::object_function&>(*obj);
+						return hash_bits(function.get_parameters_arity()) ^ hash_bits(function.get_code_size());
+					}
+					case gal::object_type::STRING_TYPE:
+					{
+						return dynamic_cast<const gal::object_string&>(*obj).hash();
+					}
+					default:
+					{
+						// "Only immutable objects can be hashed."
+						UNREACHABLE();
+					}
+				}
+			}
+			else
+			{
+				return hash_bits(value.data_);
+			}
 		}
 	};
 }// namespace std
@@ -1353,6 +1497,7 @@ namespace gal
 	public:
 		using map_buffer_type = std::unordered_map<magic_value, magic_value, std::hash<magic_value>, std::equal_to<>, gal_allocator<std::pair<const magic_value, magic_value>>>;
 
+		using value_type	  = map_buffer_type::value_type;
 		using key_type		  = map_buffer_type::key_type;
 		using mapped_type	  = map_buffer_type::mapped_type;
 		using size_type		  = map_buffer_type::size_type;
@@ -1447,6 +1592,12 @@ namespace gal
 		{
 			return entries_.find(key);
 		}
+
+		/**
+		 * @brief Removes [key] from [map], if present. Returns the value for the key if found
+		 * or `magic_value_null` otherwise.
+		 */
+		magic_value remove(gal_virtual_machine_state& state, magic_value key);
 
 	private:
 		void blacken(gal_virtual_machine_state& state) override;
