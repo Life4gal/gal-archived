@@ -29,6 +29,7 @@ namespace gal
 	class object_function;
 	class object_module;
 	class object_class;
+	class object_string;
 
 	/**
 	 * @brief Compiles [source], a string of GAL source code located in [module], to an
@@ -70,12 +71,21 @@ namespace gal
 	/**
 	 * @brief Returns `true` if [name] is a local variable name (starts with a lowercase
 	 * letter).
+	 *
+	 * todo: better way
 	 */
 	bool			 is_local_name(const char* name)
 	{
-		// todo: better way
 		return name[0] >= 'a' && name[0] <= 'z';
 	}
+
+	/**
+	 * @brief Returns `true` if [name] is a local variable name (starts with a lowercase
+	 * letter).
+	 *
+	 * todo: better way
+	 */
+	bool is_local_name(const object_string& name);
 }// namespace gal
 
 #endif//GAL_LANG_COMPILER_HPP

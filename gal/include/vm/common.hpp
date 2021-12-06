@@ -23,7 +23,7 @@ namespace gal
 	 * This limitation comes from the 16 bits used for the arguments to
 	 * `CODE_LOAD_MODULE_SIZE` and `CODE_STORE_MODULE_SIZE`.
 	 */
-	constexpr auto max_module_size			= 1 << 16;// 65536
+	constexpr auto max_module_variables		= 1 << 16;// 65536
 
 	/**
 	 * @brief The maximum number of arguments that can be passed to a method. Note that

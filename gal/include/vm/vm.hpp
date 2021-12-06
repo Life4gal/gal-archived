@@ -279,7 +279,18 @@ namespace gal
 		  * are too many variables defined. Returns `variable_used_before_defined` if this is
 		  * a top-level lowercase variable (local name) that was used before being defined.
 		  */
-		gal_index_type	   define_variable(object_module& module, const char* name, gal_size_type length, magic_value value, int* line);
+		gal_index_type	   define_variable(object_module& module, const char* name, gal_size_type length, magic_value value, int* line = nullptr);
+
+		/**
+		  * @brief Adds a new top-level variable named [name] to [module], and optionally
+		  * populates line with the line of the implicit first use (line can be nullptr).
+		  *
+		  * Returns the symbol for the new variable, `variable_already_defined` if a variable
+		  * with the given name is already defined, or `variable_too_many_defined` if there
+		  * are too many variables defined. Returns `variable_used_before_defined` if this is
+		  * a top-level lowercase variable (local name) that was used before being defined.
+		  */
+		gal_index_type	   define_variable(object_module& module, const object_string& name, magic_value value, int* line = nullptr);
 
 		/**
 		 * @brief Pushes [closure] onto [fiber]'s callstack to invoke it. Expects [num_args]
@@ -294,16 +305,6 @@ namespace gal
 
 			fiber.add_call_frame(closure, *fiber.get_stack_point(num_args));
 		}
-
-		/**
-		 * @brief Marks [obj] as a GC root so that it doesn't get collected.
-		 */
-		void							  push_root(object& obj);
-
-		/**
-		 * @brief Removes the most recently pushed temporary root.
-		 */
-		void							  pop_root();
 
 		/**
 		 * @brief Returns the class of [value].
@@ -323,6 +324,21 @@ namespace gal
 			}
 
 			UNREACHABLE();
+		}
+
+		/**
+		 * @brief Create an object on the heap and add it to the linked list.
+		 *
+		 * The reason why this function is needed is to avoid explicitly allocating objects
+		 * with new. Here we can use the specified allocator to get the object.
+		 *
+		 * note: All memory used by members of the class is managed by itself (usually STL components), and we only manage the class object itself
+		 */
+		template<typename T, typename... Args>
+		requires std::is_base_of_v<object, T>
+		auto make_object(Args&&... args)
+		{
+			return objects_.template emplace_front(object::ctor<T>(std::forward<Args>(args)...));
 		}
 
 	private:
@@ -377,10 +393,10 @@ namespace gal
 		 * Also validates that it doesn't result in a class with too many fields and
 		 * the other limitations outer classes have.
 		 *
-		 * If successful, returns `null`. Otherwise, returns a string for the runtime
+		 * If successful, returns empty object_string. Otherwise, returns a string for the runtime
 		 * error message.
 		 */
-		magic_value					   validate_superclass(magic_value name, magic_value superclass_value, gal_size_type num_fileds);
+		object_string				   validate_superclass(const object_string& name, magic_value superclass_value, gal_size_type num_fields);
 
 		void						   bind_outer_class(object_class& obj_class, object_module& module);
 

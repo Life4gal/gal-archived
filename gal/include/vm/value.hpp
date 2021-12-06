@@ -81,7 +81,6 @@ namespace gal
 	{
 	private:
 		object_type type_;
-		bool		dark_;
 
 	protected:
 		/**
@@ -89,34 +88,66 @@ namespace gal
 		 */
 		std::shared_ptr<object_class> object_class_;
 
-	public:
 		virtual ~object() noexcept = 0;
 
-		object(gal_virtual_machine_state& state, object_type type, std::shared_ptr<object_class> object_class) noexcept;
+	public:
+		object(object_type type, std::shared_ptr<object_class> object_class) noexcept;
 
 		[[nodiscard]] constexpr object_type			type() const noexcept { return type_; }
 		[[nodiscard]] constexpr object_class*		get_class() noexcept { return object_class_.get(); }
 		[[nodiscard]] constexpr const object_class* get_class() const noexcept { return object_class_.get(); }
 
-		/**
-		 * @brief Mark [this] as reachable and still in use. This should only be called
-		 * during the sweep phase of a garbage collection.
-		 */
-		void										gray(gal_virtual_machine_state& state);
-
-		/**
-		 * @brief Processes every object in the gray stack until all reachable objects have
-		 * been marked. After that, all objects are either white (free-able) or black
-		 * (in use and fully traversed).
-		  *
-		  * todo: move it to state
-		 */
-		static void									blacken_all(gal_virtual_machine_state& state);
-
 		explicit									operator magic_value() const noexcept;
 
+		/**
+		 * @brief Create an object on the heap.
+		 *
+		 * The reason why this function is needed is to avoid explicitly allocating objects
+		 * with new. Here we can use the specified allocator to get the object.
+		 *
+		 * If we need to allocate an object and convert it to magic_value and store it somewhere,
+		 * we must perform heap allocation, otherwise magic_value will be invalidated after
+		 * leaving the scope.
+		 */
+		template<typename T, typename... Args>
+		requires std::is_base_of_v<object, T>
+		static auto ctor(Args&&... args)
+		{
+			using allocator_type = gal_allocator<T>;
+			auto  allocator		 = allocator_type{};
+			auto* ptr			 = allocator.allocate(1);
+			allocator.template construct(ptr, std::forward<Args>(args)...);
+			return ptr;
+		}
+
+		/**
+		 * @brief Destroy an object on the heap created by ctor.
+		 */
+		template<typename T>
+		requires std::is_base_of_v<object, T>
+		static void dtor(T* ptr)
+		{
+			using allocator_type = gal_allocator<T>;
+			auto allocator		 = allocator_type{};
+			ptr->destroy();
+			allocator.template destroy(ptr);
+			allocator.deallocate(ptr, 1);
+		}
+
+		/**
+		 * @brief Try to get the amount of memory used by the object
+		 */
+		[[nodiscard]] virtual gal_size_type memory_usage() const noexcept = 0;
+
 	private:
-		virtual void blacken(gal_virtual_machine_state& state) = 0;
+		/**
+		 * @brief Destroy all dynamically allocated objects in the class, generally called before the object will be recycled (destructed)
+		 *
+		 * Usually, this function does not need to do anything (because the memory is managed by the STL components),
+		 * but if the class contains a container for storing polymorphic objects (such as map),
+		 * then you need to call this function to destroy all of them.
+		 */
+		virtual void destroy() {}
 	};
 
 	/**
@@ -289,12 +320,6 @@ namespace gal
 		[[nodiscard]] inline object_map*	  as_map() const noexcept;
 
 		/**
-		 * @brief Mark [this] as reachable and still in use. This should only be called
-		 * during the sweep phase of a garbage collection.
-		 */
-		void								  gray(gal_virtual_machine_state& state) const;
-
-		/**
 		 * @brief Returns true if [lhs] and [rhs] are strictly the same value. This is identity
 		 * for object values, and value equality for unboxed values.
 		 */
@@ -349,6 +374,7 @@ namespace gal
 
 	class magic_value_buffer
 	{
+	public:
 		using buffer_type	  = std::vector<magic_value, gal_allocator<magic_value>>;
 		using value_type	  = buffer_type::value_type;
 		using size_type		  = buffer_type::size_type;
@@ -423,12 +449,6 @@ namespace gal
 		{
 			return sizeof(value_type) * buffer_.capacity();
 		}
-
-		/**
-		 * @brief Mark the values in [this] as reachable and still in use. This should only
-		 * be called during the sweep phase of a garbage collection.
-		 */
-		void gray(gal_virtual_machine_state& state);
 	};
 
 	/**
@@ -549,6 +569,11 @@ namespace gal
 			return string_.data();
 		}
 
+		[[nodiscard]] const string_type& str() const noexcept
+		{
+			return string_;
+		}
+
 		[[nodiscard]] reference operator[](size_type index) noexcept
 		{
 			return string_[index];
@@ -630,22 +655,6 @@ namespace gal
 			string_.push_back(c);
 		}
 
-		[[nodiscard]] std::size_t hash() const noexcept
-		{
-			// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
-			static_assert(sizeof(size_type) == sizeof(std::uint64_t));
-			constexpr std::uint64_t hash_init{14695981039346656037ull};
-			constexpr std::uint64_t hash_prime{1099511628211ull};
-
-			auto					hash = hash_init;
-			for (auto c: string_)
-			{
-				hash ^= c;
-				hash *= hash_prime;
-			}
-			return hash;
-		}
-
 		/**
 		 * @brief Returns true if [text] and [string] represent the same string.
 		 */
@@ -683,8 +692,11 @@ namespace gal
 			return lhs.string_ == rhs.string_;
 		}
 
-	private:
-		void blacken(gal_virtual_machine_state& state) override;
+		gal_size_type memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
 	};
 
 	class symbol_table
@@ -820,8 +832,6 @@ namespace gal
 				return index;
 			}
 		}
-
-		void blacken(gal_virtual_machine_state& state);
 	};
 
 	/**
@@ -847,9 +857,9 @@ namespace gal
 		/**
 		 * @brief Creates a new open upvalue pointing to [value] on the stack.
 		 */
-		explicit object_upvalue(gal_virtual_machine_state& state, magic_value& value)
+		explicit object_upvalue(magic_value& value)
 			// Upvalues are never used as first-class objects, so don't need a class.
-			: object{state, object_type::UPVALUE_TYPE, nullptr},
+			: object{object_type::UPVALUE_TYPE, nullptr},
 			  value_{&value},
 			  closed_{magic_value_null}
 		{
@@ -871,8 +881,11 @@ namespace gal
 			value_	= &closed_;
 		}
 
-	private:
-		void blacken(gal_virtual_machine_state& state) override;
+		gal_size_type memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
 	};
 
 	/**
@@ -910,51 +923,6 @@ namespace gal
 			// todo: What about the function name?
 			return sizeof(line_type) * source_lines.capacity();
 		}
-	};
-
-	/**
-	  * @brief A loaded module and the top-level variables it defines.
-	  *
-	  * While this is an object and is managed by the GC, it never appears as a
-	  * first-class object in GAL.
-	  */
-	class object_module : public object
-	{
-	private:
-		/**
-		  * @brief The currently defined top-level variables.
-		  */
-		magic_value_buffer variables_;
-
-		/**
-		  * @brief Symbol table for the names of all module variables. Indexes here directly
-		  * correspond to entries in [variables].
-		  */
-		symbol_table	   variable_names_;
-
-		/**
-		  * @brief The name of the module.
-		  */
-		object_string	   name_;
-
-	public:
-		/**
-		 * @brief Creates a new module.
-		 */
-		explicit object_module(gal_virtual_machine_state& state, object_string name)
-			// Modules are never used as first-class objects, so don't need a class.
-			: object{state, object_type::MODULE_TYPE, nullptr},
-			  name_{std::move(name)}
-		{
-		}
-
-		[[nodiscard]] const object_string& get_name() const noexcept
-		{
-			return name_;
-		}
-
-	private:
-		void blacken(gal_virtual_machine_state& state) override;
 	};
 
 	/**
@@ -1043,8 +1011,11 @@ namespace gal
 			return arity_;
 		}
 
-	private:
-		void blacken(gal_virtual_machine_state& state) override;
+		gal_size_type memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
 	};
 
 	/**
@@ -1060,8 +1031,14 @@ namespace gal
 	private:
 		/**
 		 * @brief The function that this closure is an instance of.
+		 *
+		 * @note The function should be heap allocated, and we are responsible for releasing it.
+		 *
+		 * Use a reference to make sure we have a valid function.
+		 *
+		 * todo: Heap allocation maybe is not necessary.
 		 */
-		object_function	  function_;
+		object_function&  function_;
 		upvalue_container upvalues_;
 
 	public:
@@ -1069,7 +1046,7 @@ namespace gal
 		 * @brief Creates a new closure object that invokes [function]. Allocates room for its
 		 * upvalues, but assumes outside code will populate it.
 		 */
-		object_closure(gal_virtual_machine_state& state, object_function&& function);
+		object_closure(gal_virtual_machine_state& state, object_function& function);
 
 		[[nodiscard]] object_function& get_function() noexcept
 		{
@@ -1081,8 +1058,18 @@ namespace gal
 			return function_;
 		}
 
+		[[nodiscard]] gal_size_type memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
+
 	private:
-		void blacken(gal_virtual_machine_state& state) override;
+		void destroy() override
+		{
+			// todo
+			object::dtor(&function_);
+		}
 	};
 
 	struct call_frame
@@ -1240,7 +1227,7 @@ namespace gal
 		 * the same variable.) Otherwise, it will create a new open upvalue and add it
 		 * the fiber's list of upvalues.
 		 */
-		object_upvalue& capature_upvalue(gal_virtual_machine_state& state, magic_value& local);
+		object_upvalue& capature_upvalue(magic_value& local);
 
 		/**
 		 * @brief Closes any open upvalues that have been created for stack slots at [last]
@@ -1286,8 +1273,21 @@ namespace gal
 		[[nodiscard]] magic_value	peek() const { return *(stack_top_ - 1); }
 		[[nodiscard]] magic_value	peek2() const { return *(stack_top_ - 2); }
 
+		gal_size_type				memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
+
 	private:
-		void blacken(gal_virtual_machine_state& state) override;
+		void destroy() override
+		{
+			// todo
+			// Stack functions.
+			// Stack variables.
+			// Open upvalues.
+			// The caller.
+		}
 	};
 
 	enum class method_type
@@ -1380,8 +1380,8 @@ namespace gal
 		 * This is only used for bootstrapping the initial Object and Class classes,
 		 * which are a little special.
 		 */
-		object_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_string name)
-			: object{state, object_type::CLASS_TYPE, nullptr},
+		object_class(gal_size_type num_fields, object_string name)
+			: object{object_type::CLASS_TYPE, nullptr},
 			  superclass_{nullptr},
 			  num_fields_{num_fields},
 			  methods_{},
@@ -1419,6 +1419,11 @@ namespace gal
 			return num_fields_;
 		}
 
+		[[nodiscard]] gal_size_type get_remain_field_size() const noexcept
+		{
+			return max_fields - num_fields_;
+		}
+
 		[[nodiscard]] const object_string& get_class_name() const noexcept
 		{
 			return name_;
@@ -1427,8 +1432,21 @@ namespace gal
 		[[nodiscard]] bool is_outer_class() const noexcept { return num_fields_ == gal_size_type(-1); }
 		[[nodiscard]] bool is_interface_class() const noexcept { return num_fields_ == gal_size_type(0); }
 
+		[[nodiscard]] gal_size_type	   memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
+
 	private:
-		void blacken(gal_virtual_machine_state& state) override;
+		void destroy() override
+		{
+			// todo
+			// The metaclass.
+			// The superclass.
+			// Method function objects.
+			// attributes
+		}
 	};
 
 	class object_outer : public object
@@ -1442,19 +1460,18 @@ namespace gal
 		data_buffer_type data_;
 
 	public:
-		explicit object_outer(gal_virtual_machine_state& state, std::shared_ptr<object_class> obj_class)
-			: object{state, object_type::OUTER_TYPE, std::move(obj_class)},
+		explicit object_outer(std::shared_ptr<object_class> obj_class)
+			: object{object_type::OUTER_TYPE, std::move(obj_class)},
 			  data_{} {}
 
-	private:
-		void blacken(gal_virtual_machine_state& state) override
+		[[nodiscard]] gal_size_type memory_usage() const noexcept override
 		{
-			(void)state;
 			// todo: Keep track of how much memory the outer object uses. We can store
 			// this in each outer object, but it will balloon the size. We may not want
 			// that much overhead. One option would be to let the outer class register
 			// a C++ function that returns a size for the object. That way the VM doesn't
 			// always have to explicitly store it.
+			return 0;
 		}
 	};
 
@@ -1469,8 +1486,8 @@ namespace gal
 		field_buffer_type fields_;
 
 	public:
-		explicit object_instance(gal_virtual_machine_state& state, std::shared_ptr<object_class> obj_class)
-			: object{state, object_type::OUTER_TYPE, std::move(obj_class)},
+		explicit object_instance(std::shared_ptr<object_class> obj_class)
+			: object{object_type::OUTER_TYPE, std::move(obj_class)},
 			  fields_{}
 		{
 			// Initialize fields to null.
@@ -1482,8 +1499,17 @@ namespace gal
 			}
 		}
 
+		[[nodiscard]] gal_size_type memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
+
 	private:
-		void blacken(gal_virtual_machine_state& state) override;
+		void destroy() override
+		{
+			// todo
+		}
 	};
 
 	class object_list : public object
@@ -1503,28 +1529,82 @@ namespace gal
 		explicit object_list(gal_virtual_machine_state& state);
 
 		/**
-		 * @brief Inserts [value] in [list] at [index], shifting down the other elements.
+		 * @brief Inserts [value] in [list] at [index].
 		 */
-		void						 insert(gal_virtual_machine_state& state, magic_value value, list_buffer_size_type index);
+		void insert(magic_value value, list_buffer_size_type index)
+		{
+			// Store the new element.
+			elements_.insert(std::next(elements_.begin(), static_cast<list_buffer_difference_type>(index)), value);
+		}
 
 		/**
 		 * @brief Removes and returns the item at [index] from [list].
 		 */
-		magic_value					 remove(gal_virtual_machine_state& state, list_buffer_size_type index);
+		magic_value remove(list_buffer_size_type index)
+		{
+			auto removed = elements_[index];
+			elements_.erase(std::next(elements_.begin(), static_cast<list_buffer_difference_type>(index)));
+			return removed;
+		}
 
 		/**
 		 * @brief Searches for [value] in [list], returns the index or gal_index_not_exist if not found.
 		 */
 		[[nodiscard]] gal_index_type index_of(magic_value value) const;
 
+		gal_size_type				 memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
+
 	private:
-		void blacken(gal_virtual_machine_state& state) override;
+		void destroy() override
+		{
+			// todo
+			// elements
+		}
 	};
 
 }// namespace gal
 
 namespace std
 {
+	template<>
+	struct hash<::gal::object_string>
+	{
+		using is_transparent = void;
+		std::size_t operator()(const ::gal::object_string& str) const
+		{
+			// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
+			constexpr std::uint64_t hash_init{14695981039346656037ull};
+			constexpr std::uint64_t hash_prime{1099511628211ull};
+
+			auto					hash = hash_init;
+			for (auto c: str.str())
+			{
+				hash ^= c;
+				hash *= hash_prime;
+			}
+			return hash;
+		}
+
+		std::size_t operator()(::gal::object_string::const_pointer str) const
+		{
+			// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
+			constexpr std::uint64_t hash_init{14695981039346656037ull};
+			constexpr std::uint64_t hash_prime{1099511628211ull};
+
+			auto					hash = hash_init;
+			for (auto c = *str; c != '\0'; ++str, c = *str)
+			{
+				hash ^= c;
+				hash *= hash_prime;
+			}
+			return hash;
+		}
+	};
+
 	template<>
 	struct hash<::gal::magic_value>
 	{
@@ -1549,7 +1629,7 @@ namespace std
 					case ::gal::object_type::CLASS_TYPE:
 					{
 						// Classes just use their name.
-						return dynamic_cast<const ::gal::object_class&>(*obj).get_class_name().hash();
+						return hash<::gal::object_string>{}(dynamic_cast<const ::gal::object_class&>(*obj).get_class_name());
 					}
 					case ::gal::object_type::FUNCTION_TYPE:
 					{
@@ -1562,7 +1642,7 @@ namespace std
 					}
 					case ::gal::object_type::STRING_TYPE:
 					{
-						return dynamic_cast<const ::gal::object_string&>(*obj).hash();
+						return hash<::gal::object_string>{}(dynamic_cast<const ::gal::object_string&>(*obj));
 					}
 					default:
 					{
@@ -1581,6 +1661,220 @@ namespace std
 
 namespace gal
 {
+	/**
+	  * @brief A loaded module and the top-level variables it defines.
+	  *
+	  * While this is an object and is managed by the GC, it never appears as a
+	  * first-class object in GAL.
+	  */
+	class object_module : public object
+	{
+	private:
+		using variables_buffer_type									 = std::unordered_map<object_string, magic_value, std::hash<object_string>, std::equal_to<>, gal_allocator<std::pair<const object_string, magic_value>>>;
+
+		using value_type											 = variables_buffer_type::value_type;
+		using key_type												 = variables_buffer_type::key_type;
+		using mapped_type											 = variables_buffer_type::mapped_type;
+		using size_type												 = variables_buffer_type::size_type;
+
+		using pointer												 = variables_buffer_type::pointer;
+		using const_poiner											 = variables_buffer_type::const_pointer;
+
+		using reference												 = variables_buffer_type::reference;
+		using const_reference										 = variables_buffer_type::const_reference;
+
+		using iterator												 = variables_buffer_type::iterator;
+		using const_iterator										 = variables_buffer_type::const_iterator;
+
+		constexpr static gal_index_type variable_already_defined	 = -1;
+		constexpr static gal_index_type variable_too_many_defined	 = -2;
+		constexpr static gal_index_type variable_used_before_defined = -3;
+
+	private:
+		/**
+		  * @brief The currently defined top-level variables.
+		  */
+		variables_buffer_type variables_;
+
+		/**
+		  * @brief The name of the module.
+		  */
+		object_string		  name_;
+
+	public:
+		/**
+		 * @brief Creates a new module.
+		 */
+		explicit object_module(object_string name)
+			// Modules are never used as first-class objects, so don't need a class.
+			: object{object_type::MODULE_TYPE, nullptr},
+			  name_{std::move(name)}
+		{
+		}
+
+		[[nodiscard]] const object_string& get_name() const noexcept
+		{
+			return name_;
+		}
+
+		[[nodiscard]] constexpr size_type size() const noexcept
+		{
+			return variables_.size();
+		}
+
+		[[nodiscard]] iterator begin() noexcept
+		{
+			return variables_.begin();
+		}
+
+		[[nodiscard]] const_iterator begin() const noexcept
+		{
+			return variables_.begin();
+		}
+
+		[[nodiscard]] iterator end() noexcept
+		{
+			return variables_.end();
+		}
+
+		[[nodiscard]] const_iterator end() const noexcept
+		{
+			return variables_.end();
+		}
+
+		constexpr void clear()
+		{
+			variables_.clear();
+		}
+
+		/**
+		 * @brief Looks up [name] in [module]. If found, returns the value. Otherwise, returns
+		 * `magic_value_undefined`.
+		 */
+		magic_value get(const key_type& name) const
+		{
+			const auto ret = variables_.find(name);
+			if (ret != variables_.end())
+			{
+				return ret->second;
+			}
+			return magic_value_undefined;
+		}
+
+		/**
+		 * @brief Looks up [name] in [module]. If found, returns the value. Otherwise, returns
+		 * `magic_value_undefined`.
+		 *
+		 * C++20 should support it
+		 */
+		// magic_value get(key_type::const_pointer name) const
+		// {
+		// 	const auto ret = variables_.find(name);
+		// 	if (ret != variables_.end())
+		// 	{
+		// 		return ret->second;
+		// 	}
+		// 	return magic_value_undefined;
+		// }
+
+		/**
+		  * @brief Looks up a variable from the module.
+		  *
+		  * Returns `magic_value_undefined` if not found.
+		  */
+		magic_value get_variable(const object_string& name) const
+		{
+			const auto it = variables_.find(name);
+			if (it != variables_.end())
+			{
+				return it->second;
+			}
+			return magic_value_undefined;
+		}
+
+		/**
+		  * @brief Looks up a variable from the module.
+		  *
+		  * Returns `magic_value_undefined` if not found.
+		  *
+		  * C++20 should support it
+		  */
+		// magic_value get_variable(const char* name);
+
+		/**
+		  * @brief Adds a new implicitly declared top-level variable named [name] to module
+		  * based on a use site occurring on [line].
+		  *
+		  * Does not check to see if a variable with that name is already declared or
+		  * defined. Returns the symbol for the new variable or `variable_too_many_defined`
+		  * if there are too many variables defined.
+		  */
+		gal_index_type declare_variable(const object_string& name, int line)
+		{
+			if (variables_.size() > max_module_variables)
+			{
+				return variable_too_many_defined;
+			}
+
+			// Implicitly defined variables get a "value" that is the line where the
+			// variable is first used. We'll use that later to report an error on the
+			// right line.
+			variables_.emplace(name, magic_value{static_cast<magic_value::value_type>(line)});
+		}
+
+		/**
+		  * @brief Adds a new top-level variable named [name] to [this], and optionally
+		  * populates line with the line of the implicit first use (line can be nullptr).
+		  *
+		  * Returns the symbol for the new variable, `variable_already_defined` if a variable
+		  * with the given name is already defined, or `variable_too_many_defined` if there
+		  * are too many variables defined. Returns `variable_used_before_defined` if this is
+		  * a top-level lowercase variable (local name) that was used before being defined.
+		  *
+		  * todo: it should not return gal_index_type!
+		  */
+		gal_index_type define_variable(const object_string& name, magic_value value, int* line = nullptr);
+
+		/**
+		  * @brief Adds a new top-level variable named [name] to [this], and optionally
+		  * populates line with the line of the implicit first use (line can be nullptr).
+		  *
+		  * Returns the symbol for the new variable, `variable_already_defined` if a variable
+		  * with the given name is already defined, or `variable_too_many_defined` if there
+		  * are too many variables defined. Returns `variable_used_before_defined` if this is
+		  * a top-level lowercase variable (local name) that was used before being defined.
+		  *
+		  * C++20 should support it
+		  */
+		// gal_index_type define_variable(const char* name, magic_value value, int* line = nullptr);
+
+		/**
+		 * @brief Import all variables from another module.
+		 *
+		 * todo: Should we use insert? Can we ensure that the target module does not contain any variables defined in this module?
+		 */
+		void		   copy_variables(const object_module& other)
+		{
+			for (const auto& [k, v]: other.variables_)
+			{
+				define_variable(k, v);
+			}
+		}
+
+		gal_size_type memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
+
+	private:
+		void destroy() override
+		{
+			// todo
+			// variables
+		}
+	};
+
 	/**
 	 * @brief A hash table mapping keys to values.
 	 */
@@ -1657,7 +1951,7 @@ namespace gal
 		 * @brief Looks up [key] in [map]. If found, returns the value. Otherwise, returns
 		 * `magic_value_undefined`.
 		 */
-		magic_value get(magic_value key)
+		magic_value get(magic_value key) const
 		{
 			const auto ret = entries_.find(key);
 			if (ret != entries_.end())
@@ -1689,10 +1983,32 @@ namespace gal
 		 * @brief Removes [key] from [map], if present. Returns the value for the key if found
 		 * or `magic_value_null` otherwise.
 		 */
-		magic_value remove(gal_virtual_machine_state& state, magic_value key);
+		magic_value remove(magic_value key)
+		{
+			auto it = find(key);
+			if (it == entries_.end())
+			{
+				return magic_value_null;
+			}
+
+			auto value = it->second;
+
+			entries_.erase(it);
+
+			return value;
+		}
+
+		gal_size_type memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
 
 	private:
-		void blacken(gal_virtual_machine_state& state) override;
+		void destroy() override
+		{
+			// todo
+		}
 	};
 
 	inline object* magic_value::as_object() const noexcept
