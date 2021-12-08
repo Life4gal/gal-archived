@@ -35,17 +35,17 @@ namespace gal
 		/**
 		 * @brief Prints a representation of the bytecode for [function] at instruction [i].
 		 */
-		static int	dump(gal_virtual_machine_state& state, object_function& function, int i);
+		static int	dump(gal_virtual_machine_state& state, const object_function& function, int i);
 
 		/**
 		 * @brief Prints the disassembled code for [function] to stdout.
 		 */
-		static void dump(gal_virtual_machine_state& state, object_function& function);
+		static void dump(gal_virtual_machine_state& state, const object_function& function);
 
 		/**
 		 * @brief Prints the contents of the current stack for [fiber] to stdout.
 		 */
-		static void dump(object_fiber& fiber);
+		static void dump(const object_fiber& fiber);
 	};
 }// namespace gal
 

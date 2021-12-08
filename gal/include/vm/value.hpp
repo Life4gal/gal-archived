@@ -13,6 +13,7 @@
 	#include <vector>
 	#include <string>
 	#include <unordered_map>
+	#include <map>
 	#include <memory>
 	#include <forward_list>
 
@@ -93,11 +94,11 @@ namespace gal
 	public:
 		object(object_type type, std::shared_ptr<object_class> object_class) noexcept;
 
-		[[nodiscard]] constexpr object_type			type() const noexcept { return type_; }
-		[[nodiscard]] constexpr object_class*		get_class() noexcept { return object_class_.get(); }
-		[[nodiscard]] constexpr const object_class* get_class() const noexcept { return object_class_.get(); }
+		[[nodiscard]] constexpr object_type type() const noexcept { return type_; }
+		[[nodiscard]] object_class*			get_class() noexcept { return object_class_.get(); }
+		[[nodiscard]] const object_class*	get_class() const noexcept { return object_class_.get(); }
 
-		explicit									operator magic_value() const noexcept;
+		explicit							operator magic_value() const noexcept;
 
 		/**
 		 * @brief Create an object on the heap.
@@ -332,6 +333,11 @@ namespace gal
 			return lhs.data_ == rhs.data_;
 		}
 
+		friend auto operator<=>(const magic_value& lhs, const magic_value& rhs)
+		{
+			return lhs.data_ <=> rhs.data_;
+		}
+
 		/**
 		 * @brief Returns true if [this] and [other] are equivalent. Immutable values
 		 * (null, booleans, numbers, ranges, and strings) are equal if they have the
@@ -375,69 +381,68 @@ namespace gal
 	class magic_value_buffer
 	{
 	public:
-		using buffer_type	  = std::vector<magic_value, gal_allocator<magic_value>>;
-		using value_type	  = buffer_type::value_type;
-		using size_type		  = buffer_type::size_type;
+		using buffer_type	 = std::vector<magic_value, gal_allocator<magic_value>>;
+		using value_type	 = buffer_type::value_type;
+		using size_type		 = buffer_type::size_type;
 
-		using pointer		  = buffer_type::pointer;
-		using const_pointer	  = buffer_type::const_pointer;
+		using pointer		 = buffer_type::pointer;
+		using const_pointer	 = buffer_type::const_pointer;
 
-		using reference		  = buffer_type::reference;
-		using const_reference = buffer_type::const_reference;
+		using reference		 = buffer_type::reference;
 
-		using iterator		  = buffer_type::iterator;
-		using const_iterator  = buffer_type::const_iterator;
+		using iterator		 = buffer_type::iterator;
+		using const_iterator = buffer_type::const_iterator;
 
 	private:
 		buffer_type buffer_;
 
 	public:
-		[[nodiscard]] constexpr reference operator[](size_type index) noexcept
+		[[nodiscard]] reference operator[](size_type index) noexcept
 		{
 			return buffer_[index];
 		}
 
-		[[nodiscard]] constexpr const_reference operator[](size_type index) const noexcept
+		[[nodiscard]] value_type operator[](size_type index) const noexcept
 		{
 			return buffer_[index];
 		}
 
-		[[nodiscard]] constexpr size_type size() const noexcept
+		[[nodiscard]] size_type size() const noexcept
 		{
 			return buffer_.size();
 		}
 
-		[[nodiscard]] constexpr iterator begin() noexcept
+		[[nodiscard]] iterator begin() noexcept
 		{
 			return buffer_.begin();
 		}
 
-		[[nodiscard]] constexpr const_iterator begin() const noexcept
+		[[nodiscard]] const_iterator begin() const noexcept
 		{
 			return buffer_.begin();
 		}
 
-		[[nodiscard]] constexpr iterator end() noexcept
+		[[nodiscard]] iterator end() noexcept
 		{
 			return buffer_.end();
 		}
 
-		[[nodiscard]] constexpr const_iterator end() const noexcept
+		[[nodiscard]] const_iterator end() const noexcept
 		{
 			return buffer_.end();
 		}
 
-		constexpr void clear()
+		void clear()
 		{
 			buffer_.clear();
 		}
 
-		constexpr void push(value_type data)
+		void push(value_type data)
 		{
 			buffer_.push_back(data);
 		}
 
-		constexpr void fill(value_type data, size_type size)
+		void fill(value_type data, size_type size)
 		{
 			for (size_type i = 0; i < size; ++i)
 			{
@@ -445,7 +450,7 @@ namespace gal
 			}
 		}
 
-		[[nodiscard]] constexpr gal_size_type memory_usage() const noexcept
+		[[nodiscard]] gal_size_type memory_usage() const noexcept
 		{
 			return sizeof(value_type) * buffer_.capacity();
 		}
@@ -457,24 +462,21 @@ namespace gal
 	class object_string : public object
 	{
 	public:
-		using string_type												 = std::basic_string<char, std::char_traits<char>, gal_allocator<char>>;
+		using string_type				= std::basic_string<char, std::char_traits<char>, gal_allocator<char>>;
 
-		using value_type												 = string_type::value_type;
-		using size_type													 = string_type::size_type;
+		using value_type				= string_type::value_type;
+		using size_type					= string_type::size_type;
 
-		using pointer													 = string_type::pointer;
-		using const_pointer												 = string_type::const_pointer;
+		using pointer					= string_type::pointer;
+		using const_pointer				= string_type::const_pointer;
 
-		using reference													 = string_type::reference;
-		using const_reference											 = string_type::const_reference;
+		using reference					= string_type::reference;
+		using const_reference			= string_type::const_reference;
 
-		using iterator													 = string_type::iterator;
-		using const_iterator											 = string_type::const_iterator;
+		using iterator					= string_type::iterator;
+		using const_iterator			= string_type::const_iterator;
 
-		// todo: different allocator?
-		using std_string_type [[deprecated("use get_appender instead")]] = std::basic_string<value_type, std::char_traits<value_type>>;
-
-		constexpr static size_type npos									 = string_type::npos;
+		constexpr static size_type npos = string_type::npos;
 
 	private:
 		string_type string_;
@@ -499,13 +501,6 @@ namespace gal
 		 * @brief Move an exist string into [this]
 		 */
 		object_string(gal_virtual_machine_state& state, string_type string);
-
-		/**
-		 * @brief Move an exist string into [this]
-		 *
-		 * @warning different allocator
-		 */
-		[[deprecated("use get_appender instead")]] object_string(gal_virtual_machine_state& state, std_string_type string);
 
 		/**
 		 * @brief Creates a new string object by taking a range of characters from [source].
@@ -549,22 +544,22 @@ namespace gal
 		 */
 		object_string(gal_virtual_machine_state& state, object_string& string, size_type index);
 
-		[[nodiscard]] constexpr bool empty() const noexcept
+		[[nodiscard]] bool empty() const noexcept
 		{
 			return string_.empty();
 		}
 
-		[[nodiscard]] constexpr size_type size() const noexcept
+		[[nodiscard]] size_type size() const noexcept
 		{
 			return string_.size();
 		}
 
-		[[nodiscard]] constexpr pointer data() noexcept
+		[[nodiscard]] pointer data() noexcept
 		{
 			return string_.data();
 		}
 
-		[[nodiscard]] constexpr const_pointer data() const noexcept
+		[[nodiscard]] const_pointer data() const noexcept
 		{
 			return string_.data();
 		}
@@ -584,27 +579,27 @@ namespace gal
 			return string_[index];
 		}
 
-		[[nodiscard]] constexpr iterator begin() noexcept
+		[[nodiscard]] iterator begin() noexcept
 		{
 			return string_.begin();
 		}
 
-		[[nodiscard]] constexpr const_iterator begin() const noexcept
+		[[nodiscard]] const_iterator begin() const noexcept
 		{
 			return string_.begin();
 		}
 
-		[[nodiscard]] constexpr iterator end() noexcept
+		[[nodiscard]] iterator end() noexcept
 		{
 			return string_.end();
 		}
 
-		[[nodiscard]] constexpr const_iterator end() const noexcept
+		[[nodiscard]] const_iterator end() const noexcept
 		{
 			return string_.end();
 		}
 
-		constexpr void clear()
+		void clear()
 		{
 			string_.clear();
 		}
@@ -692,7 +687,7 @@ namespace gal
 			return lhs.string_ == rhs.string_;
 		}
 
-		gal_size_type memory_usage() const noexcept override
+		[[nodiscard]] gal_size_type memory_usage() const noexcept override
 		{
 			// todo
 			return 0;
@@ -719,42 +714,42 @@ namespace gal
 		table_type table_;
 
 	public:
-		[[nodiscard]] constexpr reference operator[](size_type index) noexcept
+		[[nodiscard]] reference operator[](size_type index) noexcept
 		{
 			return table_[index];
 		}
 
-		[[nodiscard]] constexpr const_reference operator[](size_type index) const noexcept
+		[[nodiscard]] const_reference operator[](size_type index) const noexcept
 		{
 			return table_[index];
 		}
 
-		[[nodiscard]] constexpr size_type size() const noexcept
+		[[nodiscard]] size_type size() const noexcept
 		{
 			return table_.size();
 		}
 
-		[[nodiscard]] constexpr iterator begin() noexcept
+		[[nodiscard]] iterator begin() noexcept
 		{
 			return table_.begin();
 		}
 
-		[[nodiscard]] constexpr const_iterator begin() const noexcept
+		[[nodiscard]] const_iterator begin() const noexcept
 		{
 			return table_.begin();
 		}
 
-		[[nodiscard]] constexpr iterator end() noexcept
+		[[nodiscard]] iterator end() noexcept
 		{
 			return table_.end();
 		}
 
-		[[nodiscard]] constexpr const_iterator end() const noexcept
+		[[nodiscard]] const_iterator end() const noexcept
 		{
 			return table_.end();
 		}
 
-		constexpr void clear()
+		void clear()
 		{
 			table_.clear();
 		}
@@ -790,12 +785,12 @@ namespace gal
 		/**
 		 * @brief Looks up name in the symbol table. Returns its index if found or gal_index_not_exist if not.
 		 */
-		[[nodiscard]] gal_index_type find(const char* name, object_string::size_type length);
+		[[nodiscard]] gal_index_type find(const char* name, object_string::size_type length) const;
 
 		/**
 		 * @brief Looks up name in the symbol table. Returns its index if found or gal_index_not_exist if not.
 		 */
-		[[nodiscard]] gal_index_type find(const object_string& string);
+		[[nodiscard]] gal_index_type find(const object_string& string) const;
 
 		/**
 		 * @brief Adds name to the symbol table. Returns the index of it in the table.
@@ -881,7 +876,7 @@ namespace gal
 			value_	= &closed_;
 		}
 
-		gal_size_type memory_usage() const noexcept override
+		[[nodiscard]] gal_size_type memory_usage() const noexcept override
 		{
 			// todo
 			return 0;
@@ -938,13 +933,15 @@ namespace gal
 	class object_function : public object
 	{
 	public:
-		using code_buffer_type			= std::vector<std::uint8_t, gal_allocator<std::uint8_t>>;
-		using code_buffer_value_type	= code_buffer_type::value_type;
-		using code_buffer_size_type		= code_buffer_type::size_type;
-		using code_buffer_pointer		= code_buffer_type::pointer;
-		using code_buffer_const_pointer = code_buffer_type::const_pointer;
+		using code_buffer_type			  = std::vector<std::uint8_t, gal_allocator<std::uint8_t>>;
+		using code_buffer_value_type	  = code_buffer_type::value_type;
+		using code_buffer_size_type		  = code_buffer_type::size_type;
+		using code_buffer_pointer		  = code_buffer_type::pointer;
+		using code_buffer_const_pointer	  = code_buffer_type::const_pointer;
 
-		using constants_buffer_type		= magic_value_buffer;
+		using constants_buffer_type		  = magic_value_buffer;
+		using constants_buffer_value_type = magic_value_buffer::value_type;
+		using constants_buffer_size_type  = magic_value_buffer::size_type;
 
 	private:
 		code_buffer_type	  code_;
@@ -981,6 +978,11 @@ namespace gal
 		 */
 		object_function(gal_virtual_machine_state& state, object_module& module, gal_slot_type max_slots);
 
+		[[nodiscard]] const auto& get_name() const noexcept
+		{
+			return debug_.name;
+		}
+
 		void set_name(const char* name)
 		{
 			debug_.name = name;
@@ -1006,12 +1008,37 @@ namespace gal
 			return code_.size();
 		}
 
+		[[nodiscard]] decltype(auto) get_constant(constants_buffer_size_type index) noexcept
+		{
+			return constants_[index];
+		}
+
+		[[nodiscard]] decltype(auto) get_constant(constants_buffer_size_type index) const noexcept
+		{
+			return constants_[index];
+		}
+
 		[[nodiscard]] gal_size_type get_parameters_arity() const noexcept
 		{
 			return arity_;
 		}
 
-		gal_size_type memory_usage() const noexcept override
+		[[nodiscard]] bool check_parameters_arity(gal_size_type num_args) const noexcept
+		{
+			return get_parameters_arity() <= num_args;
+		}
+
+		[[nodiscard]] object_module& get_module() noexcept
+		{
+			return module_;
+		}
+
+		[[nodiscard]] const object_module& get_module() const noexcept
+		{
+			return module_;
+		}
+
+		[[nodiscard]] gal_size_type memory_usage() const noexcept override
 		{
 			// todo
 			return 0;
@@ -1025,8 +1052,9 @@ namespace gal
 	class object_closure : public object
 	{
 	public:
-		using upvalue_type		= std::reference_wrapper<object_upvalue>;
-		using upvalue_container = std::vector<upvalue_type, gal_allocator<upvalue_type>>;
+		using upvalue_container			   = std::vector<object_upvalue*, gal_allocator<object_upvalue*>>;
+		using upvalue_container_value_type = upvalue_container::value_type;
+		using upvalue_container_size_type  = upvalue_container::size_type;
 
 	private:
 		/**
@@ -1056,6 +1084,16 @@ namespace gal
 		[[nodiscard]] const object_function& get_function() const noexcept
 		{
 			return function_;
+		}
+
+		[[nodiscard]] upvalue_container_value_type get_upvalue(upvalue_container_size_type index) const noexcept
+		{
+			return upvalues_[index];
+		}
+
+		void push_upvalue(upvalue_container_value_type value)
+		{
+			upvalues_.push_back(value);
 		}
 
 		[[nodiscard]] gal_size_type memory_usage() const noexcept override
@@ -1121,6 +1159,8 @@ namespace gal
 		using frames_buffer_type									 = std::vector<call_frame, gal_allocator<call_frame>>;
 		using frames_buffer_value_type								 = frames_buffer_type::value_type;
 		using frames_buffer_size_type								 = frames_buffer_type::size_type;
+		using frames_buffer_reference								 = frames_buffer_type::reference;
+		using frames_buffer_const_reference							 = frames_buffer_type::const_reference;
 
 		/**
 		 * @brief The number of call frames initially allocated when a fiber is created. Making
@@ -1180,10 +1220,30 @@ namespace gal
 		 */
 		object_fiber(gal_virtual_machine_state& state, object_closure* closure);
 
+		[[nodiscard]] bool has_frame() const noexcept
+		{
+			return frames_.empty();
+		}
+
 		/**
 		 * @brief Adds a new [call_frame] to [fiber] invoking [closure] whose stack starts at [stack_start].
 		 */
-		void						add_call_frame(object_closure& closure, magic_value& stack_start);
+		void								  add_call_frame(object_closure& closure, magic_value& stack_start);
+
+		[[nodiscard]] frames_buffer_reference get_recent_frame() noexcept
+		{
+			return frames_.back();
+		}
+
+		[[nodiscard]] frames_buffer_const_reference get_recent_frame() const noexcept
+		{
+			return frames_.back();
+		}
+
+		void pop_recent_frame() noexcept
+		{
+			frames_.pop_back();
+		}
 
 		/**
 		 * @brief Ensures [fiber]'s stack has at least [needed] slots.
@@ -1200,6 +1260,11 @@ namespace gal
 			return stack_top_ - stack_.get();
 		}
 
+		[[nodiscard]] magic_value* get_stack_bottom() const noexcept
+		{
+			return stack_.get();
+		}
+
 		[[nodiscard]] magic_value* get_stack_point(gal_size_type offset) noexcept
 		{
 			return stack_top_ - offset;
@@ -1210,7 +1275,7 @@ namespace gal
 			return stack_top_ - offset;
 		}
 
-		void set_stack_point(gal_size_type offset, magic_value value)
+		void set_stack_point(gal_size_type offset, magic_value value) noexcept
 		{
 			stack_top_[-offset] = value;
 		}
@@ -1220,6 +1285,16 @@ namespace gal
 			stack_top_ = new_top;
 		}
 
+		void stack_top_rebase(gal_size_type offset) noexcept
+		{
+			stack_top_ = stack_.get() + offset;
+		}
+
+		void pop_stack(gal_size_type offset) noexcept
+		{
+			stack_top_ -= offset;
+		}
+
 		/**
 		 * @brief Captures the local variable [local] into an [object_upvalue]. If that local is
 		 * already in an upvalue, the existing one will be used. (This is important to
@@ -1227,15 +1302,54 @@ namespace gal
 		 * the same variable.) Otherwise, it will create a new open upvalue and add it
 		 * the fiber's list of upvalues.
 		 */
-		object_upvalue& capature_upvalue(magic_value& local);
+		object_upvalue&	   capature_upvalue(magic_value& local);
 
 		/**
 		 * @brief Closes any open upvalues that have been created for stack slots at [last]
 		 * and above.
 		 */
-		void			close_upvalue(magic_value& last);
+		void			   close_upvalue(magic_value& last);
 
-		void			set_error(const object_string& error)
+		/**
+		 * @brief Creates a new class.
+		 *
+		 * If [num_fields] is -1, the class is a outer class. The name and superclass
+		 * should be on top of the fiber's stack. After calling this, the top of the
+		 * stack will contain the new class.
+		 *
+		 * Aborts the current fiber if an error occurs.
+		 */
+		void			   create_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_module* module);
+
+		/**
+		 * @brief Completes the process for creating a new class.
+		 *
+		 * The class attributes instance and the class itself should be on the
+		 * top of the fiber's stack.
+		 *
+		 * This process handles moving the attribute data for a class from
+		 * compile time to runtime, since it now has all the attributes associated
+		 * with a class, including for methods.
+		 */
+		void			   end_class();
+
+		[[nodiscard]] bool has_caller() const noexcept
+		{
+			return not caller_;
+		}
+
+		[[nodiscard]] object_fiber* get_caller() const noexcept
+		{
+			return caller_;
+		}
+
+		void set_caller(object_fiber* caller) noexcept
+		{
+			// todo: What should we do with the previously existing caller?
+			caller_ = caller;
+		}
+
+		void set_error(const object_string& error)
 		{
 			error_message_ = std::make_shared<object_string>(error);
 		}
@@ -1265,15 +1379,25 @@ namespace gal
 			return error_message_.operator bool();
 		}
 
+		[[nodiscard]] fiber_state get_state() const noexcept
+		{
+			return state_;
+		}
+
+		void set_state(fiber_state new_state) noexcept
+		{
+			state_ = new_state;
+		}
+
 		[[nodiscard]] object_fiber* raise_error();
 
-		void						push(magic_value value) { *stack_top_++ = value; }
-		magic_value					pop() { return *--stack_top_; }
-		void						drop() { --stack_top_; }
-		[[nodiscard]] magic_value	peek() const { return *(stack_top_ - 1); }
-		[[nodiscard]] magic_value	peek2() const { return *(stack_top_ - 2); }
+		void						stack_push(magic_value value) { *stack_top_++ = value; }
+		magic_value*				stack_pop() { return --stack_top_; }
+		void						stack_drop() { --stack_top_; }
+		[[nodiscard]] magic_value*	stack_peek() const { return stack_top_ - 1; }
+		[[nodiscard]] magic_value*	stack_peek2() const { return stack_top_ - 2; }
 
-		gal_size_type				memory_usage() const noexcept override
+		[[nodiscard]] gal_size_type memory_usage() const noexcept override
 		{
 			// todo
 			return 0;
@@ -1338,9 +1462,14 @@ namespace gal
 	class object_class : public object
 	{
 	public:
-		using method_buffer_type	   = std::vector<method, gal_allocator<method>>;
-		using method_buffer_value_type = method_buffer_type::value_type;
-		using method_buffer_size_type  = method_buffer_type::size_type;
+		using method_buffer_type								   = std::vector<method, gal_allocator<method>>;
+		using method_buffer_value_type							   = method_buffer_type::value_type;
+		using method_buffer_size_type							   = method_buffer_type::size_type;
+		using method_buffer_reference							   = method_buffer_type::reference;
+		using method_buffer_const_reference						   = method_buffer_type::const_reference;
+
+		constexpr static gal_size_type outer_class_fields_size	   = -1;
+		constexpr static gal_size_type interface_class_fields_size = 0;
 
 	private:
 		// todo: Do we need to support multiple inheritance?
@@ -1393,14 +1522,29 @@ namespace gal
 		 * inherit its methods. This should be called before any methods are defined
 		 * on subclass.
 		 */
-		void						  bind_super_class(object_class& superclass);
+		void								  bind_super_class(object_class& superclass);
 
 		/**
 		 * @brief Creates a new class object as well as its associated metaclass.
 		 */
-		std::shared_ptr<object_class> create_derived_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_string& name);
+		std::shared_ptr<object_class>		  create_derived_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_string& name);
 
-		void						  set_method(method_buffer_size_type symbol, method m)
+		[[nodiscard]] method_buffer_size_type get_methods_size() const noexcept
+		{
+			return methods_.size();
+		}
+
+		[[nodiscard]] method_buffer_reference get_method(method_buffer_size_type index) noexcept
+		{
+			return methods_[index];
+		}
+
+		[[nodiscard]] method_buffer_const_reference get_method(method_buffer_size_type index) const noexcept
+		{
+			return methods_[index];
+		}
+
+		void set_method(method_buffer_size_type symbol, method m)
 		{
 			// Make sure the buffer is big enough to contain the symbol's index.
 			if (symbol >= methods_.size())
@@ -1429,10 +1573,24 @@ namespace gal
 			return name_;
 		}
 
-		[[nodiscard]] bool is_outer_class() const noexcept { return num_fields_ == gal_size_type(-1); }
-		[[nodiscard]] bool is_interface_class() const noexcept { return num_fields_ == gal_size_type(0); }
+		[[nodiscard]] magic_value get_attributes() const noexcept
+		{
+			return attributes_;
+		}
 
-		[[nodiscard]] gal_size_type	   memory_usage() const noexcept override
+		void set_attributes(magic_value attributes) noexcept
+		{
+			// todo: How to deal with existing attributes?
+			attributes_ = attributes;
+		}
+
+		[[nodiscard]] bool			is_outer_class() const noexcept { return num_fields_ == outer_class_fields_size; }
+		[[nodiscard]] bool			is_interface_class() const noexcept { return num_fields_ == interface_class_fields_size; }
+
+		[[nodiscard]] static bool	is_outer_class_fields(gal_size_type num_fields) noexcept { return num_fields == outer_class_fields_size; };
+		[[nodiscard]] static bool	is_interface_class_fields(gal_size_type num_fields) noexcept { return num_fields == interface_class_fields_size; }
+
+		[[nodiscard]] gal_size_type memory_usage() const noexcept override
 		{
 			// todo
 			return 0;
@@ -1452,9 +1610,11 @@ namespace gal
 	class object_outer : public object
 	{
 	public:
-		using data_buffer_type		 = std::vector<std::uint8_t, gal_allocator<std::uint8_t>>;
-		using data_buffer_value_type = data_buffer_type::value_type;
-		using data_buffer_size_type	 = data_buffer_type::size_type;
+		using data_buffer_type			= std::vector<std::uint8_t, gal_allocator<std::uint8_t>>;
+		using data_buffer_value_type	= data_buffer_type::value_type;
+		using data_buffer_size_type		= data_buffer_type::size_type;
+		using data_buffer_pointer		= data_buffer_type::pointer;
+		using data_buffer_const_pointer = data_buffer_type::const_pointer;
 
 	private:
 		data_buffer_type data_;
@@ -1463,6 +1623,16 @@ namespace gal
 		explicit object_outer(std::shared_ptr<object_class> obj_class)
 			: object{object_type::OUTER_TYPE, std::move(obj_class)},
 			  data_{} {}
+
+		[[nodiscard]] data_buffer_pointer get_data() noexcept
+		{
+			return data_.data();
+		}
+
+		[[nodiscard]] data_buffer_const_pointer get_data() const noexcept
+		{
+			return data_.data();
+		}
 
 		[[nodiscard]] gal_size_type memory_usage() const noexcept override
 		{
@@ -1478,14 +1648,18 @@ namespace gal
 	class object_instance : public object
 	{
 	public:
-		using field_buffer_type		  = std::vector<magic_value, gal_allocator<magic_value>>;
-		using field_buffer_value_type = field_buffer_type::value_type;
-		using field_buffer_size_type  = field_buffer_type::size_type;
+		using field_buffer_type			  = std::vector<magic_value, gal_allocator<magic_value>>;
+		using field_buffer_value_type	  = field_buffer_type::value_type;
+		using field_buffer_size_type	  = field_buffer_type::size_type;
+		using field_buffer_type_reference = field_buffer_type::reference;
 
 	private:
 		field_buffer_type fields_;
 
 	public:
+		explicit object_instance(object_class* obj_class)
+			: object_instance(std::shared_ptr<object_class>(obj_class)) {}
+
 		explicit object_instance(std::shared_ptr<object_class> obj_class)
 			: object{object_type::OUTER_TYPE, std::move(obj_class)},
 			  fields_{}
@@ -1497,6 +1671,21 @@ namespace gal
 			{
 				fields_.push_back(magic_value_null);
 			}
+		}
+
+		[[nodiscard]] auto get_field_size() const noexcept
+		{
+			return object_class_->get_field_size();
+		}
+
+		[[nodiscard]] field_buffer_type_reference get_field(field_buffer_size_type index) noexcept
+		{
+			return fields_[index];
+		}
+
+		[[nodiscard]] field_buffer_value_type get_field(field_buffer_size_type index) const noexcept
+		{
+			return fields_[index];
 		}
 
 		[[nodiscard]] gal_size_type memory_usage() const noexcept override
@@ -1670,25 +1859,28 @@ namespace gal
 	class object_module : public object
 	{
 	private:
-		using variables_buffer_type									 = std::unordered_map<object_string, magic_value, std::hash<object_string>, std::equal_to<>, gal_allocator<std::pair<const object_string, magic_value>>>;
+		// using variables_buffer_type							   = std::unordered_map<gal_size_type, std::pair<object_string, magic_value>, std::hash<gal_size_type>, std::equal_to<>, gal_allocator<std::pair<const gal_size_type, std::pair<object_string, magic_value>>>>;
+		using variables_buffer_type							   = std::map<gal_size_type, std::pair<object_string, magic_value>, std::less<>, gal_allocator<std::pair<const gal_size_type, std::pair<object_string, magic_value>>>>;
 
-		using value_type											 = variables_buffer_type::value_type;
-		using key_type												 = variables_buffer_type::key_type;
-		using mapped_type											 = variables_buffer_type::mapped_type;
-		using size_type												 = variables_buffer_type::size_type;
+		using value_type									   = variables_buffer_type::value_type;
+		// variable index
+		using key_type										   = variables_buffer_type::key_type;
+		// pair of variable_name-variable
+		using mapped_type									   = variables_buffer_type::mapped_type;
+		using size_type										   = variables_buffer_type::size_type;
 
-		using pointer												 = variables_buffer_type::pointer;
-		using const_poiner											 = variables_buffer_type::const_pointer;
+		using pointer										   = variables_buffer_type::pointer;
+		using const_poiner									   = variables_buffer_type::const_pointer;
 
-		using reference												 = variables_buffer_type::reference;
-		using const_reference										 = variables_buffer_type::const_reference;
+		using reference										   = variables_buffer_type::reference;
+		using const_reference								   = variables_buffer_type::const_reference;
 
-		using iterator												 = variables_buffer_type::iterator;
-		using const_iterator										 = variables_buffer_type::const_iterator;
+		using iterator										   = variables_buffer_type::iterator;
+		using const_iterator								   = variables_buffer_type::const_iterator;
 
-		constexpr static gal_index_type variable_already_defined	 = -1;
-		constexpr static gal_index_type variable_too_many_defined	 = -2;
-		constexpr static gal_index_type variable_used_before_defined = -3;
+		constexpr static key_type variable_already_defined	   = -1;
+		constexpr static key_type variable_too_many_defined	   = -2;
+		constexpr static key_type variable_used_before_defined = -3;
 
 	private:
 		/**
@@ -1717,7 +1909,7 @@ namespace gal
 			return name_;
 		}
 
-		[[nodiscard]] constexpr size_type size() const noexcept
+		[[nodiscard]] size_type size() const noexcept
 		{
 			return variables_.size();
 		}
@@ -1742,64 +1934,50 @@ namespace gal
 			return variables_.end();
 		}
 
-		constexpr void clear()
+		void clear()
 		{
 			variables_.clear();
 		}
 
 		/**
-		 * @brief Looks up [name] in [module]. If found, returns the value. Otherwise, returns
-		 * `magic_value_undefined`.
-		 */
-		magic_value get(const key_type& name) const
-		{
-			const auto ret = variables_.find(name);
-			if (ret != variables_.end())
-			{
-				return ret->second;
-			}
-			return magic_value_undefined;
-		}
+		  * @brief Looks up a variable from the module.
+		  *
+		  * Returns `magic_value_undefined` if not found.
+		  *
+		  * todo: C++20 should support the use of object_string::const_pointer for search without the need to construct a temporary object_string, \
+		  *     add an extra function to support it!
+		  */
+		[[nodiscard]] magic_value get_variable(const object_string& name) const;
 
 		/**
-		 * @brief Looks up [name] in [module]. If found, returns the value. Otherwise, returns
-		 * `magic_value_undefined`.
+		  * @brief Looks up a variable from the module.
+		  *
+		  * Returns `magic_value_undefined` if not found.
+		  */
+		[[nodiscard]] magic_value get_variable(key_type index) const;
+
+		/**
+		  * @brief Looks up a variable from the module.
+		  *
+		  * Returns `gal_size_not_exist` if not found.
+		  *
+		  * todo: C++20 should support the use of object_string::const_pointer for search without the need to construct a temporary object_string, \
+		  *     add an extra function to support it!
+		  */
+		[[nodiscard]] key_type	  get_variable_index(const object_string& name) const;
+
+		/**
+		 * @brief Change a variable in Module to another, and do nothing if the target variable does not exist.
 		 *
-		 * C++20 should support it
+		 * todo: C++20 should support the use of object_string::const_pointer for search without the need to construct a temporary object_string, \
+		 *     add an extra function to support it!
 		 */
-		// magic_value get(key_type::const_pointer name) const
-		// {
-		// 	const auto ret = variables_.find(name);
-		// 	if (ret != variables_.end())
-		// 	{
-		// 		return ret->second;
-		// 	}
-		// 	return magic_value_undefined;
-		// }
+		void					  set_variable(const object_string& name, magic_value value);
 
 		/**
-		  * @brief Looks up a variable from the module.
-		  *
-		  * Returns `magic_value_undefined` if not found.
-		  */
-		magic_value get_variable(const object_string& name) const
-		{
-			const auto it = variables_.find(name);
-			if (it != variables_.end())
-			{
-				return it->second;
-			}
-			return magic_value_undefined;
-		}
-
-		/**
-		  * @brief Looks up a variable from the module.
-		  *
-		  * Returns `magic_value_undefined` if not found.
-		  *
-		  * C++20 should support it
-		  */
-		// magic_value get_variable(const char* name);
+		 * @brief Change a variable in Module to another, and do nothing if the target variable does not exist.
+		 */
+		void					  set_variable(gal_size_type index, magic_value value);
 
 		/**
 		  * @brief Adds a new implicitly declared top-level variable named [name] to module
@@ -1809,7 +1987,7 @@ namespace gal
 		  * defined. Returns the symbol for the new variable or `variable_too_many_defined`
 		  * if there are too many variables defined.
 		  */
-		gal_index_type declare_variable(const object_string& name, int line)
+		key_type				  declare_variable(const object_string& name, int line)
 		{
 			if (variables_.size() > max_module_variables)
 			{
@@ -1819,7 +1997,7 @@ namespace gal
 			// Implicitly defined variables get a "value" that is the line where the
 			// variable is first used. We'll use that later to report an error on the
 			// right line.
-			variables_.emplace(name, magic_value{static_cast<magic_value::value_type>(line)});
+			return variables_.emplace(variables_.size(), std::make_pair(name, magic_value{static_cast<magic_value::value_type>(line)})).first->first;
 		}
 
 		/**
@@ -1830,10 +2008,8 @@ namespace gal
 		  * with the given name is already defined, or `variable_too_many_defined` if there
 		  * are too many variables defined. Returns `variable_used_before_defined` if this is
 		  * a top-level lowercase variable (local name) that was used before being defined.
-		  *
-		  * todo: it should not return gal_index_type!
 		  */
-		gal_index_type define_variable(const object_string& name, magic_value value, int* line = nullptr);
+		key_type define_variable(const object_string& name, magic_value value, int* line = nullptr);
 
 		/**
 		  * @brief Adds a new top-level variable named [name] to [this], and optionally
@@ -1853,11 +2029,11 @@ namespace gal
 		 *
 		 * todo: Should we use insert? Can we ensure that the target module does not contain any variables defined in this module?
 		 */
-		void		   copy_variables(const object_module& other)
+		void	 copy_variables(const object_module& other)
 		{
-			for (const auto& [k, v]: other.variables_)
+			for (const auto& [index, kv]: other.variables_)
 			{
-				define_variable(k, v);
+				define_variable(kv.first, kv.second);
 			}
 		}
 
@@ -1881,7 +2057,8 @@ namespace gal
 	class object_map : public object
 	{
 	public:
-		using map_buffer_type = std::unordered_map<magic_value, magic_value, std::hash<magic_value>, std::equal_to<>, gal_allocator<std::pair<const magic_value, magic_value>>>;
+		// using map_buffer_type = std::unordered_map<magic_value, magic_value, std::hash<magic_value>, std::equal_to<>, gal_allocator<std::pair<const magic_value, magic_value>>>;
+		using map_buffer_type = std::map<magic_value, magic_value, std::less<>, gal_allocator<std::pair<const magic_value, magic_value>>>;
 
 		using value_type	  = map_buffer_type::value_type;
 		using key_type		  = map_buffer_type::key_type;
@@ -1917,7 +2094,7 @@ namespace gal
 				   arg.is_string();
 		}
 
-		[[nodiscard]] constexpr size_type size() const noexcept
+		[[nodiscard]] size_type size() const noexcept
 		{
 			return entries_.size();
 		}
@@ -1942,7 +2119,7 @@ namespace gal
 			return entries_.end();
 		}
 
-		constexpr void clear()
+		void clear()
 		{
 			entries_.clear();
 		}
@@ -1951,7 +2128,7 @@ namespace gal
 		 * @brief Looks up [key] in [map]. If found, returns the value. Otherwise, returns
 		 * `magic_value_undefined`.
 		 */
-		magic_value get(magic_value key) const
+		[[nodiscard]] magic_value get(magic_value key) const
 		{
 			const auto ret = entries_.find(key);
 			if (ret != entries_.end())

@@ -65,7 +65,6 @@ namespace gal
 	[[nodiscard]] constexpr auto index_to_size(std::integral auto target_size, std::integral auto index) noexcept -> decltype(target_size)
 	{
 		using size_type = decltype(target_size);
-		using index_type = decltype(index);
 
 		auto ret = static_cast<size_type>(index);
 		if (std::cmp_greater(ret, index))

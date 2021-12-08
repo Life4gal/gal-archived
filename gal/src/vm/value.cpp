@@ -79,12 +79,6 @@ namespace gal
 	{
 	}
 
-	object_string::object_string(gal_virtual_machine_state& state, std_string_type string)
-		: object{object_type::STRING_TYPE, state.string_class_},
-		  string_{std::move(string)}
-	{
-	}
-
 	object_string::object_string(gal_virtual_machine_state& state, const object_string& source, object_string::size_type begin, object_string::size_type count, object_string::size_type step)
 		: object{object_type::STRING_TYPE, state.string_class_}
 	{
@@ -248,7 +242,7 @@ namespace gal
 		return npos;
 	}
 
-	gal_index_type symbol_table::find(const char* name, object_string::size_type length)
+	gal_index_type symbol_table::find(const char* name, object_string::size_type length) const
 	{
 		const auto it = std::ranges::find_if(
 				table_,
@@ -261,7 +255,7 @@ namespace gal
 		return gal_index_not_exist;
 	}
 
-	gal_index_type symbol_table::find(const object_string& string)
+	gal_index_type symbol_table::find(const object_string& string) const
 	{
 		const auto it = std::ranges::find(
 				table_,
@@ -418,6 +412,44 @@ namespace gal
 		}
 	}
 
+	void object_fiber::create_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_module* module)
+	{
+		// Pull the name and superclass off the stack.
+		auto superclass = get_stack_point(1);
+		auto name		= get_stack_point(2)->as_string();
+
+		// We have two values on the stack, and we are going to leave one, so discard
+		// the other slot.
+		pop_stack(1);
+
+		set_error(state.validate_superclass(*name, *superclass, num_fields));
+		if (has_error())
+		{
+			return;
+		}
+
+		auto obj_class = superclass->as_class()->create_derived_class(state, num_fields, *name);
+		set_stack_point(1, state.class_class_->operator magic_value());
+
+		if (object_class::is_outer_class_fields(num_fields))
+		{
+			state.bind_outer_class(*obj_class, *module);
+		}
+	}
+
+	void object_fiber::end_class()
+	{
+		// Pull the attributes and class off the stack
+		auto class_value = get_stack_point(1);
+		auto attributes	 = get_stack_point(2);
+
+		// Remove the stack items
+		pop_stack(2);
+
+		auto* obj_class = class_value->as_class();
+		obj_class->set_attributes(*attributes);
+	}
+
 	object_fiber* object_fiber::raise_error()
 	{
 		gal_assert(has_error(), "Should only call this after an error.");
@@ -501,7 +533,58 @@ namespace gal
 		return gal_index_not_exist;
 	}
 
-	gal_index_type object_module::define_variable(const object_string& name, magic_value value, int* line)
+	magic_value object_module::get_variable(const object_string& name) const
+	{
+		const auto it = std::ranges::find(variables_, name, [](const value_type& index_kv) -> decltype(auto)
+										  { return index_kv.second.first; });
+		if (it != variables_.end())
+		{
+			return it->second.second;
+		}
+		return magic_value_undefined;
+	}
+
+	magic_value object_module::get_variable(key_type index) const
+	{
+		const auto it = variables_.find(index);
+		if (it != variables_.end())
+		{
+			return it->second.second;
+		}
+		return magic_value_undefined;
+	}
+
+	object_module::key_type object_module::get_variable_index(const object_string& name) const
+	{
+		const auto it = std::ranges::find(variables_, name, [](const value_type& index_kv) -> decltype(auto)
+										  { return index_kv.second.first; });
+		if (it != variables_.end())
+		{
+			return it->first;
+		}
+		return gal_size_not_exist;
+	}
+
+	void object_module::set_variable(gal_size_type index, magic_value value)
+	{
+		auto it = variables_.find(index);
+		if (it != variables_.end())
+		{
+			it->second.second = value;
+		}
+	}
+
+	void object_module::set_variable(const object_string& name, magic_value value)
+	{
+		auto it = std::ranges::find(variables_, name, [](const value_type& index_kv) -> decltype(auto)
+									{ return index_kv.second.first; });
+		if (it != variables_.end())
+		{
+			it->second.second = value;
+		}
+	}
+
+	object_module::key_type object_module::define_variable(const object_string& name, magic_value value, int* line)
 	{
 		if (variables_.size() > max_module_variables)
 		{
@@ -509,14 +592,15 @@ namespace gal
 		}
 
 		// See if the variable is already explicitly or implicitly declared.
-		auto it = variables_.find(name);
+		auto it = std::ranges::find(variables_, name, [](const value_type& index_kv) -> decltype(auto)
+									{ return index_kv.second.first; });
 
 		if (it == variables_.end())
 		{
 			// Brand-new variable.
-			return static_cast<gal_index_type>(std::distance(variables_.begin(), variables_.emplace(name, value).first));
+			return variables_.emplace(variables_.size(), std::make_pair(name, value)).first->first;
 		}
-		else if (auto& v = it->second; v.is_number())
+		else if (auto& v = it->second.second; v.is_number())
 		{
 			// An implicitly declared variable's value will always be a number.
 			// Now we have a real definition.
@@ -532,7 +616,7 @@ namespace gal
 			{
 				return variable_used_before_defined;
 			}
-			return static_cast<gal_index_type>(std::distance(variables_.begin(), it));
+			return it->first;
 		}
 		else
 		{

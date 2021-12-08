@@ -253,7 +253,7 @@ namespace std
 
 		constexpr static allocator_type select_on_container_copy_construction(const allocator_type& a)
 		{
-			return internal_allocator_traits::select_on_container_copy_construction(a.allocator);
+			return a;
 		}
 	};
 }// namespace std

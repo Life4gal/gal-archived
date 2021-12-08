@@ -9,6 +9,95 @@
 
 namespace gal
 {
+	object_string gal_virtual_machine_state::validate_superclass(const object_string &name, magic_value superclass_value, gal_size_type num_fields)
+	{
+		object_string error{*this};
+
+		// Make sure the superclass is a class.
+		if (not superclass_value.is_class())
+		{
+			std_format::format_to(error.get_appender(), "Class '{}' cannot inherit from a non-class object.", name.str());
+			return error;
+		}
+
+		// Make sure it doesn't inherit from a sealed built-in type. Primitive methods
+		// on these classes assume the instance is one of the other object_xxx types and
+		// will fail horribly if it's actually an object_instance.
+		auto *superclass = superclass_value.as_class();
+		if (
+				superclass == class_class_.get() ||
+				superclass == fiber_class_.get() ||
+				superclass == function_class_.get() ||
+				superclass == list_class_.get() ||
+				superclass == map_class_.get() ||
+				superclass == range_class_.get() ||
+				superclass == string_class_.get() ||
+				superclass == boolean_class_.get() ||
+				superclass == null_class_.get() ||
+				superclass == number_class_.get())
+		{
+			std_format::format_to(error.get_appender(), "Class '{}' cannot inherit from built-in class '{}'.", name.str(), superclass->get_class_name().str());
+			return error;
+		}
+
+		if (superclass->is_outer_class())
+		{
+			std_format::format_to(error.get_appender(), "Class '{}' cannot inherit from outer class '{}'.", name.str(), superclass->get_class_name().str());
+			return error;
+		}
+
+		if (superclass->get_remain_field_size() < num_fields)
+		{
+			std_format::format_to(
+					error.get_appender(),
+					"There are currently {} fields in class, and {} fields will be added, but there can only be {} fields at most, including inherited ones.",
+					superclass->get_field_size(),
+					num_fields,
+					max_fields);
+			return error;
+		}
+
+		return error;
+	}
+
+	void gal_virtual_machine_state::bind_outer_class(object_class &obj_class, object_module &module)
+	{
+		gal_configuration::gal_outer_class_method methods{};
+
+		// Check the optional built-in module first so the host can override it.
+		if (configuration.bind_outer_class_function != nullptr)
+		{
+			methods = configuration.bind_outer_class_function(*this, module.get_name().data(), obj_class.get_class_name().data());
+		}
+
+		// If the host didn't provide it, see if it's a built-in optional module.
+		if (methods.allocate == nullptr && methods.finalize == nullptr)
+		{
+			// todo: built-in module
+		}
+
+		method m{};
+		m.type		= method_type::outer_type;
+
+		// Add the symbol even if there is no allocator, so we can ensure that the
+		// symbol itself is always in the symbol table.
+		auto symbol = method_names_.ensure(*this, gal_configuration::gal_outer_class_method::allocate_symbol_name, gal_configuration::gal_outer_class_method::allocate_symbol_name_length);
+		if (methods.allocate != nullptr)
+		{
+			m.as.outer_method_function = methods.allocate;
+			obj_class.set_method(symbol, m);
+		}
+
+		// Add the symbol even if there is no finalizer, so we can ensure that the
+		// symbol itself is always in the symbol table.
+		symbol = method_names_.ensure(*this, gal_configuration::gal_outer_class_method::finalize_symbol_name, gal_configuration::gal_outer_class_method::finalize_symbol_name_length);
+		if (methods.finalize != nullptr)
+		{
+			m.as.outer_method_function = reinterpret_cast<gal_outer_method_function_type>(methods.finalize);
+			obj_class.set_method(symbol, m);
+		}
+	}
+
 	gal_outer_method_function_type gal_virtual_machine_state::find_outer_method(const char *module_name, const char *class_name, bool is_static, const char *signature)
 	{
 		gal_outer_method_function_type method = nullptr;
@@ -137,92 +226,828 @@ namespace gal
 		return object::ctor<object_closure>(*this, *function);
 	}
 
-	object_string gal_virtual_machine_state::validate_superclass(const object_string &name, magic_value superclass_value, gal_size_type num_fields)
+	void gal_virtual_machine_state::create_outer(magic_value *stack)
 	{
-		object_string error{*this};
+		auto *obj_class = stack[0].as_class();
+		gal_assert(obj_class->is_outer_class(), "Class must be a outer class.");
 
-		// Make sure the superclass is a class.
-		if (not superclass_value.is_class())
-		{
-			std_format::format_to(error.get_appender(), "Class '{}' cannot inherit from a non-class object.", name.str());
-			return error;
-		}
+		// TODO: Don't look up every time.
+		const auto symbol = method_names_.find(gal_configuration::gal_outer_class_method::allocate_symbol_name, gal_configuration::gal_outer_class_method::allocate_symbol_name_length);
+		gal_assert(symbol != gal_index_not_exist, "Should have defined <allocate> symbol.");
 
-		// Make sure it doesn't inherit from a sealed built-in type. Primitive methods
-		// on these classes assume the instance is one of the other object_xxx types and
-		// will fail horribly if it's actually an object_instance.
-		auto *superclass = superclass_value.as_class();
-		if (
-				superclass == class_class_.get() ||
-				superclass == fiber_class_.get() ||
-				superclass == function_class_.get() ||
-				superclass == list_class_.get() ||
-				superclass == map_class_.get() ||
-				superclass == range_class_.get() ||
-				superclass == string_class_.get() ||
-				superclass == boolean_class_.get() ||
-				superclass == null_class_.get() ||
-				superclass == number_class_.get())
-		{
-			std_format::format_to(error.get_appender(), "Class '{}' cannot inherit from built-in class '{}'.", name.str(), superclass->get_class_name().str());
-			return error;
-		}
+		gal_assert(std::cmp_greater(obj_class->get_methods_size(), symbol), "Class should have allocator.");
+		auto &method = obj_class->get_method(symbol);
+		gal_assert(method.type == method_type::outer_type, "Allocator should be outer.");
 
-		if (superclass->is_outer_class())
-		{
-			std_format::format_to(error.get_appender(), "Class '{}' cannot inherit from outer class '{}'.", name.str(), superclass->get_class_name().str());
-			return error;
-		}
+		// Pass the constructor arguments to the allocator as well.
+		gal_assert(api_stack_ == nullptr, "Cannot already be in outer call.");
+		set_stack_bottom(stack);
 
-		if (superclass->get_remain_field_size() < num_fields)
-		{
-			std_format::format_to(
-					error.get_appender(),
-					"There are currently {} fields in class, and {} fields will be added, but there can only be {} fields at most, including inherited ones.",
-					superclass->get_field_size(),
-					num_fields,
-					max_fields);
-			return error;
-		}
+		method.as.outer_method_function(this);
 
-		return error;
+		shutdown_stack();
 	}
 
-	void gal_virtual_machine_state::bind_outer_class(object_class &obj_class, object_module &module)
+	object_string gal_virtual_machine_state::resolve_module(const object_string &name)
 	{
-		gal_configuration::gal_outer_class_method methods{};
-
-		// Check the optional built-in module first so the host can override it.
-		if (configuration.bind_outer_class_function != nullptr)
+		// If the host doesn't care to resolve, leave the name alone.
+		if (configuration.resolve_module_function == nullptr)
 		{
-			methods = configuration.bind_outer_class_function(*this, module.get_name().data(), obj_class.get_class_name().data());
+			return name;
+		}
+
+		auto &function = fiber_->get_recent_frame().closure->get_function();
+		auto &importer = function.get_module().get_name();
+
+		auto *resolved = configuration.resolve_module_function(*this, importer.data(), name.data());
+
+		if (not resolved)
+		{
+			object_string error{*this};
+			std_format::format_to(error.get_appender(), "Could not resolve module '{}' imported from '{}'.", name.str(), importer.str());
+
+			fiber_->set_error(error);
+		}
+
+		// If they resolved to the exact same string, we don't need to copy it.
+		if (resolved == name)
+		{
+			return name;
+		}
+
+		// Copy the string into a GAL String object.
+		// todo: `resolved` sequence is dynamic allocated, we maybe need to delete it here.
+		return {*this, resolved, std::strlen(resolved)};
+	}
+
+	magic_value gal_virtual_machine_state::import_module(const object_string &name)
+	{
+		auto read_name = resolve_module(name);
+
+		// If the module is already loaded, we don't need to do anything.
+		auto existing  = modules_.get(read_name.operator magic_value());
+		if (existing != magic_value_undefined)
+		{
+			return existing;
+		}
+
+		gal_configuration::gal_load_module_result result{};
+
+		// Let the host try to provide the module.
+		if (configuration.load_module_function != nullptr)
+		{
+			result = configuration.load_module_function(*this, read_name.data());
 		}
 
 		// If the host didn't provide it, see if it's a built-in optional module.
-		if (methods.allocate == nullptr && methods.finalize == nullptr)
+		if (result.source == nullptr)
 		{
-			// todo: built-in module
+			result.on_complete = nullptr;
+			// todo: built-in module here
 		}
 
-		method m{};
-		m.type		= method_type::outer_type;
-
-		// Add the symbol even if there is no allocator, so we can ensure that the
-		// symbol itself is always in the symbol table.
-		auto symbol = method_names_.ensure(*this, gal_configuration::gal_outer_class_method::allocate_symbol_name, gal_configuration::gal_outer_class_method::allocate_symbol_name_length);
-		if (methods.allocate != nullptr)
+		if (result.source == nullptr)
 		{
-			m.as.outer_method_function = methods.allocate;
-			obj_class.set_method(symbol, m);
+			object_string error{*this};
+			std_format::format_to(error.get_appender(), "Could not load module '{}'.", read_name.str());
+			fiber_->set_error(std::move(error));
+			return magic_value_null;
 		}
 
-		// Add the symbol even if there is no finalizer, so we can ensure that the
-		// symbol itself is always in the symbol table.
-		symbol = method_names_.ensure(*this, gal_configuration::gal_outer_class_method::finalize_symbol_name, gal_configuration::gal_outer_class_method::finalize_symbol_name_length);
-		if (methods.finalize != nullptr)
+		auto *module_closure = compile_in_module(read_name.operator magic_value(), result.source, false, true);
+
+		// Now that we're done, give the result back in case there's cleanup to do.
+		if (result.on_complete)
 		{
-			m.as.outer_method_function = reinterpret_cast<gal_outer_method_function_type>(methods.finalize);
-			obj_class.set_method(symbol, m);
+			result.on_complete(*this, read_name.data(), result);
 		}
+
+		if (not module_closure)
+		{
+			object_string error{*this};
+			std_format::format_to(error.get_appender(), "Could not compile module '{}'.", read_name.str());
+			fiber_->set_error(std::move(error));
+			return magic_value_null;
+		}
+
+		// Return the closure that executes the module.
+		return module_closure->operator magic_value();
+	}
+
+	magic_value gal_virtual_machine_state::get_module_variable(object_module &module, const object_string &variable_name)
+	{
+		auto variable = module.get_variable(variable_name);
+
+		// It's a runtime error if the imported variable does not exist.
+		if (variable != magic_value_undefined)
+		{
+			return variable;
+		}
+
+		object_string error{*this};
+		std_format::format_to(
+				error.get_appender(),
+				"Could not find a variable named '{}' in module '{}'.",
+				variable_name.str(),
+				module.get_name().str());
+		fiber_->set_error(std::move(error));
+		return magic_value_null;
+	}
+
+	bool gal_virtual_machine_state::check_arity(magic_value value, gal_size_type num_args)
+	{
+		gal_assert(value.is_closure(), "Receiver must be a closure.");
+		auto &function = value.as_closure()->get_function();
+
+		// We only care about missing arguments, not extras. The "- 1" is because
+		// num_args includes the receiver, the function itself, which we don't want to
+		// count.
+		if (function.check_parameters_arity(num_args - 1))
+		{
+			return true;
+		}
+
+		object_string error{*this};
+		std_format::format_to(
+				error.get_appender(),
+				"Function {} expects {} argument(s), but only given {} argument(s).",
+				function.get_name(),
+				function.get_parameters_arity(),
+				num_args - 1);
+		fiber_->set_error(std::move(error));
+		return false;
+	}
+
+	gal_interpret_result gal_virtual_machine_state::run_interpreter(object_fiber *fiber)
+	{
+		// Remember the current fiber, so we can find it if a GC happens.
+		fiber_ = fiber;
+		fiber->set_state(fiber_state::root_state);
+
+		call_frame		   *frame;
+		magic_value		*stack_start;
+		const std::uint8_t *ip;
+		object_function	*function;
+
+		auto				read_byte = [&]
+		{ return static_cast<std::uint8_t>(*ip++); };
+		auto read_short = [&]
+		{
+			ip += 2;
+			return static_cast<std::uint16_t>((ip[-2] << 8) | ip[-1]);
+		};
+
+		/**
+		 * @brief Use this before a call_frame is pushed to store the local variables back
+		 * into the current one.
+		 */
+		auto store_frame = [&]
+		{ frame->ip = ip; };
+
+		/**
+		 * @brief Use this after a call_frame has been pushed or popped to refresh the local
+		 * variables.
+		 */
+		auto load_frame = [&]
+		{
+			frame		= &fiber->get_recent_frame();
+			stack_start = frame->stack_start;
+			ip			= frame->ip;
+			function	= &frame->closure->get_function();
+		};
+
+		auto runtime_error = [&]
+		{
+			bool finished = false;
+
+			store_frame();
+			this->runtime_error();
+			if (fiber_ == nullptr) { finished = true; }
+			fiber = fiber_;
+			load_frame();
+
+			return finished;
+		};
+
+		auto trace_instructions = [&]
+		{
+			if constexpr (debug_trace_instruction)
+			{
+				// Prints the stack and instruction before each instruction is executed.
+				debugger::dump(*fiber);
+				debugger::dump(*this, *function, static_cast<int>(ip - function->get_code_data()));
+			}
+		};
+
+		load_frame();
+
+		opcodes_type instruction;
+
+	loop_back:
+		trace_instructions();
+		switch (instruction = static_cast<opcodes_type>(read_byte()))
+		{
+			case opcodes_type::CODE_LOAD_LOCAL_0:
+			case opcodes_type::CODE_LOAD_LOCAL_1:
+			case opcodes_type::CODE_LOAD_LOCAL_2:
+			case opcodes_type::CODE_LOAD_LOCAL_3:
+			case opcodes_type::CODE_LOAD_LOCAL_4:
+			case opcodes_type::CODE_LOAD_LOCAL_5:
+			case opcodes_type::CODE_LOAD_LOCAL_6:
+			case opcodes_type::CODE_LOAD_LOCAL_7:
+			case opcodes_type::CODE_LOAD_LOCAL_8:
+			{
+				fiber->stack_push(stack_start[code_to_scalar(instruction) - code_to_scalar(opcodes_type::CODE_LOAD_LOCAL_0)]);
+				goto loop_back;
+			}
+			case opcodes_type::CODE_LOAD_LOCAL:
+			{
+				fiber->stack_push(stack_start[read_byte()]);
+				goto loop_back;
+			}
+			case opcodes_type::CODE_LOAD_FIELD_THIS:
+			{
+				auto filed	  = read_byte();
+				auto receiver = stack_start[0];
+				gal_assert(receiver.is_instance(), "Receiver should be instance.");
+				auto *instance = receiver.as_instance();
+				gal_assert(filed < instance->get_field_size(), "Out of bounds field.");
+				fiber->stack_push(instance->get_field(filed));
+				goto loop_back;
+			}
+			case opcodes_type::CODE_POP:
+			{
+				fiber->stack_drop();
+				goto loop_back;
+			}
+			case opcodes_type::CODE_NULL:
+			{
+				fiber->stack_push({magic_value::null_val});
+				goto loop_back;
+			}
+			case opcodes_type::CODE_FALSE:
+			{
+				fiber->stack_push({magic_value::false_val});
+				goto loop_back;
+			}
+			case opcodes_type::CODE_TRUE:
+			{
+				fiber->stack_push({magic_value::true_val});
+				goto loop_back;
+			}
+			case opcodes_type::CODE_STORE_LOCAL:
+			{
+				stack_start[read_byte()] = *fiber->stack_peek();
+				goto loop_back;
+			}
+			case opcodes_type::CODE_CONSTANT:
+			{
+				fiber->stack_push(function->get_constant(read_short()));
+				goto loop_back;
+			}
+				{
+					// The opcodes for doing method and superclass calls share a lot of code.
+					// However, doing an if() test in the middle of the instruction sequence
+					// to handle the bit that is special to super calls makes the non-super
+					// call path noticeably slower.
+					//
+					// Instead, we do this old school using an explicit goto to share code for
+					// everything at the tail end of the call-handling code that is the same
+					// between normal and superclass calls.
+					gal_size_type  num_args;
+					gal_index_type symbol;
+
+					magic_value	*args;
+					object_class	 *obj_class;
+
+					method		   *method;
+
+					case opcodes_type::CODE_CALL_0:
+					case opcodes_type::CODE_CALL_1:
+					case opcodes_type::CODE_CALL_2:
+					case opcodes_type::CODE_CALL_3:
+					case opcodes_type::CODE_CALL_4:
+					case opcodes_type::CODE_CALL_5:
+					case opcodes_type::CODE_CALL_6:
+					case opcodes_type::CODE_CALL_7:
+					case opcodes_type::CODE_CALL_8:
+					case opcodes_type::CODE_CALL_9:
+					case opcodes_type::CODE_CALL_10:
+					case opcodes_type::CODE_CALL_11:
+					case opcodes_type::CODE_CALL_12:
+					case opcodes_type::CODE_CALL_13:
+					case opcodes_type::CODE_CALL_14:
+					case opcodes_type::CODE_CALL_15:
+					case opcodes_type::CODE_CALL_16:
+					{
+						// Add one for the implicit receiver argument.
+						num_args  = code_to_scalar(instruction) - code_to_scalar(opcodes_type::CODE_CALL_0) + 1;
+						symbol	  = read_short();
+
+						// The receiver is the first argument.
+						args	  = fiber->get_stack_point(num_args);
+						obj_class = get_class(args[0]);
+						goto complete_call;
+					}
+					case opcodes_type::CODE_SUPER_0:
+					case opcodes_type::CODE_SUPER_1:
+					case opcodes_type::CODE_SUPER_2:
+					case opcodes_type::CODE_SUPER_3:
+					case opcodes_type::CODE_SUPER_4:
+					case opcodes_type::CODE_SUPER_5:
+					case opcodes_type::CODE_SUPER_6:
+					case opcodes_type::CODE_SUPER_7:
+					case opcodes_type::CODE_SUPER_8:
+					case opcodes_type::CODE_SUPER_9:
+					case opcodes_type::CODE_SUPER_10:
+					case opcodes_type::CODE_SUPER_11:
+					case opcodes_type::CODE_SUPER_12:
+					case opcodes_type::CODE_SUPER_13:
+					case opcodes_type::CODE_SUPER_14:
+					case opcodes_type::CODE_SUPER_15:
+					case opcodes_type::CODE_SUPER_16:
+					{
+						// Add one for the implicit receiver argument.
+						num_args  = code_to_scalar(instruction) - code_to_scalar(opcodes_type::CODE_SUPER_0) + 1;
+						symbol	  = read_short();
+
+						// The receiver is the first argument.
+						args	  = fiber->get_stack_point(num_args);
+
+						// The superclass is stored in a constant.
+						obj_class = function->get_constant(read_short()).as_class();
+						goto complete_call;
+					}
+					complete_call:
+					{
+						// If the class's method table doesn't include the symbol, bail.
+						if (std::cmp_greater_equal(symbol, obj_class->get_methods_size()) ||
+							(method = &obj_class->get_method(symbol))->type == method_type::none_type)
+						{
+							method_not_found(*obj_class, symbol);
+							if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+						}
+						switch (method->type)
+						{
+							case method_type::primitive_type:
+							{
+								if (method->as.primitive_function(*this, args))
+								{
+									// The result is now in the first arg slot. Discard the other
+									// stack slots.
+									fiber->pop_stack(num_args - 1);
+								}
+								else
+								{
+									// An error, fiber switch, or call frame change occurred.
+									store_frame();
+
+									// If we don't have a fiber to switch to, stop interpreting.
+									fiber = fiber_;
+									if (fiber == nullptr) { return gal_interpret_result::RESULT_SUCCESS; }
+									if (fiber->has_error())
+									{
+										if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+									}
+									load_frame();
+								}
+								break;
+							}
+							case method_type::function_call_type:
+							{
+								if (not check_arity(args[0], num_args))
+								{
+									if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+									break;
+								}
+
+								store_frame();
+								method->as.primitive_function(*this, args);
+								load_frame();
+								break;
+							}
+							case method_type::outer_type:
+							{
+								call_outer(*fiber, method->as.outer_method_function, num_args);
+								if (fiber->has_error())
+								{
+									if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+								}
+								break;
+							}
+							case method_type::block_type:
+							{
+								store_frame();
+								call_function(*fiber, *method->as.closure, num_args);
+								load_frame();
+								break;
+							}
+							case method_type::none_type:
+							{
+								UNREACHABLE();
+								break;
+							}
+						}
+						goto loop_back;
+					}
+				}
+			case opcodes_type::CODE_LOAD_UPVALUE:
+			{
+				fiber->stack_push(*frame->closure->get_upvalue(read_byte())->get_value());
+				goto loop_back;
+			}
+			case opcodes_type::CODE_STORE_UPVALUE:
+			{
+				frame->closure->get_upvalue(read_byte())->reset_value(fiber->stack_peek());
+				goto loop_back;
+			}
+			case opcodes_type::CODE_LOAD_MODULE_VAR:
+			{
+				fiber->stack_push(function->get_module().get_variable(read_short()));
+				goto loop_back;
+			}
+			case opcodes_type::CODE_STORE_MODULE_VAR:
+			{
+				function->get_module().set_variable(read_short(), *fiber->stack_peek());
+				goto loop_back;
+			}
+			case opcodes_type::CODE_STORE_FIELD_THIS:
+			{
+				auto field	  = read_byte();
+				auto receiver = stack_start[0];
+				gal_assert(receiver.is_instance(), "Receiver should be instance.");
+				auto *instance = receiver.as_instance();
+				gal_assert(field < instance->get_field_size(), "Out of bounds field.");
+				instance->get_field(field) = *fiber->stack_peek();
+				goto loop_back;
+			}
+			case opcodes_type::CODE_LOAD_FIELD:
+			{
+				auto field	  = read_byte();
+				auto receiver = fiber->stack_pop();
+				gal_assert(receiver->is_instance(), "Receiver should be instance.");
+				auto *instance = receiver->as_instance();
+				gal_assert(field < instance->get_field_size(), "Out of bounds field.");
+				fiber->stack_push(instance->get_field(field));
+				goto loop_back;
+			}
+			case opcodes_type::CODE_STORE_FIELD:
+			{
+				auto field	  = read_byte();
+				auto receiver = fiber->stack_pop();
+				gal_assert(receiver->is_instance(), "Receiver should be instance.");
+				auto *instance = receiver->as_instance();
+				gal_assert(field < instance->get_field_size(), "Out of bounds field.");
+				instance->get_field(field) = *fiber->stack_peek();
+				goto loop_back;
+			}
+			case opcodes_type::CODE_JUMP:
+			{
+				ip += read_short();
+				goto loop_back;
+			}
+			case opcodes_type::CODE_LOOP:
+			{
+				// Jump back to the top of the loop.
+				ip -= read_short();
+				goto loop_back;
+			}
+			case opcodes_type::CODE_JUMP_IF:
+			{
+				auto offset	   = read_short();
+				auto condition = fiber->stack_pop();
+
+				if (condition->is_falsy())
+				{
+					ip += offset;
+				}
+				goto loop_back;
+			}
+			case opcodes_type::CODE_AND:
+			{
+				auto offset	   = read_short();
+				auto condition = fiber->stack_peek();
+
+				if (condition->is_falsy())
+				{
+					// Short-circuit the right-hand side.
+					ip += offset;
+				}
+				else
+				{
+					// Discard the condition and evaluate the right-hand side.
+					fiber->stack_drop();
+				}
+				goto loop_back;
+			}
+			case opcodes_type::CODE_OR:
+			{
+				auto offset	   = read_short();
+				auto condition = fiber->stack_peek();
+
+				if (condition->is_falsy())
+				{
+					// Discard the condition and evaluate the right-hand side.
+					fiber->stack_drop();
+				}
+				else
+				{
+					// Short-circuit the right-hand side.
+					ip += offset;
+				}
+				goto loop_back;
+			}
+			case opcodes_type::CODE_CLOSE_UPVALUE:
+			{
+				// Close the upvalue for the local if we have one.
+				fiber->close_upvalue(*fiber->get_stack_point(1));
+				fiber->stack_drop();
+				goto loop_back;
+			}
+			case opcodes_type::CODE_RETURN:
+			{
+				auto result = fiber->stack_pop();
+				fiber->pop_recent_frame();
+
+				// Close any upvalues still in scope.
+				fiber->close_upvalue(stack_start[0]);
+
+				// If the fiber is complete, end it.
+				if (not fiber->has_frame())
+				{
+					// See if there's another fiber to return to. If not, we're done.
+					if (not fiber->has_caller())
+					{
+						// Store the final result value at the beginning of the stack so the
+						// C++ API can get it.
+						fiber->set_stack_point(0, *result);
+						fiber->stack_top_rebase(1);
+						return gal_interpret_result::RESULT_SUCCESS;
+					}
+
+					auto *resuming_fiber = fiber->get_caller();
+					fiber->set_caller(nullptr);
+					fiber  = resuming_fiber;
+					fiber_ = resuming_fiber;
+
+					// Store the result in the resuming fiber.
+					fiber->set_stack_point(1, *result);
+				}
+				else
+				{
+					// Store the result of the block in the first slot, which is where the
+					// caller expects it.
+					stack_start[0] = *result;
+
+					// Discard the stack slots for the call frame (leaving one slot for the
+					// result).
+					fiber->set_stack_top(frame->stack_start + 1);
+				}
+
+				load_frame();
+				goto loop_back;
+			}
+			case opcodes_type::CODE_CONSTRUCT:
+			{
+				gal_assert(stack_start[0].is_class(), "'this' should be a class.");
+				stack_start[0] = object::ctor<object_instance>(stack_start[0].as_class())->operator magic_value();
+				goto loop_back;
+			}
+			case opcodes_type::CODE_OUTER_CONSTRUCT:
+			{
+				gal_assert(stack_start[0].is_class(), "'this' should be a class.");
+				create_outer(stack_start);
+				if (fiber->has_error())
+				{
+					if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+				}
+				goto loop_back;
+			}
+			case opcodes_type::CODE_CLOSURE:
+			{
+				// Create the closure and push it on the stack before creating upvalues
+				// so that it doesn't get collected.
+				auto *func	  = function->get_constant(read_short()).as_function();
+				auto *closure = object::ctor<object_closure>(*this, *func);
+				fiber->stack_push(closure->operator magic_value());
+
+				// Capture upvalues, if any.
+				for (decltype(func->get_upvalues_size()) i = 0; i < func->get_upvalues_size(); ++i)
+				{
+					const auto is_local = read_byte();
+					const auto index	= read_byte();
+					if (is_local)
+					{
+						// Make a new upvalue to close over the parent's local variable.
+						closure->push_upvalue(&fiber->capature_upvalue(frame->stack_start[index]));
+					}
+					else
+					{
+						// Use the same upvalue as the current call frame.
+						closure->push_upvalue(frame->closure->get_upvalue(index));
+					}
+				}
+				goto loop_back;
+			}
+			case opcodes_type::CODE_END_CLASS:
+			{
+				fiber->end_class();
+				if (fiber->has_error())
+				{
+					if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+				}
+				goto loop_back;
+			}
+			case opcodes_type::CODE_CLASS:
+			{
+				fiber_->create_class(*this, read_byte(), nullptr);
+				if (fiber->has_error())
+				{
+					if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+				}
+				goto loop_back;
+			}
+			case opcodes_type::CODE_OUTER_CLASS:
+			{
+				fiber_->create_class(*this, object_class::outer_class_fields_size, &function->get_module());
+				if (fiber->has_error())
+				{
+					if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+				}
+				goto loop_back;
+			}
+			case opcodes_type::CODE_METHOD_INSTANCE:
+			case opcodes_type::CODE_METHOD_STATIC:
+			{
+				auto  symbol	= read_short();
+				auto *obj_class = fiber->stack_peek()->as_class();
+				auto  method	= fiber->stack_peek2();
+				bind_method(instruction, symbol, function->get_module(), *obj_class, *method);
+				if (fiber->has_error())
+				{
+					if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+				}
+				fiber->stack_drop();
+				fiber->stack_drop();
+				goto loop_back;
+			}
+			case opcodes_type::CODE_END_MODULE:
+			{
+				last_module_ = &function->get_module();
+				fiber->stack_push(magic_value_null);
+				goto loop_back;
+			}
+			case opcodes_type::CODE_IMPORT_MODULE:
+			{
+				// Make a slot on the stack for the module's fiber to place the return
+				// value. It will be popped after this fiber is resumed. Store the
+				// imported module's closure in the slot in case a GC happens when
+				// invoking the closure.
+				fiber->stack_push(import_module(*function->get_constant(read_short()).as_string()));
+				if (fiber->has_error())
+				{
+					if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+				}
+
+				// If we get a closure, call it to execute the module body.
+				if (auto v = fiber->stack_peek(); v->is_closure())
+				{
+					store_frame();
+					auto *closure = v->as_closure();
+					call_function(*fiber, *closure, 1);
+					load_frame();
+				}
+				else
+				{
+					// The module has already been loaded. Remember it, so we can import
+					// variables from it if needed.
+					last_module_ = v->as_module();
+				}
+				goto loop_back;
+			}
+			case opcodes_type::CODE_IMPORT_VARIABLE:
+			{
+				auto variable = function->get_constant(read_short());
+				gal_assert(last_module_, "Should have already imported module.");
+				auto result = last_module_->get_variable(*variable.as_string());
+				if (fiber->has_error())
+				{
+					if (runtime_error()) { return gal_interpret_result::RESULT_RUNTIME_ERROR; }
+				}
+
+				fiber->stack_push(result);
+				goto loop_back;
+			}
+			case opcodes_type::CODE_END:
+			{
+				// A CODE_END should always be preceded by a CODE_RETURN. If we get here,
+				// the compiler generated wrong code.
+				UNREACHABLE();
+			}
+		}
+
+		// We should only exit this function from an explicit return from CODE_RETURN
+		// or a runtime error.
+		UNREACHABLE();
+		return gal_interpret_result::RESULT_RUNTIME_ERROR;
+	}
+
+	void gal_virtual_machine_state::validate_slot(gal_slot_type slot) const
+	{
+		gal_assert(slot < get_slot_count(), "Not that many slots.");
+	}
+
+	void gal_virtual_machine_state::ensure_slot(gal_slot_type slots)
+	{
+		// If we don't have a fiber accessible, create one for the API to use.
+		if (not api_stack_)
+		{
+			fiber_	   = make_object<object_fiber>(*this, nullptr);
+			api_stack_ = fiber_->get_stack_bottom();
+		}
+
+		if (std::cmp_greater_equal(get_slot_count(), slots))
+		{
+			return;
+		}
+
+		// Grow the stack if needed.
+		auto needed = api_stack_ + slots - fiber_->get_stack_bottom();
+		fiber_->ensure_stack(*this, needed);
+
+		fiber_->set_stack_top(api_stack_ + slots);
+	}
+
+	gal_object_type gal_virtual_machine_state::get_slot_type(gal_slot_type slot) const
+	{
+		validate_slot(slot);
+
+		auto target = get_slot_value(slot);
+		if (target.is_boolean())
+		{
+			return gal_object_type::BOOLEAN_TYPE;
+		}
+		if (target.is_number())
+		{
+			return gal_object_type::NUMBER_TYPE;
+		}
+		if (target.is_outer())
+		{
+			return gal_object_type::OUTER_TYPE;
+		}
+		if (target.is_list())
+		{
+			return gal_object_type::LIST_TYPE;
+		}
+		if (target.is_map())
+		{
+			return gal_object_type::MAP_TYPE;
+		}
+		if (target.is_null())
+		{
+			return gal_object_type::NULL_TYPE;
+		}
+		if (target.is_string())
+		{
+			return gal_object_type::STRING_TYPE;
+		}
+
+		return gal_object_type::UNKNOWN_TYPE;
+	}
+
+	void gal_virtual_machine_state::finalize_outer(object_outer &outer) const
+	{
+		// TODO: Don't look up every time.
+		auto symbol = method_names_.find(gal_configuration::gal_outer_class_method::finalize_symbol_name, gal_configuration::gal_outer_class_method::finalize_symbol_name_length);
+		gal_assert(symbol != gal_index_not_exist, "Should have defined <finalize> symbol.");
+
+		// If there are no finalizers, don't finalize it.
+		if (symbol == gal_index_not_exist)
+		{
+			return;
+		}
+
+		// If the class doesn't have a finalizer, bail out.
+		auto *obj = outer.get_class();
+		if (std::cmp_greater_equal(symbol, obj->get_methods_size()))
+		{
+			return;
+		}
+
+		auto &method = obj->get_method(symbol);
+		if (method.type == method_type::none_type)
+		{
+			return;
+		}
+
+		gal_assert(method.type == method_type::outer_type, "Finalizer should be outer.");
+
+		auto finalizer = reinterpret_cast<gal_finalize_function_type>(method.as.outer_method_function);
+		finalizer(outer.get_data());
+	}
+
+	gal_handle *gal_virtual_machine_state::make_handle(magic_value value)
+	{
+		return &handles_.emplace_front(value);
 	}
 }// namespace gal

@@ -124,18 +124,18 @@ namespace gal
 		 * that contains the import. Typically, this is used to implement relative
 		 * imports.
 		 */
-		using resolve_module_function_type		   = const char* (*)(gal_virtual_machine& virtual_machine, const char* importer, const char* name);
+		using resolve_module_function_type		   = const char* (*)(gal_virtual_machine_state& state, const char* importer, const char* name);
 
 		/**
 		 * @brief Loads and returns the source code for the module [name].
 		 */
-		using load_module_function_type			   = gal_load_module_result (*)(gal_virtual_machine& virtual_machine, const char* name);
+		using load_module_function_type			   = gal_load_module_result (*)(gal_virtual_machine_state& state, const char* name);
 
 		/**
 		 * @brief Called after load_module_function is called for module [name]. The original returned result
 		 * is handed back to you in this callback, so that you can free memory if appropriate.
 		 */
-		using load_module_complete_function_type   = void (*)(gal_virtual_machine& virtual_machine, const char* name, gal_load_module_result result);
+		using load_module_complete_function_type   = void (*)(gal_virtual_machine_state& state, const char* name, gal_load_module_result result);
 
 		/**
 		 * @brief Returns a pointer to a outer method on [class_name] in [module] with [signature].
