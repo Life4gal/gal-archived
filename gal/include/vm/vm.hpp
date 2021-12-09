@@ -203,27 +203,7 @@ namespace gal
 		/**
 		 * @brief Returns the class of [value].
 		 */
-		[[nodiscard]] object_class* get_class(magic_value value)
-		{
-			if (value.is_number()) { return number_class_; }
-			if (value.is_object()) { return value.as_object()->get_class(); }
-
-			switch (value.get_tag())
-			{
-				case magic_value::tag_nan: return number_class_;
-				case magic_value::tag_null: return null_class_;
-				case magic_value::tag_false:
-				case magic_value::tag_true: return boolean_class_;
-				case magic_value::tag_undefined: UNREACHABLE();
-			}
-
-			UNREACHABLE();
-		}
-
-		/**
-		 * @brief Returns the class of [value].
-		 */
-		[[nodiscard]] const object_class* get_class(magic_value value) const
+		[[nodiscard]] object_class* get_class(magic_value value) const
 		{
 			if (value.is_number()) { return number_class_; }
 			if (value.is_object()) { return value.as_object()->get_class(); }
@@ -332,6 +312,62 @@ namespace gal
 		 * also, as you can imagine, highly performance critical.
 		 */
 		gal_interpret_result		   run_interpreter(object_fiber* fiber);
+
+		/**
+		 * @brief Validate everything here below.
+		 */
+
+		bool validate_helper(const char* arg_name, const char* requires_type);
+
+		/**
+		 * @brief Validates that the given [arg] is a function. Returns true if it is. If not,
+		 * reports an error and returns false.
+		 */
+		bool validate_function(magic_value arg, const char* arg_name);
+
+		/**
+		 * @brief Validates that the given [arg] is a Num. Returns true if it is. If not,
+		 * reports an error and returns false.
+		 */
+		bool validate_number(magic_value arg, const char* arg_name);
+
+		/**
+		 * @brief Validates that [value] is an integer. Returns true if it is. If not, reports
+		 * an error and returns false.
+		 */
+		bool validate_int_value(double value, const char* arg_name);
+
+		/**
+		 * @brief Validates that the given [arg] is an integer. Returns true if it is. If not,
+		 * reports an error and returns false.
+		 */
+		bool validate_int(magic_value arg, const char* arg_name);
+
+		/**
+		 * @brief Validates that [arg] is a valid object for use as a map key. Returns true if
+		 * it is. If not, reports an error and returns false.
+		 */
+		bool validate_key(magic_value arg);
+
+		/**
+		 * @brief Validates that [value] is an integer within `[0, count)`. Also allows
+		 * negative indices which map backwards from the end. Returns the valid positive
+		 * index value. If invalid, reports an error and returns `gal_index_not_exist`.
+		 */
+		gal_index_type validate_index_value(double value, gal_size_type count, const char* arg_name);
+
+		/**
+		 * @brief Validates that the argument at [arg] is an integer within `[0, count)`.
+		 * Also allows negative indices which map backwards from the end. Returns the
+		 * valid positive index value. If invalid, reports an error and returns `gal_index_not_exist`.
+		 */
+		gal_index_type validate_index(magic_value arg, gal_size_type count, const char* arg_name);
+
+		/**
+		 * @brief Validates that the given [arg] is a String. Returns true if it is. If not,
+		 * reports an error and returns false.
+		 */
+		bool validate_string(magic_value arg, const char* arg_name);
 	};
 }// namespace gal
 

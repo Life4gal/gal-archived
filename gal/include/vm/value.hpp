@@ -90,6 +90,7 @@ namespace gal
 		object_class* object_class_;
 
 		object(object_type type, object_class* obj_class) noexcept;
+
 	public:
 		virtual ~object() noexcept = 0;
 
@@ -1725,10 +1726,15 @@ namespace gal
 	public:
 		explicit object_list(gal_virtual_machine_state& state);
 
+		[[nodiscard]] list_buffer_size_type size() const noexcept
+		{
+			return elements_.size();
+		}
+
 		/**
 		 * @brief Inserts [value] in [list] at [index].
 		 */
-		void insert(magic_value value, list_buffer_size_type index)
+		void insert(list_buffer_size_type index, list_buffer_value_type value)
 		{
 			// Store the new element.
 			elements_.insert(std::next(elements_.begin(), static_cast<list_buffer_difference_type>(index)), value);
@@ -1737,11 +1743,21 @@ namespace gal
 		/**
 		 * @brief Removes and returns the item at [index] from [list].
 		 */
-		magic_value remove(list_buffer_size_type index)
+		list_buffer_value_type remove(list_buffer_size_type index)
 		{
 			auto removed = elements_[index];
 			elements_.erase(std::next(elements_.begin(), static_cast<list_buffer_difference_type>(index)));
 			return removed;
+		}
+
+		[[nodiscard]] list_buffer_value_type get(list_buffer_size_type index) const noexcept
+		{
+			return elements_[index];
+		}
+
+		void set(list_buffer_size_type index, list_buffer_value_type value) noexcept
+		{
+			elements_[index] = value;
 		}
 
 		/**
@@ -1749,7 +1765,7 @@ namespace gal
 		 */
 		[[nodiscard]] gal_index_type index_of(magic_value value) const;
 
-		gal_size_type				 memory_usage() const noexcept override
+		[[nodiscard]] gal_size_type	 memory_usage() const noexcept override
 		{
 			// todo
 			return 0;
@@ -2156,7 +2172,7 @@ namespace gal
 			return entries_.find(key);
 		}
 
-		const_iterator find(magic_value key) const
+		[[nodiscard]] const_iterator find(magic_value key) const
 		{
 			return entries_.find(key);
 		}
@@ -2180,7 +2196,7 @@ namespace gal
 			return value;
 		}
 
-		gal_size_type memory_usage() const noexcept override
+		[[nodiscard]] gal_size_type memory_usage() const noexcept override
 		{
 			// todo
 			return 0;

@@ -1326,4 +1326,169 @@ namespace gal
 	{
 		state.set_slot_value(slot, handle.value);
 	}
+
+	gal_size_type gal_virtual_machine::get_list_size(gal_slot_type slot)
+	{
+		const auto target = state.get_slot_value(slot);
+		gal_assert(target.is_list(), "Slot must hold a list.");
+		return target.as_list()->size();
+	}
+
+	void gal_virtual_machine::get_list_element(gal_slot_type list_slot, gal_index_type index, gal_slot_type element_slot)
+	{
+		const auto target = state.get_slot_value(list_slot);
+		gal_assert(target.is_list(), "Slot must hold a list.");
+
+		const auto* list = target.as_list();
+
+		const auto real_index = index_to_size(list->size(), index);
+		state.set_slot_value(element_slot, list->get(real_index));
+	}
+
+	void gal_virtual_machine::set_list_element(gal_slot_type list_slot, gal_index_type index, gal_slot_type element_slot)
+	{
+		auto target = state.get_slot_value(list_slot);
+		gal_assert(target.is_list(), "Slot must hold a list.");
+
+		auto* list = target.as_list();
+
+		const auto real_index = index_to_size(list->size(), index);
+		list->set(real_index, state.get_slot_value(element_slot));
+	}
+
+	void gal_virtual_machine::insert_to_list(gal_slot_type list_slot, gal_index_type index, gal_slot_type element_slot)
+	{
+		auto target = state.get_slot_value(list_slot);
+		gal_assert(target.is_list(), "Slot must hold a list.");
+
+		auto* list = target.as_list();
+
+		const auto real_index = index_to_size<false>(list->size(), index);
+		gal_assert(std::cmp_less_equal(real_index, list->size()), "Index out bounds.");
+
+		list->insert(real_index, state.get_slot_value(element_slot));
+	}
+
+	gal_size_type gal_virtual_machine::get_map_size(gal_slot_type slot)
+	{
+		const auto target = state.get_slot_value(slot);
+		gal_assert(target.is_map(), "Slot must hold a map.");
+
+		return target.as_map()->size();
+	}
+
+	bool gal_virtual_machine::get_map_contains_key(gal_slot_type map_slot, gal_slot_type key_slot)
+	{
+		const auto target = state.get_slot_value(map_slot);
+		gal_assert(target.is_map(), "Slot must hold a map.");
+
+		const auto key = state.get_slot_value(key_slot);
+		if(not state.validate_key(key))
+		{
+			return false;
+		}
+
+		return target.as_map()->get(key) != magic_value_undefined;
+	}
+
+	void gal_virtual_machine::get_map_value(gal_slot_type map_slot, gal_slot_type key_slot, gal_slot_type value_slot)
+	{
+		const auto target = state.get_slot_value(map_slot);
+		gal_assert(target.is_map(), "Slot must hold a map.");
+
+		const auto key = state.get_slot_value(key_slot);
+		const auto value = target.as_map()->get(key);
+		state.set_slot_value(value_slot, value == magic_value_undefined ? magic_value_null : value);
+	}
+
+	void gal_virtual_machine::set_map_value(gal_slot_type map_slot, gal_slot_type key_slot, gal_slot_type value_slot)
+	{
+		const auto target = state.get_slot_value(map_slot);
+		gal_assert(target.is_map(), "Slot must hold a map.");
+
+		const auto key = state.get_slot_value(key_slot);
+		gal_assert(object_map::is_valid_key(key), "Map key must be a value type.");
+
+		if(not state.validate_key(key))
+		{
+			return;
+		}
+
+		const auto value = state.get_slot_value(value_slot);
+		target.as_map()->set(key, value);
+	}
+
+	void gal_virtual_machine::erase_map_value(gal_slot_type map_slot, gal_slot_type key_slot, gal_slot_type value_slot)
+	{
+		const auto target = state.get_slot_value(map_slot);
+		gal_assert(target.is_map(), "Slot must hold a map.");
+
+		const auto key = state.get_slot_value(key_slot);
+		gal_assert(object_map::is_valid_key(key), "Map key must be a value type.");
+
+		if(not state.validate_key(key))
+		{
+			return;
+		}
+
+		const auto removed= target.as_map()->remove(key);
+		state.set_slot_value(value_slot, removed);
+	}
+
+	void gal_virtual_machine::get_variable(const char* module_name, const char* variable_name, gal_slot_type slot)
+	{
+		gal_assert(module_name, "Module name cannot be nullptr.");
+		gal_assert(variable_name, "Variable name cannot be nullptr");
+
+		const auto module_name_str = object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
+
+		const auto* module = state.get_module(module_name_str);
+		gal_assert(module, "Could not find module.");
+
+		const auto variable = module->get_variable(variable_name);
+		gal_assert(variable != magic_value_undefined, "Count not find variable.");
+
+		state.set_slot_value(slot, variable);
+	}
+
+	bool gal_virtual_machine::has_variable(const char* module_name, const char* variable_name)
+	{
+		gal_assert(module_name, "Module name cannot be nullptr.");
+		gal_assert(variable_name, "Variable name cannot be nullptr");
+
+		const auto module_name_str = object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
+
+		const auto* module = state.get_module(module_name_str);
+		gal_assert(module, "Could not find module.");
+
+		const auto variable = module->get_variable(variable_name);
+		return variable != magic_value_undefined;
+	}
+
+	bool gal_virtual_machine::has_module(const char *module_name)
+	{
+		gal_assert(module_name, "Module name cannot be nullptr.");
+
+		const auto module_name_str = object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
+
+		const auto* module = state.get_module(module_name_str);
+
+		return module != nullptr;
+	}
+
+	void gal_virtual_machine::abort_fiber(gal_slot_type slot)
+	{
+		// todo: the error type may not be object_string
+		state.fiber_->set_error(*state.get_slot_value(slot).as_string());
+	}
+
+	gal_row_pointer_type gal_virtual_machine::get_user_data()
+	{
+		return state.configuration_.user_data;
+	}
+
+	void gal_virtual_machine::set_user_data(gal_row_pointer_type user_data)
+	{
+		state.configuration_.user_data = user_data;
+	}
 }// namespace gal
