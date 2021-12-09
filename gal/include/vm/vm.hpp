@@ -40,22 +40,22 @@ namespace gal
 	public:
 		friend class gal_virtual_machine;
 
-		object_class*							 boolean_class_;
-		object_class*							 class_class_;
-		object_class*							 fiber_class_;
-		object_class*							 function_class_;
-		object_class*							 list_class_;
-		object_class*							 map_class_;
-		object_class*							 null_class_;
-		object_class*							 number_class_;
-		object_class*							 object_class_;
-		object_class*							 range_class_;
-		object_class*							 string_class_;
+		object_class*							 boolean_class_{nullptr};
+		object_class*							 class_class_{nullptr};
+		object_class*							 fiber_class_{nullptr};
+		object_class*							 function_class_{nullptr};
+		object_class*							 list_class_{nullptr};
+		object_class*							 map_class_{nullptr};
+		object_class*							 null_class_{nullptr};
+		object_class*							 number_class_{nullptr};
+		object_class*							 object_class_{nullptr};
+		object_class*							 range_class_{nullptr};
+		object_class*							 string_class_{nullptr};
 
 		/**
 		 * @brief The fiber that is currently running.
 		 */
-		object_fiber*											 fiber_;
+		object_fiber*											 fiber_{nullptr};
 
 		/**
 		 * @brief The loaded modules. Each key is an object_string (except for
@@ -72,7 +72,7 @@ namespace gal
 		 *
 		 * Not treated like a GC root since the module is already in [modules].
 		 */
-		object_module*											 last_module_;
+		object_module*											 last_module_{nullptr};
 
 		// Memory management data below:
 		// vvv
@@ -83,7 +83,7 @@ namespace gal
 		 * that were allocated since then. Does *not* include bytes for objects that
 		 * were freed since the last GC.
 		 */
-		gal_size_type											 bytes_allocated_;
+		gal_size_type											 bytes_allocated_{0};
 
 		/**
 		 * @brief The number of total allocated bytes that will trigger the next GC.
@@ -109,9 +109,9 @@ namespace gal
 		 * slots by calling gal_ensure_slots(), a stack is created and this is
 		 * initialized.
 		 */
-		magic_value*											 api_stack_;
+		magic_value*											 api_stack_{nullptr};
 
-		gal_configuration										 configuration;
+		gal_configuration										 configuration_;
 
 		// Compiler and debugger data below:
 		// vvv
@@ -121,13 +121,19 @@ namespace gal
 		 * allocated objects used by the compiler can be found if a GC is kicked off
 		 * in the middle of a compile.
 		 */
-		compiler*												 compiler_;
+		compiler*												 compiler_{nullptr};
 
 		/**
 		 * @brief There is a single global symbol table for all method names on all classes.
 		 * Method calls are dispatched directly by index in this table.
 		 */
 		symbol_table											 method_names_;
+
+		explicit gal_virtual_machine_state(gal_configuration configuration)
+				:
+			  modules_(*this),
+			  next_gc_(configuration.min_heap_size),
+			  configuration_(configuration) {}
 
 		[[nodiscard]] gal_size_type								 get_slot_count() const noexcept
 		{

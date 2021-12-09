@@ -1208,6 +1208,8 @@ namespace gal
 		/**
 		 * @brief If the fiber failed because of a runtime error, this will contain the
 		 * error object. Otherwise, it will be nullptr.
+		 *
+		 * todo: the error object may not necessarily be object_string
 		 */
 		std::shared_ptr<object_string>									 error_message_;
 

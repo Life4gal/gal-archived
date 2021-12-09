@@ -66,9 +66,9 @@ namespace gal
 		gal_configuration::gal_outer_class_method methods{};
 
 		// Check the optional built-in module first so the host can override it.
-		if (configuration.bind_outer_class_function != nullptr)
+		if (configuration_.bind_outer_class_function != nullptr)
 		{
-			methods = configuration.bind_outer_class_function(*this, module.get_name().data(), obj_class.get_class_name().data());
+			methods = configuration_.bind_outer_class_function(*this, module.get_name().data(), obj_class.get_class_name().data());
 		}
 
 		// If the host didn't provide it, see if it's a built-in optional module.
@@ -103,9 +103,9 @@ namespace gal
 	{
 		gal_outer_method_function_type method = nullptr;
 
-		if (configuration.bind_outer_method_function != nullptr)
+		if (configuration_.bind_outer_method_function != nullptr)
 		{
-			method = configuration.bind_outer_method_function(*this, module_name, class_name, is_static, signature);
+			method = configuration_.bind_outer_method_function(*this, module_name, class_name, is_static, signature);
 		}
 
 		// If the host didn't provide it, see if it's an optional one.
@@ -252,7 +252,7 @@ namespace gal
 	object_string gal_virtual_machine_state::resolve_module(const object_string &name)
 	{
 		// If the host doesn't care to resolve, leave the name alone.
-		if (configuration.resolve_module_function == nullptr)
+		if (configuration_.resolve_module_function == nullptr)
 		{
 			return name;
 		}
@@ -260,7 +260,7 @@ namespace gal
 		auto &function = fiber_->get_recent_frame().closure->get_function();
 		auto &importer = function.get_module().get_name();
 
-		auto *resolved = configuration.resolve_module_function(*this, importer.data(), name.data());
+		auto *resolved = configuration_.resolve_module_function(*this, importer.data(), name.data());
 
 		if (not resolved)
 		{
@@ -295,9 +295,9 @@ namespace gal
 		gal_configuration::gal_load_module_result result{};
 
 		// Let the host try to provide the module.
-		if (configuration.load_module_function != nullptr)
+		if (configuration_.load_module_function != nullptr)
 		{
-			result = configuration.load_module_function(*this, read_name.data());
+			result = configuration_.load_module_function(*this, read_name.data());
 		}
 
 		// If the host didn't provide it, see if it's a built-in optional module.
@@ -953,27 +953,133 @@ namespace gal
 		return gal_interpret_result::RESULT_RUNTIME_ERROR;
 	}
 
+	bool gal_virtual_machine_state::validate_helper(const char *arg_name, const char *requires_type)
+	{
+		object_string error{*this};
+		std_format::format_to(error.get_appender(), "{} must be a {}.", arg_name, requires_type);
+		fiber_->set_error(std::move(error));
+		return false;
+	}
+
+	bool gal_virtual_machine_state::validate_function(magic_value arg, const char *arg_name)
+	{
+		if(arg.is_closure())
+		{
+			return true;
+		}
+
+		return validate_helper(arg_name, "closure");
+	}
+
+	bool gal_virtual_machine_state::validate_number(magic_value arg, const char *arg_name)
+	{
+		if(arg.is_number())
+		{
+			return true;
+		}
+
+		return validate_helper(arg_name, "number");
+	}
+
+	bool gal_virtual_machine_state::validate_int_value(double value, const char *arg_name)
+	{
+		if(std::trunc(value) == value)
+		{
+			return true;
+		}
+
+		return validate_helper(arg_name, "integer");
+	}
+
+	bool gal_virtual_machine_state::validate_int(magic_value arg, const char *arg_name)
+	{
+		// Make sure it's a number first.
+		if(not validate_number(arg, arg_name))
+		{
+			return false;
+		}
+
+		return validate_int_value(arg.as_number(), arg_name);
+	}
+
+	bool gal_virtual_machine_state::validate_key(magic_value arg)
+	{
+		if(object_map::is_valid_key(arg))
+		{
+			return true;
+		}
+
+		return validate_helper("Map's key", "value type");
+	}
+
+	gal_index_type gal_virtual_machine_state::validate_index_value(double value, gal_size_type count, const char *arg_name)
+	{
+		if(not validate_int_value(value, arg_name))
+		{
+			return gal_index_not_exist;
+		}
+
+		// Negative indices count from the end.
+		if(value < 0)
+		{
+			value = static_cast<double>(count) + value;
+		}
+
+		// Check bounds.
+		if(value >= 0 && value < static_cast<double>(count))
+		{
+			return static_cast<gal_index_type>(value);
+		}
+
+		object_string error{*this};
+		std_format::format_to(error.get_appender(), "{} out of bound {}.", arg_name, count);
+		fiber_->set_error(std::move(error));
+		return gal_index_not_exist;
+	}
+
+	gal_index_type gal_virtual_machine_state::validate_index(magic_value arg, gal_size_type count, const char *arg_name)
+	{
+		if(not validate_number(arg, arg_name))
+		{
+			return gal_index_not_exist;
+		}
+
+		return validate_index_value(arg.as_number(), count, arg_name);
+	}
+
+	bool gal_virtual_machine_state::validate_string(magic_value arg, const char *arg_name)
+	{
+		if(arg.is_string())
+		{
+			return true;
+		}
+
+		return validate_helper(arg_name, "string");
+	}
+
 	void gal_virtual_machine_state::validate_slot(gal_slot_type slot) const
 	{
+		gal_assert(slot >= 0, "Slot cannot be negative.");
 		gal_assert(slot < get_slot_count(), "Not that many slots.");
 	}
 
 	void gal_virtual_machine_state::ensure_slot(gal_slot_type slots)
 	{
 		// If we don't have a fiber accessible, create one for the API to use.
-		if (not api_stack_)
+		if(not api_stack_)
 		{
-			fiber_	   = make_object<object_fiber>(*this, nullptr);
+			fiber_ = make_object<object_fiber>(*this, nullptr);
 			api_stack_ = fiber_->get_stack_bottom();
 		}
 
-		if (std::cmp_greater_equal(get_slot_count(), slots))
+		const auto current = fiber_->get_current_stack_size();
+		if(current >= slots)
 		{
 			return;
 		}
 
 		// Grow the stack if needed.
-		auto needed = api_stack_ + slots - fiber_->get_stack_bottom();
+		const auto needed = api_stack_ - fiber_->get_stack_bottom() + slots;
 		fiber_->ensure_stack(*this, needed);
 
 		fiber_->set_stack_top(api_stack_ + slots);
@@ -1083,6 +1189,17 @@ namespace gal
 			return magic_value_null;
 		}
 		return module->get_variable(variable_name);
+	}
+
+	gal_virtual_machine::gal_virtual_machine(gal_configuration configuration)
+		: state{*new gal_virtual_machine_state{configuration}}
+	{}
+
+	gal_virtual_machine::~gal_virtual_machine() noexcept
+	{
+		// todo: free them all
+
+		delete &state;
 	}
 
 	void gal_virtual_machine::gc()

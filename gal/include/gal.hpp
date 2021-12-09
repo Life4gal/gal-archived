@@ -323,7 +323,7 @@ namespace gal
 		 * GAL will copy the configuration data, so the argument passed to this can be
 		 * freed after calling this.
 		 */
-		explicit gal_virtual_machine(gal_configuration& configuration);
+		explicit gal_virtual_machine(gal_configuration configuration);
 
 		/**
 		 * @brief Disposes of all resources is use by [virtual_machine].
@@ -604,19 +604,19 @@ namespace gal
 		 * @brief Looks up the top level variable with [name] in resolved [module] and stores
 		 * it in [slot].
 		 */
-		void						  get_variable(const char* module, const char* name, gal_slot_type slot);
+		void						  get_variable(const char* module_name, const char* variable_name, gal_slot_type slot);
 
 		/**
 		 * @brief Looks up the top level variable with [name] in resolved [module],
 		 * returns false if not found. The module must be imported at the time,
 		 * use has_module to ensure that before calling.
 		 */
-		bool						  has_variable(const char* module, const char* name);
+		bool						  has_variable(const char* module_name, const char* variable_name);
 
 		/**
 		 * @brief Returns true if [module] has been imported/resolved before, false if not.
 		 */
-		bool						  has_module(const char* module);
+		bool						  has_module(const char* module_name);
 
 		/**
 		 * @brief Sets the current fiber to be aborted, and uses the value in [slot] as the
