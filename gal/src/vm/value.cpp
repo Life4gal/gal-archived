@@ -12,9 +12,9 @@ namespace gal
 {
 	object::~object() noexcept = default;
 
-	object::object(object_type type, std::shared_ptr<object_class> object_class) noexcept
+	object::object(object_type type, object_class* obj_class) noexcept
 		: type_{type},
-		  object_class_{std::move(object_class)}
+		  object_class_{obj_class}
 	{
 	}
 
@@ -289,7 +289,7 @@ namespace gal
 		  stack_{std::make_unique<magic_value[]>(closure ? bit_ceil(closure->get_function().get_slots_size() + 1) : 1)},
 		  stack_top_{stack_.get()},
 		  stack_capacity_{closure ? bit_ceil(closure->get_function().get_slots_size() + 1) : 1},
-		  frames_{initial_call_frames},
+		  frames_{},
 		  open_upvalues_{},
 		  caller_{nullptr},
 		  error_message_{nullptr},
@@ -503,7 +503,7 @@ namespace gal
 		auto meta_class_name = name;
 		meta_class_name.append("@metaclass@");
 
-		auto meta_class			  = std::make_shared<object_class>(0, std::move(meta_class_name));
+		auto meta_class			  = object::ctor<object_class>(0, std::move(meta_class_name));//std::make_shared<object_class>(0, std::move(meta_class_name));
 		meta_class->object_class_ = state.class_class_;
 
 		// Meta-classes always inherit Class and do not parallel the non-metaclass
@@ -544,6 +544,23 @@ namespace gal
 		return magic_value_undefined;
 	}
 
+	magic_value object_module::get_variable(object_string::const_pointer name) const
+	{
+		// const auto it = std::ranges::find(variables_, name, [](const value_type& index_kv) -> decltype(auto)
+		// 								  { return index_kv.second.first; });
+		const auto it = std::ranges::find_if(
+				variables_,
+				[&](const auto& str)
+				{ return str == name; },
+				[](const value_type& index_kv) -> decltype(auto)
+				{ return index_kv.second.first; });
+		if (it != variables_.end())
+		{
+			return it->second.second;
+		}
+		return magic_value_undefined;
+	}
+
 	magic_value object_module::get_variable(key_type index) const
 	{
 		const auto it = variables_.find(index);
@@ -565,19 +582,52 @@ namespace gal
 		return gal_size_not_exist;
 	}
 
-	void object_module::set_variable(gal_size_type index, magic_value value)
+	object_module::key_type object_module::get_variable_index(object_string::const_pointer name) const
 	{
-		auto it = variables_.find(index);
+		// const auto it = std::ranges::find(variables_, name, [](const value_type& index_kv) -> decltype(auto)
+		// 								  { return index_kv.second.first; });
+		const auto it = std::ranges::find_if(
+				variables_,
+				[&](const auto& str)
+				{ return str == name; },
+				[](const value_type& index_kv) -> decltype(auto)
+				{ return index_kv.second.first; });
 		if (it != variables_.end())
 		{
-			it->second.second = value;
+			return it->first;
 		}
+		return gal_size_not_exist;
 	}
 
 	void object_module::set_variable(const object_string& name, magic_value value)
 	{
 		auto it = std::ranges::find(variables_, name, [](const value_type& index_kv) -> decltype(auto)
 									{ return index_kv.second.first; });
+		if (it != variables_.end())
+		{
+			it->second.second = value;
+		}
+	}
+
+	void object_module::set_variable(object_string::const_pointer name, magic_value value)
+	{
+		// const auto it = std::ranges::find(variables_, name, [](const value_type& index_kv) -> decltype(auto)
+		// 								  { return index_kv.second.first; });
+		const auto it = std::ranges::find_if(
+				variables_,
+				[&](const auto& str)
+				{ return str == name; },
+				[](const value_type& index_kv) -> decltype(auto)
+				{ return index_kv.second.first; });
+		if (it != variables_.end())
+		{
+			it->second.second = value;
+		}
+	}
+
+	void object_module::set_variable(key_type index, magic_value value)
+	{
+		auto it = variables_.find(index);
 		if (it != variables_.end())
 		{
 			it->second.second = value;

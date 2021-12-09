@@ -267,7 +267,7 @@ namespace gal
 		 * Setting this to a smaller number wastes less memory, but triggers more
 		 * frequent garbage collections.
 		 */
-		std::size_t							 heap_growth_percent{50};
+		gal_size_type						 heap_growth_percent{50};
 
 		/**
 		 * @brief User-defined data associated with the VM.
@@ -290,8 +290,8 @@ namespace gal
 		{
 			constexpr static const char	   allocate_symbol_name[]	   = "<allocate>";
 			constexpr static const char	   finalize_symbol_name[]	   = "<finalize>";
-			constexpr static std::size_t   allocate_symbol_name_length = sizeof(allocate_symbol_name) - 1;
-			constexpr static std::size_t   finalize_symbol_name_length = sizeof(finalize_symbol_name) - 1;
+			constexpr static auto		   allocate_symbol_name_length = sizeof(allocate_symbol_name) - 1;
+			constexpr static auto		   finalize_symbol_name_length = sizeof(finalize_symbol_name) - 1;
 
 			/**
 			 * @brief The callback invoked when the outer object is created.
@@ -335,13 +335,13 @@ namespace gal
 		/**
 		 * @brief Immediately run the garbage collector to free unused memory.
 		 */
-		void						gc();
+		void						  gc();
 
 		/**
 		 * @brief Runs [source], a string of GAL source code in a new fiber in [virtual_machine]
 		 * in the context of resolved [module].
 		 */
-		gal_interpret_result		interpret(const char* module, const char* source);
+		gal_interpret_result		  interpret(const char* module, const char* source);
 
 		/**
 		 * @brief Creates a handle that can be used to invoke a method with [signature] on
@@ -353,7 +353,7 @@ namespace gal
 		 * When you are done with this handle, it must be released using
 		 * [release_handle].
 		 */
-		gal_handle*					make_callable_handle(const char* signature);
+		gal_handle*					  make_callable_handle(const char* signature);
 
 		/**
 		 * @brief Calls [method], using the receiver and arguments previously set up on the stack.
@@ -366,13 +366,13 @@ namespace gal
 		 *
 		 * After this returns, you can access the return value from slot 0 on the stack.
 		 */
-		gal_interpret_result		call_handle(gal_handle& method);
+		gal_interpret_result		  call_handle(gal_handle& method);
 
 		/**
 		 * @brief Releases the reference stored in [handle]. After calling this, [handle] can
 		 * no longer be used.
 		 */
-		void						release_handle(gal_handle& handle);
+		void						  release_handle(gal_handle& handle);
 
 		/**
 			The following functions are intended to be called from outer methods or
@@ -411,7 +411,7 @@ namespace gal
 		/**
 		 * @brief Returns the number of slots available to the current outer method.
 		 */
-		[[nodiscard]] gal_size_type get_slot_count() const;
+		[[nodiscard]] gal_size_type	  get_slot_count() const noexcept;
 
 		/**
 		 * @brief Ensures that the outer method stack has at least [slots] available for
@@ -421,19 +421,19 @@ namespace gal
 		 *
 		 * It is an error to call this from a finalizer.
 		 */
-		void						ensure_slots(gal_slot_type slots);
+		void						  ensure_slots(gal_slot_type slots);
 
 		/**
 		 * @brief Gets the type of the object in [slot].
 		 */
-		gal_object_type				get_slot_type(gal_slot_type slot);
+		[[nodiscard]] gal_object_type get_slot_type(gal_slot_type slot) const;
 
 		/**
 		 * @brief Reads a boolean value from [slot].
 		 *
 		 * It is an error to call this if the slot does not contain a boolean value.
 		 */
-		bool						get_slot_boolean(gal_slot_type slot);
+		bool						  get_slot_boolean(gal_slot_type slot);
 
 		/**
 		 * @brief Reads a byte array from [slot].
@@ -447,14 +447,14 @@ namespace gal
 		 *
 		 * It is an error to call this if the slot does not contain a string.
 		 */
-		const char*					get_slot_bytes(gal_slot_type slot, gal_size_type& length);
+		const char*					  get_slot_bytes(gal_slot_type slot, gal_size_type& length);
 
 		/**
 		 * @brief Reads a number from [slot].
 		 *
 		 * It is an error to call this if the slot does not contain a number.
 		 */
-		double						get_slot_number(gal_slot_type slot);
+		double						  get_slot_number(gal_slot_type slot);
 
 		/**
 		 * @brief Reads a outer object from [slot] and returns a pointer to the outer data
@@ -463,7 +463,7 @@ namespace gal
 		 * It is an error to call this if the slot does not contain an instance of a
 		 * outer class.
 		 */
-		gal_row_pointer_type		get_slot_outer(gal_slot_type slot);
+		gal_row_pointer_type		  get_slot_outer(gal_slot_type slot);
 
 		/**
 		 * @brief Reads a string from [slot].
@@ -474,7 +474,7 @@ namespace gal
 		 *
 		 * It is an error to call this if the slot does not contain a string.
 		 */
-		const char*					get_slot_string(gal_slot_type slot);
+		const char*					  get_slot_string(gal_slot_type slot);
 
 		/**
 		 * @brief Creates a handle for the value stored in [slot].
@@ -482,12 +482,12 @@ namespace gal
 		 * This will prevent the object that is referred to from being garbage collected
 		 * until the handle is released by calling [release_handle()].
 		 */
-		gal_handle*					get_slot_handle(gal_slot_type slot);
+		gal_handle*					  get_slot_handle(gal_slot_type slot);
 
 		/**
 		 * @brief Stores the boolean [value] in [slot].
 		 */
-		void						set_slot_boolean(gal_slot_type slot, bool value);
+		void						  set_slot_boolean(gal_slot_type slot, bool value);
 
 		/**
 		 * @brief Stores the array [length] of [bytes] in [slot].
@@ -495,12 +495,12 @@ namespace gal
 		 * The bytes are copied to a new string within GAL's heap, so you can free
 		 * memory used by them after this is called.
 		 */
-		void						set_slot_bytes(gal_slot_type slot, const char* bytes, gal_size_type length);
+		void						  set_slot_bytes(gal_slot_type slot, const char* bytes, gal_size_type length);
 
 		/**
 		 * @brief Stores the numeric [value] in [slot].
 		 */
-		void						set_slot_number(gal_slot_type slot, double value);
+		void						  set_slot_number(gal_slot_type slot, double value);
 
 		/**
 		 * @brief Creates a new instance of the outer class stored in [class_slot] with [size]
@@ -513,22 +513,22 @@ namespace gal
 		 *
 		 * Returns a pointer to the outer object's data.
 		 */
-		void*						set_slot_outer(gal_slot_type slot, gal_slot_type class_slot, gal_size_type size);
+		gal_row_pointer_type		  set_slot_outer(gal_slot_type slot, gal_slot_type class_slot, gal_size_type size);
 
 		/**
 		 * @brief Stores a new empty list in [slot].
 		 */
-		void						set_slot_list(gal_slot_type slot);
+		void						  set_slot_list(gal_slot_type slot);
 
 		/**
 		 * @brief Stores a new empty map in [slot].
 		 */
-		void						set_slot_map(gal_slot_type slot);
+		void						  set_slot_map(gal_slot_type slot);
 
 		/**
 		 * @brief Stores null in [slot].
 		 */
-		void						set_slot_null(gal_slot_type slot);
+		void						  set_slot_null(gal_slot_type slot);
 
 		/**
 		 * @brief Stores the string [text] in [slot].
@@ -537,30 +537,30 @@ namespace gal
 		 * memory used by it after this is called. If the string may contain any null
 		 * bytes in the middle, then you should use [set_slot_bytes()] instead.
 		 */
-		void						set_slot_string(gal_slot_type slot, const char* text, gal_size_type length);
+		void						  set_slot_string(gal_slot_type slot, const char* text, gal_size_type length);
 
 		/**
 		 * @brief Stores the value captured in [handle] in [slot].
 		 *
 		 * This does not release the handle for the value.
 		 */
-		void						set_slot_handle(gal_slot_type slot, gal_handle& handle);
+		void						  set_slot_handle(gal_slot_type slot, gal_handle& handle);
 
 		/**
 		 * @brief Returns the number of elements in the list stored in [slot].
 		 */
-		gal_size_type				get_list_size(gal_slot_type slot);
+		gal_size_type				  get_list_size(gal_slot_type slot);
 
 		/**
 		 * @brief Reads element [index] from the list in [list_slot] and stores it in [element_slot].
 		 */
-		void						get_list_element(gal_slot_type list_slot, gal_index_type index, gal_slot_type element_slot);
+		void						  get_list_element(gal_slot_type list_slot, gal_index_type index, gal_slot_type element_slot);
 
 		/**
 		 * @brief Sets the value stored at [index] in the list at [list_slot],
 		 * to the value from [element_slot].
 		 */
-		void						set_list_element(gal_slot_type list_slot, gal_index_type index, gal_slot_type element_slot);
+		void						  set_list_element(gal_slot_type list_slot, gal_index_type index, gal_slot_type element_slot);
 
 		/**
 		 * @brief Takes the value stored at [element_slot] and inserts it into the list stored
@@ -569,70 +569,70 @@ namespace gal
 		 * As in GAL, negative indexes can be used to insert from the end. To append
 		 * an element, use `-1` for the index.
 		 */
-		void						insert_to_list(gal_slot_type list_slot, gal_index_type index, gal_slot_type element_slot);
+		void						  insert_to_list(gal_slot_type list_slot, gal_index_type index, gal_slot_type element_slot);
 
 		/**
 		 * @brief Returns the number of entries in the map stored in [slot].
 		 */
-		gal_size_type				get_map_size(gal_slot_type slot);
+		gal_size_type				  get_map_size(gal_slot_type slot);
 
 		/**
 		 * @brief Returns true if the key in [key_slot] is found in the map placed in [map_slot].
 		 */
-		bool						get_map_contains_key(gal_slot_type map_slot, gal_slot_type key_slot);
+		bool						  get_map_contains_key(gal_slot_type map_slot, gal_slot_type key_slot);
 
 		/**
 		 * @brief Retrieves a value with the key in [key_slot] from the map in [map_slot] and
 		 * stores it in [value_slot].
 		 */
-		void						get_map_value(gal_slot_type map_slot, gal_slot_type key_slot, gal_slot_type value_slot);
+		void						  get_map_value(gal_slot_type map_slot, gal_slot_type key_slot, gal_slot_type value_slot);
 
 		/**
 		 * @brief Takes the value stored at [value_slot] and inserts it into the map stored
 		 * at [map_slot] with key [key_slot].
 		 */
-		void						set_map_value(gal_slot_type map_slot, gal_slot_type key_slot, gal_slot_type value_slot);
+		void						  set_map_value(gal_slot_type map_slot, gal_slot_type key_slot, gal_slot_type value_slot);
 
 		/**
 		 * @brief Removes a value from the map in [map_slot], with the key from [key_slot],
 		 * and place it in [value_slot]. If not found, [value_slot] is set to null,
 		 * the same behaviour as the GAL Map API.
 		 */
-		void						erase_map_value(gal_slot_type map_slot, gal_slot_type key_slot, gal_slot_type value_slot);
+		void						  erase_map_value(gal_slot_type map_slot, gal_slot_type key_slot, gal_slot_type value_slot);
 
 		/**
 		 * @brief Looks up the top level variable with [name] in resolved [module] and stores
 		 * it in [slot].
 		 */
-		void						get_variable(const char* module, const char* name, gal_slot_type slot);
+		void						  get_variable(const char* module, const char* name, gal_slot_type slot);
 
 		/**
 		 * @brief Looks up the top level variable with [name] in resolved [module],
 		 * returns false if not found. The module must be imported at the time,
 		 * use has_module to ensure that before calling.
 		 */
-		bool						has_variable(const char* module, const char* name);
+		bool						  has_variable(const char* module, const char* name);
 
 		/**
 		 * @brief Returns true if [module] has been imported/resolved before, false if not.
 		 */
-		bool						has_module(const char* module);
+		bool						  has_module(const char* module);
 
 		/**
 		 * @brief Sets the current fiber to be aborted, and uses the value in [slot] as the
 		 * runtime error object.
 		 */
-		void						abort_fiber(gal_slot_type slot);
+		void						  abort_fiber(gal_slot_type slot);
 
 		/**
 		 * @brief Returns the user data associated with the VM.
 		 */
-		gal_row_pointer_type		get_user_data();
+		gal_row_pointer_type		  get_user_data();
 
 		/**
 		 * @brief Sets user data associated with the VM.
 		 */
-		void						set_user_data(gal_row_pointer_type user_data);
+		void						  set_user_data(gal_row_pointer_type user_data);
 	};
 }// namespace gal
 

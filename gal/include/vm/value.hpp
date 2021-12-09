@@ -87,16 +87,15 @@ namespace gal
 		/**
 		 * @brief The object's class.
 		 */
-		std::shared_ptr<object_class> object_class_;
+		object_class* object_class_;
 
+		object(object_type type, object_class* obj_class) noexcept;
+	public:
 		virtual ~object() noexcept = 0;
 
-	public:
-		object(object_type type, std::shared_ptr<object_class> object_class) noexcept;
-
 		[[nodiscard]] constexpr object_type type() const noexcept { return type_; }
-		[[nodiscard]] object_class*			get_class() noexcept { return object_class_.get(); }
-		[[nodiscard]] const object_class*	get_class() const noexcept { return object_class_.get(); }
+		[[nodiscard]] object_class*			get_class() noexcept { return object_class_; }
+		[[nodiscard]] const object_class*	get_class() const noexcept { return object_class_; }
 
 		explicit							operator magic_value() const noexcept;
 
@@ -1008,6 +1007,12 @@ namespace gal
 			return code_.size();
 		}
 
+		object_function& append_code(code_buffer_value_type data)
+		{
+			code_.push_back(data);
+			return *this;
+		}
+
 		[[nodiscard]] decltype(auto) get_constant(constants_buffer_size_type index) noexcept
 		{
 			return constants_[index];
@@ -1156,18 +1161,11 @@ namespace gal
 	class object_fiber : public object
 	{
 	public:
-		using frames_buffer_type									 = std::vector<call_frame, gal_allocator<call_frame>>;
-		using frames_buffer_value_type								 = frames_buffer_type::value_type;
-		using frames_buffer_size_type								 = frames_buffer_type::size_type;
-		using frames_buffer_reference								 = frames_buffer_type::reference;
-		using frames_buffer_const_reference							 = frames_buffer_type::const_reference;
-
-		/**
-		 * @brief The number of call frames initially allocated when a fiber is created. Making
-		 * this smaller makes fibers use less memory (at first) but spends more time
-		 * reallocating when the call stack grows.
-		 */
-		constexpr static frames_buffer_size_type initial_call_frames = 4;
+		using frames_buffer_type			= std::vector<call_frame, gal_allocator<call_frame>>;
+		using frames_buffer_value_type		= frames_buffer_type::value_type;
+		using frames_buffer_size_type		= frames_buffer_type::size_type;
+		using frames_buffer_reference		= frames_buffer_type::reference;
+		using frames_buffer_const_reference = frames_buffer_type::const_reference;
 
 	private:
 		/**
@@ -1243,6 +1241,19 @@ namespace gal
 		void pop_recent_frame() noexcept
 		{
 			frames_.pop_back();
+		}
+
+		/**
+		 * @brief Pushes [closure] onto [this]'s callstack to invoke it. Expects [num_args]
+		 * arguments (including the receiver) to be on the top of the stack already.
+		 */
+		void call_function(gal_virtual_machine_state& state, object_closure& closure, gal_size_type num_args)
+		{
+			// Grow the stack if needed.
+			const auto needed = get_current_stack_size() + closure.get_function().get_slots_size();
+			ensure_stack(state, needed);
+
+			add_call_frame(closure, *get_stack_point(num_args));
 		}
 
 		/**
@@ -1620,9 +1631,9 @@ namespace gal
 		data_buffer_type data_;
 
 	public:
-		explicit object_outer(std::shared_ptr<object_class> obj_class)
-			: object{object_type::OUTER_TYPE, std::move(obj_class)},
-			  data_{} {}
+		explicit object_outer(object_class* obj_class, gal_size_type size)
+			: object{object_type::OUTER_TYPE, obj_class},
+			  data_(size) {}
 
 		[[nodiscard]] data_buffer_pointer get_data() noexcept
 		{
@@ -1658,10 +1669,7 @@ namespace gal
 
 	public:
 		explicit object_instance(object_class* obj_class)
-			: object_instance(std::shared_ptr<object_class>(obj_class)) {}
-
-		explicit object_instance(std::shared_ptr<object_class> obj_class)
-			: object{object_type::OUTER_TYPE, std::move(obj_class)},
+			: object{object_type::OUTER_TYPE, obj_class},
 			  fields_{}
 		{
 			// Initialize fields to null.
@@ -1943,11 +1951,10 @@ namespace gal
 		  * @brief Looks up a variable from the module.
 		  *
 		  * Returns `magic_value_undefined` if not found.
-		  *
-		  * todo: C++20 should support the use of object_string::const_pointer for search without the need to construct a temporary object_string, \
-		  *     add an extra function to support it!
 		  */
 		[[nodiscard]] magic_value get_variable(const object_string& name) const;
+
+		[[nodiscard]] magic_value get_variable(object_string::const_pointer name) const;
 
 		/**
 		  * @brief Looks up a variable from the module.
@@ -1960,24 +1967,22 @@ namespace gal
 		  * @brief Looks up a variable from the module.
 		  *
 		  * Returns `gal_size_not_exist` if not found.
-		  *
-		  * todo: C++20 should support the use of object_string::const_pointer for search without the need to construct a temporary object_string, \
-		  *     add an extra function to support it!
 		  */
 		[[nodiscard]] key_type	  get_variable_index(const object_string& name) const;
 
-		/**
-		 * @brief Change a variable in Module to another, and do nothing if the target variable does not exist.
-		 *
-		 * todo: C++20 should support the use of object_string::const_pointer for search without the need to construct a temporary object_string, \
-		 *     add an extra function to support it!
-		 */
-		void					  set_variable(const object_string& name, magic_value value);
+		[[nodiscard]] key_type	  get_variable_index(object_string::const_pointer name) const;
 
 		/**
 		 * @brief Change a variable in Module to another, and do nothing if the target variable does not exist.
 		 */
-		void					  set_variable(gal_size_type index, magic_value value);
+		void					  set_variable(const object_string& name, magic_value value);
+
+		void					  set_variable(object_string::const_pointer name, magic_value value);
+
+		/**
+		 * @brief Change a variable in Module to another, and do nothing if the target variable does not exist.
+		 */
+		void					  set_variable(key_type index, magic_value value);
 
 		/**
 		  * @brief Adds a new implicitly declared top-level variable named [name] to module

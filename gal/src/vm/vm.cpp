@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <gal.hpp>
 #include <utils/assert.hpp>
 #include <utils/format.hpp>
@@ -25,16 +26,16 @@ namespace gal
 		// will fail horribly if it's actually an object_instance.
 		auto *superclass = superclass_value.as_class();
 		if (
-				superclass == class_class_.get() ||
-				superclass == fiber_class_.get() ||
-				superclass == function_class_.get() ||
-				superclass == list_class_.get() ||
-				superclass == map_class_.get() ||
-				superclass == range_class_.get() ||
-				superclass == string_class_.get() ||
-				superclass == boolean_class_.get() ||
-				superclass == null_class_.get() ||
-				superclass == number_class_.get())
+				superclass == class_class_ ||
+				superclass == fiber_class_ ||
+				superclass == function_class_ ||
+				superclass == list_class_ ||
+				superclass == map_class_ ||
+				superclass == range_class_ ||
+				superclass == string_class_ ||
+				superclass == boolean_class_ ||
+				superclass == null_class_ ||
+				superclass == number_class_)
 		{
 			std_format::format_to(error.get_appender(), "Class '{}' cannot inherit from built-in class '{}'.", name.str(), superclass->get_class_name().str());
 			return error;
@@ -638,7 +639,7 @@ namespace gal
 							case method_type::block_type:
 							{
 								store_frame();
-								call_function(*fiber, *method->as.closure, num_args);
+								fiber->call_function(*this, *method->as.closure, num_args);
 								load_frame();
 								break;
 							}
@@ -914,7 +915,7 @@ namespace gal
 				{
 					store_frame();
 					auto *closure = v->as_closure();
-					call_function(*fiber, *closure, 1);
+					fiber->call_function(*this, *closure, 1);
 					load_frame();
 				}
 				else
@@ -1049,5 +1050,280 @@ namespace gal
 	gal_handle *gal_virtual_machine_state::make_handle(magic_value value)
 	{
 		return &handles_.emplace_front(value);
+	}
+
+	object_closure *gal_virtual_machine_state::compile_source(const char *module, const char *source, bool is_expression, bool print_errors)
+	{
+		magic_value name = module ? object_string{*this, module, std::strlen(module)}.operator magic_value() : magic_value_null;
+
+		return compile_in_module(name, source, is_expression, print_errors);
+	}
+
+	magic_value gal_virtual_machine_state::get_module_variable(magic_value module_name, const object_string &variable_name)
+	{
+		auto *module = get_module(module_name);
+		if (not module)
+		{
+			object_string error{*this};
+			std_format::format_to(error.get_appender(), "Module '{}' is not loaded.", module_name.as_string()->str());
+			fiber_->set_error(std::move(error));
+			return magic_value_null;
+		}
+		return module->get_variable(variable_name);
+	}
+
+	magic_value gal_virtual_machine_state::get_module_variable(magic_value module_name, object_string::const_pointer variable_name)
+	{
+		auto *module = get_module(module_name);
+		if (not module)
+		{
+			object_string error{*this};
+			std_format::format_to(error.get_appender(), "Module '{}' is not loaded.", module_name.as_string()->str());
+			fiber_->set_error(std::move(error));
+			return magic_value_null;
+		}
+		return module->get_variable(variable_name);
+	}
+
+	void gal_virtual_machine::gc()
+	{
+		// todo
+	}
+
+	gal_interpret_result gal_virtual_machine::interpret(const char *module, const char *source)
+	{
+		auto *closure = state.compile_source(module, source, false, true);
+		if (not closure)
+		{
+			return gal_interpret_result::RESULT_COMPILE_ERROR;
+		}
+
+		return state.run_interpreter(state.make_object<object_fiber>(state, closure));
+	}
+
+	gal_handle *gal_virtual_machine::make_callable_handle(const char *signature)
+	{
+		gal_assert(signature, "Signature cannot be nullptr.");
+
+		auto signature_length = std::strlen(signature);
+		gal_assert(signature_length > 0, "Signature cannot be empty.");
+
+		// todo: check global module
+		auto		 *global_module = state.get_module(magic_value_null);
+
+		// todo: pattern
+
+		// Count the number parameters the method expects.
+		gal_size_type num_params	= 0;
+		if (signature[signature_length - 1] == ')')
+		{
+			for (auto i = signature_length - 1; i > 0 && signature[i] != '('; --i)
+			{
+				if (signature[i] == '_')
+				{
+					++num_params;
+				}
+			}
+		}
+
+		// Count subscript arguments.
+		if (signature[0] == '[')
+		{
+			for (decltype(signature_length) i = 0; i < signature_length && signature[i] != ']'; ++i)
+			{
+				if (signature[i] == '_')
+				{
+					++num_params;
+				}
+			}
+		}
+
+		// Add the signature to the method table.
+		auto  method   = state.method_names_.ensure(state, signature, signature_length);
+
+		// Create a little stub function that assumes the arguments are on the stack
+		// and calls the method.
+		auto *function = object::ctor<object_function>(state, *global_module, num_params + 1);
+
+		// Wrap the function in a closure and then in a handle. Do this here, so it
+		// doesn't get collected as we fill it in.
+		auto *handle   = state.make_handle(object::ctor<object_closure>(state, *function)->operator magic_value());
+
+		function->append_code(code_to_scalar(opcodes_type::CODE_CALL_0) + num_params).append_code((method >> 8) & 0xff).append_code(method & 0xff).append_code(code_to_scalar(opcodes_type::CODE_RETURN)).append_code(code_to_scalar(opcodes_type::CODE_END));
+
+		function->set_name(signature);
+
+		return handle;
+	}
+
+	gal_interpret_result gal_virtual_machine::call_handle(gal_handle &method)
+	{
+		gal_assert(method.value.is_closure(), "Method must be a method handle.");
+		gal_assert(state.fiber_, "Must set up arguments for call first.");
+		gal_assert(state.api_stack_, "Must set up arguments for call first.");
+		gal_assert(not state.fiber_->has_frame(), "Can not call from a outer method.");
+
+		auto *closure = method.value.as_closure();
+		gal_assert(
+				std::cmp_greater_equal(state.fiber_->get_current_stack_size(), closure->get_function().get_parameters_arity()),
+				"Stack must have enough arguments for method.");
+
+		// Clear the API stack. Now that call_handle() has control, we no longer need
+		// it. We use this being non-null to tell if re-entrant calls to outer
+		// methods are happening, so it's important to clear it out now so that you
+		// can call outer methods from within calls to call_handle().
+		// todo: release existing api_stack
+		state.shutdown_stack();
+
+		// Discard any extra temporary slots. We take for granted that the stub
+		// function has exactly one slot for each argument.
+		state.fiber_->stack_top_rebase(closure->get_function().get_slots_size());
+
+		state.fiber_->call_function(state, *closure, 0);
+		auto result = state.run_interpreter(state.fiber_);
+
+		// If the call didn't abort, then set up the API stack to point to the
+		// beginning of the stack so the host can access the call's return value.
+		if (state.fiber_)
+		{
+			state.api_stack_ = state.fiber_->get_stack_bottom();
+		}
+
+		return result;
+	}
+
+	void gal_virtual_machine::release_handle(gal_handle &handle)
+	{
+		gal_assert(not state.handles_.empty(), "Cannot release handles not created by gal_virtual_machine::make_callable_handle");
+
+		auto prev	 = state.handles_.before_begin();
+		auto current = state.handles_.begin();
+		for (
+				;
+				current != state.handles_.end() && current->value != handle.value;
+				++current, ++prev)
+		{
+		}
+
+		if (current->value.is_object())
+		{
+			object::dtor(current->value.as_object());
+		}
+		state.handles_.erase_after(prev);
+	}
+
+	gal_size_type gal_virtual_machine::get_slot_count() const noexcept
+	{
+		return state.get_slot_count();
+	}
+
+	void gal_virtual_machine::ensure_slots(gal_slot_type slots)
+	{
+		state.ensure_slot(slots);
+	}
+
+	gal_object_type gal_virtual_machine::get_slot_type(gal_slot_type slot) const
+	{
+		return state.get_slot_type(slot);
+	}
+
+	bool gal_virtual_machine::get_slot_boolean(gal_slot_type slot)
+	{
+		auto target = state.get_slot_value(slot);
+		gal_assert(target.is_boolean(), "Slot must hold a bool.");
+		return target.as_boolean();
+	}
+
+	const char *gal_virtual_machine::get_slot_bytes(gal_slot_type slot, gal_size_type &length)
+	{
+		auto target = state.get_slot_value(slot);
+		gal_assert(target.is_string(), "Slot must hold a string.");
+
+		auto *string = target.as_string();
+		length		 = string->size();
+		return string->data();
+	}
+
+	double gal_virtual_machine::get_slot_number(gal_slot_type slot)
+	{
+		auto target = state.get_slot_value(slot);
+		gal_assert(target.is_number(), "Slot must hold a number.");
+		return target.as_number();
+	}
+
+	void *gal_virtual_machine::get_slot_outer(gal_slot_type slot)
+	{
+		auto target = state.get_slot_value(slot);
+		gal_assert(target.is_outer(), "Slot must hold a outer instance.");
+		return target.as_outer()->get_data();
+	}
+
+	const char *gal_virtual_machine::get_slot_string(gal_slot_type slot)
+	{
+		auto target = state.get_slot_value(slot);
+		gal_assert(target.is_string(), "Slot must hold a string.");
+		return target.as_string()->data();
+	}
+
+	gal_handle *gal_virtual_machine::get_slot_handle(gal_slot_type slot)
+	{
+		auto target = state.get_slot_value(slot);
+		return state.make_handle(target);
+	}
+
+	void gal_virtual_machine::set_slot_boolean(gal_slot_type slot, bool value)
+	{
+		state.set_slot_value(slot, to_magic_value(value));
+	}
+
+	void gal_virtual_machine::set_slot_bytes(gal_slot_type slot, const char *bytes, gal_size_type length)
+	{
+		gal_assert(bytes, "Byte array cannot be nullptr.");
+		state.set_slot_value(slot, object::ctor<object_string>(state, bytes, length)->operator magic_value());
+	}
+
+	void gal_virtual_machine::set_slot_number(gal_slot_type slot, double value)
+	{
+		state.set_slot_value(slot, to_magic_value(value));
+	}
+
+	gal_row_pointer_type gal_virtual_machine::set_slot_outer(gal_slot_type slot, gal_slot_type class_slot, gal_size_type size)
+	{
+		auto target = state.get_slot_value(class_slot);
+		gal_assert(target.is_class(), "Slot must hold a class.");
+
+		auto *obj_class = target.as_class();
+		gal_assert(obj_class->is_outer_class(), "Class must be a outer class.");
+
+		auto *outer = object::ctor<object_outer>(obj_class, size);
+		state.set_slot_value(slot, outer->operator magic_value());
+
+		return outer->get_data();
+	}
+
+	void gal_virtual_machine::set_slot_list(gal_slot_type slot)
+	{
+		state.set_slot_value(slot, object::ctor<object_list>(state)->operator magic_value());
+	}
+
+	void gal_virtual_machine::set_slot_map(gal_slot_type slot)
+	{
+		state.set_slot_value(slot, object::ctor<object_map>(state)->operator magic_value());
+	}
+
+	void gal_virtual_machine::set_slot_null(gal_slot_type slot)
+	{
+		state.set_slot_value(slot, magic_value_null);
+	}
+
+	void gal_virtual_machine::set_slot_string(gal_slot_type slot, const char *text, gal_size_type length)
+	{
+		gal_assert(text, "String cannot be nullptr.");
+		state.set_slot_value(slot, object::ctor<object_string>(state, text, length)->operator magic_value());
+	}
+
+	void gal_virtual_machine::set_slot_handle(gal_slot_type slot, gal_handle &handle)
+	{
+		state.set_slot_value(slot, handle.value);
 	}
 }// namespace gal

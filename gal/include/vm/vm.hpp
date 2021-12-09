@@ -40,17 +40,17 @@ namespace gal
 	public:
 		friend class gal_virtual_machine;
 
-		std::shared_ptr<object_class>							 boolean_class_;
-		std::shared_ptr<object_class>							 class_class_;
-		std::shared_ptr<object_class>							 fiber_class_;
-		std::shared_ptr<object_class>							 function_class_;
-		std::shared_ptr<object_class>							 list_class_;
-		std::shared_ptr<object_class>							 map_class_;
-		std::shared_ptr<object_class>							 null_class_;
-		std::shared_ptr<object_class>							 number_class_;
-		std::shared_ptr<object_class>							 object_class_;
-		std::shared_ptr<object_class>							 range_class_;
-		std::shared_ptr<object_class>							 string_class_;
+		object_class*							 boolean_class_;
+		object_class*							 class_class_;
+		object_class*							 fiber_class_;
+		object_class*							 function_class_;
+		object_class*							 list_class_;
+		object_class*							 map_class_;
+		object_class*							 null_class_;
+		object_class*							 number_class_;
+		object_class*							 object_class_;
+		object_class*							 range_class_;
+		object_class*							 string_class_;
 
 		/**
 		 * @brief The fiber that is currently running.
@@ -129,7 +129,7 @@ namespace gal
 		 */
 		symbol_table											 method_names_;
 
-		[[nodiscard]] gal_size_type								 get_slot_count() const
+		[[nodiscard]] gal_size_type								 get_slot_count() const noexcept
 		{
 			if (api_stack_)
 			{
@@ -166,6 +166,7 @@ namespace gal
 
 		void set_slot_value(gal_slot_type slot, magic_value value) const noexcept
 		{
+			// todo: release existing object
 			validate_slot(slot);
 			api_stack_[slot] = value;
 		}
@@ -195,74 +196,24 @@ namespace gal
 		  *
 		  * Aborts the current fiber if the module or variable could not be found.
 		  */
-		magic_value					  get_module_variable(magic_value module_name, magic_value variable_name);
+		magic_value					  get_module_variable(magic_value module_name, const object_string& variable_name);
 
-		/**
-		  * @brief Returns the value of the module-level variable named [name] in the main
-		  * module.
-		  */
-		static magic_value			  find_variable(object_module& module, const char* name);
-
-		/**
-		  * @brief Adds a new implicitly declared top-level variable named [name] to [module]
-		  * based on a use site occurring on [line].
-		  *
-		  * Does not check to see if a variable with that name is already declared or
-		  * defined. Returns the symbol for the new variable or `variable_too_many_defined`
-		  * if there are too many variables defined.
-		  */
-		gal_index_type				  declare_variable(object_module& module, const char* name, gal_size_type length, gal_size_type line);
-
-		/**
-		  * @brief Adds a new top-level variable named [name] to [module], and optionally
-		  * populates line with the line of the implicit first use (line can be nullptr).
-		  *
-		  * Returns the symbol for the new variable, `variable_already_defined` if a variable
-		  * with the given name is already defined, or `variable_too_many_defined` if there
-		  * are too many variables defined. Returns `variable_used_before_defined` if this is
-		  * a top-level lowercase variable (local name) that was used before being defined.
-		  */
-		gal_index_type				  define_variable(object_module& module, const char* name, gal_size_type length, magic_value value, int* line = nullptr);
-
-		/**
-		  * @brief Adds a new top-level variable named [name] to [module], and optionally
-		  * populates line with the line of the implicit first use (line can be nullptr).
-		  *
-		  * Returns the symbol for the new variable, `variable_already_defined` if a variable
-		  * with the given name is already defined, or `variable_too_many_defined` if there
-		  * are too many variables defined. Returns `variable_used_before_defined` if this is
-		  * a top-level lowercase variable (local name) that was used before being defined.
-		  */
-		gal_index_type				  define_variable(object_module& module, const object_string& name, magic_value value, int* line = nullptr);
-
-		/**
-		 * @brief Pushes [closure] onto [fiber]'s callstack to invoke it. Expects [num_args]
-		 * arguments (including the receiver) to be on the top of the stack already.
-		 */
-		void						  call_function(object_fiber& fiber, object_closure& closure, gal_size_type num_args)
-		{
-			// Grow the stack if needed.
-			const auto stack_size = fiber.get_current_stack_size();
-			const auto needed	  = stack_size + closure.get_function().get_slots_size();
-			fiber.ensure_stack(*this, needed);
-
-			fiber.add_call_frame(closure, *fiber.get_stack_point(num_args));
-		}
+		magic_value					  get_module_variable(magic_value module_name, object_string::const_pointer variable_name);
 
 		/**
 		 * @brief Returns the class of [value].
 		 */
 		[[nodiscard]] object_class* get_class(magic_value value)
 		{
-			if (value.is_number()) { return number_class_.get(); }
+			if (value.is_number()) { return number_class_; }
 			if (value.is_object()) { return value.as_object()->get_class(); }
 
 			switch (value.get_tag())
 			{
-				case magic_value::tag_nan: return number_class_.get();
-				case magic_value::tag_null: return null_class_.get();
+				case magic_value::tag_nan: return number_class_;
+				case magic_value::tag_null: return null_class_;
 				case magic_value::tag_false:
-				case magic_value::tag_true: return boolean_class_.get();
+				case magic_value::tag_true: return boolean_class_;
 				case magic_value::tag_undefined: UNREACHABLE();
 			}
 
@@ -274,15 +225,15 @@ namespace gal
 		 */
 		[[nodiscard]] const object_class* get_class(magic_value value) const
 		{
-			if (value.is_number()) { return number_class_.get(); }
+			if (value.is_number()) { return number_class_; }
 			if (value.is_object()) { return value.as_object()->get_class(); }
 
 			switch (value.get_tag())
 			{
-				case magic_value::tag_nan: return number_class_.get();
-				case magic_value::tag_null: return null_class_.get();
+				case magic_value::tag_nan: return number_class_;
+				case magic_value::tag_null: return null_class_;
 				case magic_value::tag_false:
-				case magic_value::tag_true: return boolean_class_.get();
+				case magic_value::tag_true: return boolean_class_;
 				case magic_value::tag_undefined: UNREACHABLE();
 			}
 
