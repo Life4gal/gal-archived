@@ -42,17 +42,17 @@ namespace gal
 	public:
 		friend class gal_virtual_machine;
 
-		object_class*							 boolean_class_{nullptr};
-		object_class*							 class_class_{nullptr};
-		object_class*							 fiber_class_{nullptr};
-		object_class*							 function_class_{nullptr};
-		object_class*							 list_class_{nullptr};
-		object_class*							 map_class_{nullptr};
-		object_class*							 null_class_{nullptr};
-		object_class*							 number_class_{nullptr};
-		object_class*							 object_class_{nullptr};
-		object_class*							 range_class_{nullptr};
-		object_class*							 string_class_{nullptr};
+		object_class*											 boolean_class_{nullptr};
+		object_class*											 class_class_{nullptr};
+		object_class*											 fiber_class_{nullptr};
+		object_class*											 function_class_{nullptr};
+		object_class*											 list_class_{nullptr};
+		object_class*											 map_class_{nullptr};
+		object_class*											 null_class_{nullptr};
+		object_class*											 number_class_{nullptr};
+		object_class*											 object_class_{nullptr};
+		object_class*											 range_class_{nullptr};
+		object_class*											 string_class_{nullptr};
 
 		/**
 		 * @brief The fiber that is currently running.
@@ -132,12 +132,11 @@ namespace gal
 		symbol_table											 method_names_;
 
 		explicit gal_virtual_machine_state(gal_configuration configuration)
-				:
-			  modules_(*this),
+			: modules_(*this),
 			  next_gc_(configuration.min_heap_size),
 			  configuration_(configuration) {}
 
-		[[nodiscard]] gal_size_type								 get_slot_count() const noexcept
+		[[nodiscard]] gal_size_type get_slot_count() const noexcept
 		{
 			if (api_stack_)
 			{
@@ -211,7 +210,7 @@ namespace gal
 		/**
 		 * @brief Returns the class of [value].
 		 */
-		[[nodiscard]] object_class* get_class(magic_value value) const
+		[[nodiscard]] object_class*	  get_class(magic_value value) const
 		{
 			if (value.is_number()) { return number_class_; }
 			if (value.is_object()) { return value.as_object()->get_class(); }
@@ -325,37 +324,38 @@ namespace gal
 		 * @brief Validate everything here below.
 		 */
 
-		bool validate_helper(const char* arg_name, const char* requires_type);
+		bool						   validate_helper(const char* arg_name, const char* requires_type);
 
+	public:
 		/**
 		 * @brief Validates that the given [arg] is a function. Returns true if it is. If not,
 		 * reports an error and returns false.
 		 */
-		bool validate_function(magic_value arg, const char* arg_name);
+		bool		   validate_function(magic_value arg, const char* arg_name);
 
 		/**
 		 * @brief Validates that the given [arg] is a Num. Returns true if it is. If not,
 		 * reports an error and returns false.
 		 */
-		bool validate_number(magic_value arg, const char* arg_name);
+		bool		   validate_number(magic_value arg, const char* arg_name);
 
 		/**
 		 * @brief Validates that [value] is an integer. Returns true if it is. If not, reports
 		 * an error and returns false.
 		 */
-		bool validate_int_value(double value, const char* arg_name);
+		bool		   validate_int_value(double value, const char* arg_name);
 
 		/**
 		 * @brief Validates that the given [arg] is an integer. Returns true if it is. If not,
 		 * reports an error and returns false.
 		 */
-		bool validate_int(magic_value arg, const char* arg_name);
+		bool		   validate_int(magic_value arg, const char* arg_name);
 
 		/**
 		 * @brief Validates that [arg] is a valid object for use as a map key. Returns true if
 		 * it is. If not, reports an error and returns false.
 		 */
-		bool validate_key(magic_value arg);
+		bool		   validate_key(magic_value arg);
 
 		/**
 		 * @brief Validates that [value] is an integer within `[0, count)`. Also allows
@@ -375,7 +375,7 @@ namespace gal
 		 * @brief Validates that the given [arg] is a String. Returns true if it is. If not,
 		 * reports an error and returns false.
 		 */
-		bool validate_string(magic_value arg, const char* arg_name);
+		bool		   validate_string(magic_value arg, const char* arg_name);
 	};
 }// namespace gal
 

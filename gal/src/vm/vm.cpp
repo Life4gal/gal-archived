@@ -142,9 +142,9 @@ namespace gal
 			}
 			else
 			{
-				object_string error{*this};
-				std_format::format_to(error.get_appender(), "Could not find outer method '{}' for class '{}' in module '{}'.", name, real_obj->get_class_name().str(), module.get_name().str());
-				fiber_->set_error(std::move(error));
+				auto error = object::ctor<object_string>(*this);
+				std_format::format_to(error->get_appender(), "Could not find outer method '{}' for class '{}' in module '{}'.", name, real_obj->get_class_name().str(), module.get_name().str());
+				fiber_->set_error(error->operator magic_value());
 				return;
 			}
 		}
@@ -192,9 +192,9 @@ namespace gal
 
 	void gal_virtual_machine_state::method_not_found(object_class &obj_class, gal_index_type symbol)
 	{
-		object_string error{*this};
-		std_format::format_to(error.get_appender(), "{} does not implement '{}'.", obj_class.get_class_name().str(), method_names_[symbol].str());
-		fiber_->set_error(std::move(error));
+		auto error = object::ctor<object_string>(*this);
+		std_format::format_to(error->get_appender(), "{} does not implement '{}'.", obj_class.get_class_name().str(), method_names_[symbol].str());
+		fiber_->set_error(error->operator magic_value());
 	}
 
 	object_module *gal_virtual_machine_state::get_module(magic_value name) const
@@ -264,10 +264,9 @@ namespace gal
 
 		if (not resolved)
 		{
-			object_string error{*this};
-			std_format::format_to(error.get_appender(), "Could not resolve module '{}' imported from '{}'.", name.str(), importer.str());
-
-			fiber_->set_error(error);
+			auto error = object::ctor<object_string>(*this);
+			std_format::format_to(error->get_appender(), "Could not resolve module '{}' imported from '{}'.", name.str(), importer.str());
+			fiber_->set_error(error->operator magic_value());
 		}
 
 		// If they resolved to the exact same string, we don't need to copy it.
@@ -309,9 +308,9 @@ namespace gal
 
 		if (result.source == nullptr)
 		{
-			object_string error{*this};
-			std_format::format_to(error.get_appender(), "Could not load module '{}'.", read_name.str());
-			fiber_->set_error(std::move(error));
+			auto error = object::ctor<object_string>(*this);
+			std_format::format_to(error->get_appender(), "Could not load module '{}'.", read_name.str());
+			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
 		}
 
@@ -325,9 +324,9 @@ namespace gal
 
 		if (not module_closure)
 		{
-			object_string error{*this};
-			std_format::format_to(error.get_appender(), "Could not compile module '{}'.", read_name.str());
-			fiber_->set_error(std::move(error));
+			auto error = object::ctor<object_string>(*this);
+			std_format::format_to(error->get_appender(), "Could not compile module '{}'.", read_name.str());
+			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
 		}
 
@@ -345,13 +344,13 @@ namespace gal
 			return variable;
 		}
 
-		object_string error{*this};
+		auto error = object::ctor<object_string>(*this);
 		std_format::format_to(
-				error.get_appender(),
+				error->get_appender(),
 				"Could not find a variable named '{}' in module '{}'.",
 				variable_name.str(),
 				module.get_name().str());
-		fiber_->set_error(std::move(error));
+		fiber_->set_error(error->operator magic_value());
 		return magic_value_null;
 	}
 
@@ -368,14 +367,14 @@ namespace gal
 			return true;
 		}
 
-		object_string error{*this};
+		auto error = object::ctor<object_string>(*this);
 		std_format::format_to(
-				error.get_appender(),
+				error->get_appender(),
 				"Function {} expects {} argument(s), but only given {} argument(s).",
 				function.get_name(),
 				function.get_parameters_arity(),
 				num_args - 1);
-		fiber_->set_error(std::move(error));
+		fiber_->set_error(error->operator magic_value());
 		return false;
 	}
 
@@ -955,15 +954,15 @@ namespace gal
 
 	bool gal_virtual_machine_state::validate_helper(const char *arg_name, const char *requires_type)
 	{
-		object_string error{*this};
-		std_format::format_to(error.get_appender(), "{} must be a {}.", arg_name, requires_type);
-		fiber_->set_error(std::move(error));
+		auto error = object::ctor<object_string>(*this);
+		std_format::format_to(error->get_appender(), "{} must be a {}.", arg_name, requires_type);
+		fiber_->set_error(error->operator magic_value());
 		return false;
 	}
 
 	bool gal_virtual_machine_state::validate_function(magic_value arg, const char *arg_name)
 	{
-		if(arg.is_closure())
+		if (arg.is_closure())
 		{
 			return true;
 		}
@@ -973,7 +972,7 @@ namespace gal
 
 	bool gal_virtual_machine_state::validate_number(magic_value arg, const char *arg_name)
 	{
-		if(arg.is_number())
+		if (arg.is_number())
 		{
 			return true;
 		}
@@ -983,7 +982,7 @@ namespace gal
 
 	bool gal_virtual_machine_state::validate_int_value(double value, const char *arg_name)
 	{
-		if(std::trunc(value) == value)
+		if (std::trunc(value) == value)
 		{
 			return true;
 		}
@@ -994,7 +993,7 @@ namespace gal
 	bool gal_virtual_machine_state::validate_int(magic_value arg, const char *arg_name)
 	{
 		// Make sure it's a number first.
-		if(not validate_number(arg, arg_name))
+		if (not validate_number(arg, arg_name))
 		{
 			return false;
 		}
@@ -1004,7 +1003,7 @@ namespace gal
 
 	bool gal_virtual_machine_state::validate_key(magic_value arg)
 	{
-		if(object_map::is_valid_key(arg))
+		if (object_map::is_valid_key(arg))
 		{
 			return true;
 		}
@@ -1014,32 +1013,32 @@ namespace gal
 
 	gal_index_type gal_virtual_machine_state::validate_index_value(double value, gal_size_type count, const char *arg_name)
 	{
-		if(not validate_int_value(value, arg_name))
+		if (not validate_int_value(value, arg_name))
 		{
 			return gal_index_not_exist;
 		}
 
 		// Negative indices count from the end.
-		if(value < 0)
+		if (value < 0)
 		{
 			value = static_cast<double>(count) + value;
 		}
 
 		// Check bounds.
-		if(value >= 0 && value < static_cast<double>(count))
+		if (value >= 0 && value < static_cast<double>(count))
 		{
 			return static_cast<gal_index_type>(value);
 		}
 
-		object_string error{*this};
-		std_format::format_to(error.get_appender(), "{} out of bound {}.", arg_name, count);
-		fiber_->set_error(std::move(error));
+		auto error = object::ctor<object_string>(*this);
+		std_format::format_to(error->get_appender(), "{} out of bound {}.", arg_name, count);
+		fiber_->set_error(error->operator magic_value());
 		return gal_index_not_exist;
 	}
 
 	gal_index_type gal_virtual_machine_state::validate_index(magic_value arg, gal_size_type count, const char *arg_name)
 	{
-		if(not validate_number(arg, arg_name))
+		if (not validate_number(arg, arg_name))
 		{
 			return gal_index_not_exist;
 		}
@@ -1049,7 +1048,7 @@ namespace gal
 
 	bool gal_virtual_machine_state::validate_string(magic_value arg, const char *arg_name)
 	{
-		if(arg.is_string())
+		if (arg.is_string())
 		{
 			return true;
 		}
@@ -1066,14 +1065,14 @@ namespace gal
 	void gal_virtual_machine_state::ensure_slot(gal_slot_type slots)
 	{
 		// If we don't have a fiber accessible, create one for the API to use.
-		if(not api_stack_)
+		if (not api_stack_)
 		{
-			fiber_ = make_object<object_fiber>(*this, nullptr);
+			fiber_	   = make_object<object_fiber>(*this, nullptr);
 			api_stack_ = fiber_->get_stack_bottom();
 		}
 
 		const auto current = fiber_->get_current_stack_size();
-		if(current >= slots)
+		if (current >= slots)
 		{
 			return;
 		}
@@ -1170,9 +1169,9 @@ namespace gal
 		auto *module = get_module(module_name);
 		if (not module)
 		{
-			object_string error{*this};
-			std_format::format_to(error.get_appender(), "Module '{}' is not loaded.", module_name.as_string()->str());
-			fiber_->set_error(std::move(error));
+			auto error = object::ctor<object_string>(*this);
+			std_format::format_to(error->get_appender(), "Module '{}' is not loaded.", module_name.as_string()->str());
+			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
 		}
 		return module->get_variable(variable_name);
@@ -1183,9 +1182,9 @@ namespace gal
 		auto *module = get_module(module_name);
 		if (not module)
 		{
-			object_string error{*this};
-			std_format::format_to(error.get_appender(), "Module '{}' is not loaded.", module_name.as_string()->str());
-			fiber_->set_error(std::move(error));
+			auto error = object::ctor<object_string>(*this);
+			std_format::format_to(error->get_appender(), "Module '{}' is not loaded.", module_name.as_string()->str());
+			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
 		}
 		return module->get_variable(variable_name);
@@ -1193,7 +1192,8 @@ namespace gal
 
 	gal_virtual_machine::gal_virtual_machine(gal_configuration configuration)
 		: state{*new gal_virtual_machine_state{configuration}}
-	{}
+	{
+	}
 
 	gal_virtual_machine::~gal_virtual_machine() noexcept
 	{
@@ -1456,9 +1456,9 @@ namespace gal
 		const auto target = state.get_slot_value(list_slot);
 		gal_assert(target.is_list(), "Slot must hold a list.");
 
-		const auto* list = target.as_list();
+		const auto *list	   = target.as_list();
 
-		const auto real_index = index_to_size(list->size(), index);
+		const auto	real_index = index_to_size(list->size(), index);
 		state.set_slot_value(element_slot, list->get(real_index));
 	}
 
@@ -1467,7 +1467,7 @@ namespace gal
 		auto target = state.get_slot_value(list_slot);
 		gal_assert(target.is_list(), "Slot must hold a list.");
 
-		auto* list = target.as_list();
+		auto		 *list		  = target.as_list();
 
 		const auto real_index = index_to_size(list->size(), index);
 		list->set(real_index, state.get_slot_value(element_slot));
@@ -1478,7 +1478,7 @@ namespace gal
 		auto target = state.get_slot_value(list_slot);
 		gal_assert(target.is_list(), "Slot must hold a list.");
 
-		auto* list = target.as_list();
+		auto		 *list		  = target.as_list();
 
 		const auto real_index = index_to_size<false>(list->size(), index);
 		gal_assert(std::cmp_less_equal(real_index, list->size()), "Index out bounds.");
@@ -1500,7 +1500,7 @@ namespace gal
 		gal_assert(target.is_map(), "Slot must hold a map.");
 
 		const auto key = state.get_slot_value(key_slot);
-		if(not state.validate_key(key))
+		if (not state.validate_key(key))
 		{
 			return false;
 		}
@@ -1513,7 +1513,7 @@ namespace gal
 		const auto target = state.get_slot_value(map_slot);
 		gal_assert(target.is_map(), "Slot must hold a map.");
 
-		const auto key = state.get_slot_value(key_slot);
+		const auto key	 = state.get_slot_value(key_slot);
 		const auto value = target.as_map()->get(key);
 		state.set_slot_value(value_slot, value == magic_value_undefined ? magic_value_null : value);
 	}
@@ -1526,7 +1526,7 @@ namespace gal
 		const auto key = state.get_slot_value(key_slot);
 		gal_assert(object_map::is_valid_key(key), "Map key must be a value type.");
 
-		if(not state.validate_key(key))
+		if (not state.validate_key(key))
 		{
 			return;
 		}
@@ -1543,23 +1543,23 @@ namespace gal
 		const auto key = state.get_slot_value(key_slot);
 		gal_assert(object_map::is_valid_key(key), "Map key must be a value type.");
 
-		if(not state.validate_key(key))
+		if (not state.validate_key(key))
 		{
 			return;
 		}
 
-		const auto removed= target.as_map()->remove(key);
+		const auto removed = target.as_map()->remove(key);
 		state.set_slot_value(value_slot, removed);
 	}
 
-	void gal_virtual_machine::get_variable(const char* module_name, const char* variable_name, gal_slot_type slot)
+	void gal_virtual_machine::get_variable(const char *module_name, const char *variable_name, gal_slot_type slot)
 	{
 		gal_assert(module_name, "Module name cannot be nullptr.");
 		gal_assert(variable_name, "Variable name cannot be nullptr");
 
-		const auto module_name_str = object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
+		const auto module_name_str																		= object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
 
-		const auto* module = state.get_module(module_name_str);
+		const auto																			   *module = state.get_module(module_name_str);
 		gal_assert(module, "Could not find module.");
 
 		const auto variable = module->get_variable(variable_name);
@@ -1568,14 +1568,14 @@ namespace gal
 		state.set_slot_value(slot, variable);
 	}
 
-	bool gal_virtual_machine::has_variable(const char* module_name, const char* variable_name)
+	bool gal_virtual_machine::has_variable(const char *module_name, const char *variable_name)
 	{
 		gal_assert(module_name, "Module name cannot be nullptr.");
 		gal_assert(variable_name, "Variable name cannot be nullptr");
 
-		const auto module_name_str = object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
+		const auto module_name_str																		= object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
 
-		const auto* module = state.get_module(module_name_str);
+		const auto																			   *module = state.get_module(module_name_str);
 		gal_assert(module, "Could not find module.");
 
 		const auto variable = module->get_variable(variable_name);
@@ -1586,17 +1586,16 @@ namespace gal
 	{
 		gal_assert(module_name, "Module name cannot be nullptr.");
 
-		const auto module_name_str = object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
+		const auto module_name_str																		= object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
 
-		const auto* module = state.get_module(module_name_str);
+		const auto																			   *module = state.get_module(module_name_str);
 
 		return module != nullptr;
 	}
 
 	void gal_virtual_machine::abort_fiber(gal_slot_type slot)
 	{
-		// todo: the error type may not be object_string
-		state.fiber_->set_error(*state.get_slot_value(slot).as_string());
+		state.fiber_->set_error(state.get_slot_value(slot));
 	}
 
 	gal_row_pointer_type gal_virtual_machine::get_user_data()

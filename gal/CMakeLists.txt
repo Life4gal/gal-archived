@@ -16,6 +16,7 @@ set(
 		src/vm/vm.cpp
 		src/vm/compiler.cpp
 		src/vm/debugger.cpp
+		src/vm/meta.cpp
 )
 
 if (${BUILD_GAL_AS_SHARED})

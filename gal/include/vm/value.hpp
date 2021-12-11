@@ -333,6 +333,7 @@ namespace gal
 			return lhs.data_ == rhs.data_;
 		}
 
+		// todo: limit the usage or remove it.
 		friend auto operator<=>(const magic_value& lhs, const magic_value& rhs)
 		{
 			return lhs.data_ <=> rhs.data_;
@@ -345,6 +346,12 @@ namespace gal
 		 */
 		[[nodiscard]] bool equal(const magic_value& other) const;
 
+		/**
+		 * @brief If the value stored by magic_value points to an object constructed using dynamic memory,
+		 * it will be released, otherwise it will do nothing. This function is to keep magic_value as a POD.
+		 *
+		 * todo: It can be much simpler to change it to a destructor :)
+		 */
 		void			   destroy()
 		{
 			if (is_object())
@@ -1217,10 +1224,8 @@ namespace gal
 		/**
 		 * @brief If the fiber failed because of a runtime error, this will contain the
 		 * error object. Otherwise, it will be nullptr.
-		 *
-		 * todo: the error object may not necessarily be object_string
 		 */
-		std::shared_ptr<object_string>									 error_message_;
+		std::shared_ptr<magic_value>									 error_;
 
 		fiber_state														 state_;
 
@@ -1372,34 +1377,32 @@ namespace gal
 			caller_ = caller;
 		}
 
-		void set_error(const object_string& error)
+		void set_error(magic_value error)
 		{
-			error_message_ = std::make_shared<object_string>(error);
-		}
+			// error_ = std::make_shared<magic_value>(error);
 
-		void set_error(object_string&& error)
-		{
-			error_message_ = std::make_shared<object_string>(std::move(error));
-		}
-
-		void set_error(std::shared_ptr<object_string> error)
-		{
-			error_message_ = std::move(error);
-		}
-
-		[[nodiscard]] const object_string& get_error() const noexcept
-		{
-			return *error_message_;
+			using allocator_type = gal_allocator<magic_value>;
+			allocator_type allocator{};
+			auto*		   ptr = allocator.allocate(1);
+			allocator.construct(ptr, error);
+			error_ = std::shared_ptr<magic_value>(ptr,
+												  [](magic_value* value)
+												  {
+													  value->destroy();
+													  allocator_type allocator{};
+													  allocator.destroy(value);
+													  allocator.deallocate(value, 1);
+												  });
 		}
 
 		void clear_error()
 		{
-			error_message_.reset();
+			error_.reset();
 		}
 
 		[[nodiscard]] bool has_error() const noexcept
 		{
-			return error_message_.operator bool();
+			return error_.operator bool();
 		}
 
 		[[nodiscard]] fiber_state get_state() const noexcept
@@ -1545,7 +1548,12 @@ namespace gal
 		 * inherit its methods. This should be called before any methods are defined
 		 * on subclass.
 		 */
-		void								  bind_super_class(object_class& superclass);
+		void							  bind_super_class(object_class& superclass);
+
+		[[nodiscard]] const object_class* get_super_class() const noexcept
+		{
+			return superclass_;
+		}
 
 		/**
 		 * @brief Creates a new class object as well as its associated metaclass.
