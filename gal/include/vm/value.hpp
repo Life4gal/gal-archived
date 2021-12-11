@@ -344,6 +344,15 @@ namespace gal
 		 * same data. All other values are equal if they are identical objects.
 		 */
 		[[nodiscard]] bool equal(const magic_value& other) const;
+
+		void			   destroy()
+		{
+			if (is_object())
+			{
+				object::dtor(as_object());
+			}
+			data_ = null_val;
+		}
 	};
 
 	constexpr magic_value magic_value_null{magic_value::null_val};
@@ -2060,7 +2069,7 @@ namespace gal
 			}
 		}
 
-		gal_size_type memory_usage() const noexcept override
+		[[nodiscard]] gal_size_type memory_usage() const noexcept override
 		{
 			// todo
 			return 0;

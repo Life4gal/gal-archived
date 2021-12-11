@@ -17,7 +17,9 @@ namespace gal
 {
 	enum class opcodes_type : std::uint8_t
 	{
+	#define OPCODE(name, _) CODE_##name
 	#include <vm/opcodes.config>
+	#undef OPCODE
 	};
 
 	std::uint8_t code_to_scalar(opcodes_type code)

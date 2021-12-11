@@ -1059,7 +1059,7 @@ namespace gal
 
 	void gal_virtual_machine_state::validate_slot(gal_slot_type slot) const
 	{
-		gal_assert(slot >= 0, "Slot cannot be negative.");
+		// gal_assert(slot >= 0, "Slot cannot be negative.");
 		gal_assert(slot < get_slot_count(), "Not that many slots.");
 	}
 
