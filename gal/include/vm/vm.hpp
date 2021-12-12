@@ -252,9 +252,9 @@ namespace gal
 		 * If successful, returns empty object_string. Otherwise, returns a string for the runtime
 		 * error message.
 		 */
-		object_string validate_superclass(const object_string& name, magic_value superclass_value, gal_size_type num_fields);
+		magic_value validate_superclass(const object_string& name, magic_value superclass_value, gal_size_type num_fields);
 
-		void		  bind_outer_class(object_class& obj_class, object_module& module);
+		void		bind_outer_class(object_class& obj_class, object_module& module);
 
 	private:
 		/**

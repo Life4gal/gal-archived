@@ -217,27 +217,28 @@ namespace gal
 	public:
 		using value_type = std::uint64_t;
 
+	public:
 		/**
 		 * @brief Masks out the tag bits used to identify the singleton value.
 		 */
-		constexpr static value_type			  tag_mask{(1 << 3) - 1};// 7
+		constexpr static value_type					 tag_mask{(1 << 3) - 1};// 7
 
 		/**
 		 * @brief Tag values for the different singleton values.
 		 */
-		constexpr static value_type			  tag_nan{0};
-		constexpr static value_type			  tag_null{1};
-		constexpr static value_type			  tag_false{2};
-		constexpr static value_type			  tag_true{3};
-		constexpr static value_type			  tag_undefined{4};
-		constexpr static value_type			  tag_reserve1{5};
-		constexpr static value_type			  tag_reserve2{6};
-		constexpr static value_type			  tag_reserve3{7};
+		constexpr static value_type					 tag_nan{0};
+		constexpr static value_type					 tag_null{1};
+		constexpr static value_type					 tag_false{2};
+		constexpr static value_type					 tag_true{3};
+		constexpr static value_type					 tag_undefined{4};
+		[[maybe_unused]] constexpr static value_type tag_reserve1{5};
+		[[maybe_unused]] constexpr static value_type tag_reserve2{6};
+		[[maybe_unused]] constexpr static value_type tag_reserve3{7};
 
 		/**
 		 * @brief A mask that selects the sign bit.
 		 */
-		constexpr static value_type			  sign_bit{value_type{1} << 63};
+		constexpr static value_type					 sign_bit{value_type{1} << 63};
 
 		/**
 		 * @brief The bits that must be set to indicate a quiet NaN.
@@ -245,25 +246,57 @@ namespace gal
 		 * note:
 		 *  it's: 0 111 1111 1111 1100 000000000000000000000000000000000000000000000000
 		 *  not : 0 111 1111 1111 1000 000000000000000000000000000000000000000000000000
+		 * Intel’s "QNaN Floating-Point Indefinite" value:
+		 *      For the floating-point data type encodings (single-precision, double-precision, and double-extended-precision),
+		 *      one unique encoding (a QNaN) is reserved for representing the special value QNaN floating-point indefinite.
+		 *      The x87 FPU and the SSE/SSE2/SSE3/SSE4.1/AVX extensions return these indefinite values as responses to some
+		 *      masked floating-point exceptions.
+		 *
+		 *      https://software.intel.com/content/dam/develop/external/us/en/documents/floating-point-reference-sheet-v2-13.pdf
 		 */
-		constexpr static value_type			  quiet_nan{0x7ffc000000000000};
+		constexpr static value_type					 quiet_nan{0x7ffc000000000000};
 
-		constexpr static value_type			  pointer_mask{quiet_nan | sign_bit};
+		constexpr static value_type					 pointer_mask{quiet_nan | sign_bit};
 
 		/**
 		 * @brief Singleton values.
 		 */
-		constexpr static value_type			  null_val{quiet_nan | tag_nan};
-		constexpr static value_type			  false_val{quiet_nan | tag_false};
-		constexpr static value_type			  true_val{quiet_nan | tag_true};
-		constexpr static value_type			  undefined_val{quiet_nan | tag_undefined};
+		constexpr static value_type					 null_val{quiet_nan | tag_nan};
+		constexpr static value_type					 false_val{quiet_nan | tag_false};
+		constexpr static value_type					 true_val{quiet_nan | tag_true};
+		constexpr static value_type					 undefined_val{quiet_nan | tag_undefined};
 
-		value_type							  data_;
+	private:
+		value_type data_;
+
+	public:
+		constexpr explicit magic_value() noexcept : data_{null_val} {}
+		constexpr explicit magic_value(value_type data) noexcept : data_{data} {}
+		constexpr explicit magic_value(bool b) noexcept : data_{b ? true_val : false_val} {}
+		constexpr explicit magic_value(double d) noexcept : data_{double_to_bits(d)} {}
+		explicit magic_value(const object* obj) noexcept : data_{static_cast<value_type>(reinterpret_cast<std::uintptr_t>(obj))} {}
+
+		[[nodiscard]] constexpr value_type get_data() const noexcept
+		{
+			return data_;
+		}
 
 		/**
 		 * @brief Gets the singleton type tag for a magic_value (which must be a singleton).
 		 */
-		[[nodiscard]] constexpr value_type	  get_tag() const noexcept { return data_ & tag_mask; }
+		[[nodiscard]] constexpr value_type get_tag() const noexcept
+		{
+			return data_ & tag_mask;
+		}
+
+		constexpr void destroy()
+		{
+			if (is_object())
+			{
+				object::dtor(as_object());
+			}
+			data_ = null_val;
+		}
 
 		/**
 		 * @brief If the NaN bits are set, it's not a number.
@@ -275,12 +308,13 @@ namespace gal
 		 */
 		[[nodiscard]] constexpr bool		  is_object() const noexcept { return (data_ & pointer_mask) == pointer_mask; }
 
-		[[nodiscard]] constexpr bool		  is_true() const noexcept { return data_ == true_val; }
-		[[nodiscard]] constexpr bool		  is_false() const noexcept { return data_ == false_val; }
-
 		[[nodiscard]] constexpr bool		  is_null() const noexcept { return data_ == null_val; }
+		[[nodiscard]] constexpr bool		  is_false() const noexcept { return data_ == false_val; }
+		[[nodiscard]] constexpr bool		  is_true() const noexcept { return data_ == true_val; }
 		[[nodiscard]] constexpr bool		  is_undefined() const noexcept { return data_ == undefined_val; }
+
 		[[nodiscard]] constexpr bool		  is_falsy() const noexcept { return is_false() || is_null(); }
+		[[nodiscard]] constexpr bool		  is_empty() const noexcept { return is_null(); }
 
 		/**
 		 * @brief Value -> 0 or 1.
@@ -345,21 +379,6 @@ namespace gal
 		 * same data. All other values are equal if they are identical objects.
 		 */
 		[[nodiscard]] bool equal(const magic_value& other) const;
-
-		/**
-		 * @brief If the value stored by magic_value points to an object constructed using dynamic memory,
-		 * it will be released, otherwise it will do nothing. This function is to keep magic_value as a POD.
-		 *
-		 * todo: It can be much simpler to change it to a destructor :)
-		 */
-		void			   destroy()
-		{
-			if (is_object())
-			{
-				object::dtor(as_object());
-			}
-			data_ = null_val;
-		}
 	};
 
 	constexpr magic_value magic_value_null{magic_value::null_val};
@@ -367,31 +386,9 @@ namespace gal
 	constexpr magic_value magic_value_true{magic_value::true_val};
 	constexpr magic_value magic_value_undefined{magic_value::undefined_val};
 
-	// move magic_value's constructor here so that our magic_value is a POD type
-	constexpr magic_value to_magic_value(magic_value::value_type data) noexcept
+	object::			  operator magic_value() const noexcept
 	{
-		return {data};
-	}
-
-	constexpr magic_value to_magic_value(bool b) noexcept
-	{
-		return b ? magic_value_true : magic_value_false;
-	}
-
-	constexpr magic_value to_magic_value(double data) noexcept
-	{
-		return {double_to_bits(data)};
-	}
-
-	object::operator magic_value() const noexcept
-	{
-		/**
-		 * @brief The triple casting is necessary here to satisfy some compilers:
-		 * 1. (uintptr_t) Convert the pointer to a number of the right size.
-		 * 2. (value::value_type)  Pad it up in the bits to make a tagged NaN.
-		 * 3. Cast to value.
-		 */
-		return magic_value{magic_value::pointer_mask | static_cast<magic_value::value_type>(reinterpret_cast<std::uintptr_t>(this))};
+		return magic_value{this};
 	}
 
 	class magic_value_buffer
@@ -413,6 +410,14 @@ namespace gal
 		buffer_type buffer_;
 
 	public:
+		~magic_value_buffer()
+		{
+			for (auto& v: buffer_)
+			{
+				v.destroy();
+			}
+		}
+
 		[[nodiscard]] reference operator[](size_type index) noexcept
 		{
 			return buffer_[index];
@@ -529,19 +534,6 @@ namespace gal
 		 * @brief Produces a string representation of [value].
 		 */
 		object_string(gal_virtual_machine_state& state, double value);
-
-		/**
-		 * @brief Creates a new formatted string from [format] and any additional arguments
-		 * used in the format string.
-		 *
-		 * This is a very restricted flavor of formatting, intended only for internal
-		 * use by the VM. Two formatting characters are supported, each of which reads
-		 * the next argument as a certain type:
-		 *
-		 * $ - A const char* string.
-		 * @ - A GAL string object.
-		 */
-		[[deprecated("use get_appender instead")]] object_string(gal_virtual_machine_state& state, const char* format, ...);
 
 		/**
 		 * @brief Creates a new string containing the UTF-8 encoding of [value].
@@ -872,7 +864,7 @@ namespace gal
 			// Upvalues are never used as first-class objects, so don't need a class.
 			: object{object_type::UPVALUE_TYPE, nullptr},
 			  value_{&value},
-			  closed_{magic_value_null}
+			  closed_{}
 		{
 		}
 
@@ -896,6 +888,12 @@ namespace gal
 		{
 			// todo
 			return 0;
+		}
+
+	private:
+		void destroy() override
+		{
+			closed_.destroy();
 		}
 	};
 
@@ -1022,6 +1020,11 @@ namespace gal
 		[[nodiscard]] code_buffer_size_type get_code_size() const noexcept
 		{
 			return code_.size();
+		}
+
+		[[nodiscard]] bool has_code() const noexcept
+		{
+			return not code_.empty();
 		}
 
 		object_function& append_code(code_buffer_value_type data)
@@ -1223,7 +1226,7 @@ namespace gal
 
 		/**
 		 * @brief If the fiber failed because of a runtime error, this will contain the
-		 * error object. Otherwise, it will be nullptr.
+		 * error object. Otherwise, it will be nullptr/magic_value_null.
 		 */
 		std::shared_ptr<magic_value>									 error_;
 
@@ -1238,6 +1241,11 @@ namespace gal
 		[[nodiscard]] bool has_frame() const noexcept
 		{
 			return frames_.empty();
+		}
+
+		[[nodiscard]] frames_buffer_size_type get_frames_size() const noexcept
+		{
+			return frames_.size();
 		}
 
 		/**
@@ -1379,8 +1387,6 @@ namespace gal
 
 		void set_error(magic_value error)
 		{
-			// error_ = std::make_shared<magic_value>(error);
-
 			using allocator_type = gal_allocator<magic_value>;
 			allocator_type allocator{};
 			auto*		   ptr = allocator.allocate(1);
@@ -1395,14 +1401,19 @@ namespace gal
 												  });
 		}
 
-		void clear_error()
+		void set_error(std::shared_ptr<magic_value> error)
 		{
-			error_.reset();
+			error_ = std::move(error);
 		}
 
 		[[nodiscard]] bool has_error() const noexcept
 		{
-			return error_.operator bool();
+			return not(error_.operator bool() && not error_->is_empty());
+		}
+
+		[[nodiscard]] magic_value get_error() const noexcept
+		{
+			return *error_;
 		}
 
 		[[nodiscard]] fiber_state get_state() const noexcept
@@ -1541,7 +1552,7 @@ namespace gal
 			  num_fields_{num_fields},
 			  methods_{},
 			  name_{std::move(name)},
-			  attributes_{magic_value_null} {}
+			  attributes_{} {}
 
 		/**
 		 * @brief Makes [superclass] the superclass of [subclass], and causes subclass to
@@ -1604,14 +1615,13 @@ namespace gal
 			return name_;
 		}
 
-		[[nodiscard]] magic_value get_attributes() const noexcept
+		[[nodiscard]] const magic_value& get_attributes() const noexcept
 		{
 			return attributes_;
 		}
 
 		void set_attributes(magic_value attributes) noexcept
 		{
-			// todo: How to deal with existing attributes?
 			attributes_ = attributes;
 		}
 
@@ -1679,10 +1689,11 @@ namespace gal
 	class object_instance : public object
 	{
 	public:
-		using field_buffer_type			  = std::vector<magic_value, gal_allocator<magic_value>>;
-		using field_buffer_value_type	  = field_buffer_type::value_type;
-		using field_buffer_size_type	  = field_buffer_type::size_type;
-		using field_buffer_type_reference = field_buffer_type::reference;
+		using field_buffer_type					= std::vector<magic_value, gal_allocator<magic_value>>;
+		using field_buffer_value_type			= field_buffer_type::value_type;
+		using field_buffer_size_type			= field_buffer_type::size_type;
+		using field_buffer_type_reference		= field_buffer_type::reference;
+		using field_buffer_type_const_reference = field_buffer_type::const_reference;
 
 	private:
 		field_buffer_type fields_;
@@ -1737,7 +1748,9 @@ namespace gal
 		using list_buffer_value_type	  = list_buffer_type::value_type;
 		using list_buffer_size_type		  = list_buffer_type::size_type;
 		using list_buffer_difference_type = list_buffer_type::difference_type;
-		using list_buffer_value_pointer	  = list_buffer_type::pointer;
+		using list_buffer_reference		  = list_buffer_type::reference;
+		using list_buffer_const_reference = list_buffer_type::const_reference;
+
 
 	private:
 		list_buffer_type elements_;
@@ -1767,6 +1780,11 @@ namespace gal
 			auto removed = elements_[index];
 			elements_.erase(std::next(elements_.begin(), static_cast<list_buffer_difference_type>(index)));
 			return removed;
+		}
+
+		[[nodiscard]] list_buffer_reference get(list_buffer_size_type index) noexcept
+		{
+			return elements_[index];
 		}
 
 		[[nodiscard]] list_buffer_value_type get(list_buffer_size_type index) const noexcept
@@ -1885,7 +1903,7 @@ namespace std
 			}
 			else
 			{
-				return hash_bits(value.data_);
+				return hash_bits(value.get_data());
 			}
 		}
 	};

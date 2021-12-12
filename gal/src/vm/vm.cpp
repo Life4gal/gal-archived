@@ -10,15 +10,14 @@
 
 namespace gal
 {
-	object_string gal_virtual_machine_state::validate_superclass(const object_string &name, magic_value superclass_value, gal_size_type num_fields)
+	magic_value gal_virtual_machine_state::validate_superclass(const object_string &name, magic_value superclass_value, gal_size_type num_fields)
 	{
-		object_string error{*this};
-
 		// Make sure the superclass is a class.
 		if (not superclass_value.is_class())
 		{
-			std_format::format_to(error.get_appender(), "Class '{}' cannot inherit from a non-class object.", name.str());
-			return error;
+			auto error = object::ctor<object_string>(*this);
+			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from a non-class object.", name.str());
+			return error->operator magic_value();
 		}
 
 		// Make sure it doesn't inherit from a sealed built-in type. Primitive methods
@@ -37,28 +36,31 @@ namespace gal
 				superclass == null_class_ ||
 				superclass == number_class_)
 		{
-			std_format::format_to(error.get_appender(), "Class '{}' cannot inherit from built-in class '{}'.", name.str(), superclass->get_class_name().str());
-			return error;
+			auto error = object::ctor<object_string>(*this);
+			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from built-in class '{}'.", name.str(), superclass->get_class_name().str());
+			return error->operator magic_value();
 		}
 
 		if (superclass->is_outer_class())
 		{
-			std_format::format_to(error.get_appender(), "Class '{}' cannot inherit from outer class '{}'.", name.str(), superclass->get_class_name().str());
-			return error;
+			auto error = object::ctor<object_string>(*this);
+			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from outer class '{}'.", name.str(), superclass->get_class_name().str());
+			return error->operator magic_value();
 		}
 
 		if (superclass->get_remain_field_size() < num_fields)
 		{
+			auto error = object::ctor<object_string>(*this);
 			std_format::format_to(
-					error.get_appender(),
+					error->get_appender(),
 					"There are currently {} fields in class, and {} fields will be added, but there can only be {} fields at most, including inherited ones.",
 					superclass->get_field_size(),
 					num_fields,
 					max_fields);
-			return error;
+			return error->operator magic_value();
 		}
 
-		return error;
+		return magic_value_null;
 	}
 
 	void gal_virtual_machine_state::bind_outer_class(object_class &obj_class, object_module &module)
@@ -482,17 +484,17 @@ namespace gal
 			}
 			case opcodes_type::CODE_NULL:
 			{
-				fiber->stack_push({magic_value::null_val});
+				fiber->stack_push(magic_value_null);
 				goto loop_back;
 			}
 			case opcodes_type::CODE_FALSE:
 			{
-				fiber->stack_push({magic_value::false_val});
+				fiber->stack_push(magic_value_false);
 				goto loop_back;
 			}
 			case opcodes_type::CODE_TRUE:
 			{
-				fiber->stack_push({magic_value::true_val});
+				fiber->stack_push(magic_value_true);
 				goto loop_back;
 			}
 			case opcodes_type::CODE_STORE_LOCAL:
@@ -1390,7 +1392,7 @@ namespace gal
 
 	void gal_virtual_machine::set_slot_boolean(gal_slot_type slot, bool value)
 	{
-		state.set_slot_value(slot, to_magic_value(value));
+		state.set_slot_value(slot, magic_value{value});
 	}
 
 	void gal_virtual_machine::set_slot_bytes(gal_slot_type slot, const char *bytes, gal_size_type length)
@@ -1401,7 +1403,7 @@ namespace gal
 
 	void gal_virtual_machine::set_slot_number(gal_slot_type slot, double value)
 	{
-		state.set_slot_value(slot, to_magic_value(value));
+		state.set_slot_value(slot, magic_value{value});
 	}
 
 	gal_row_pointer_type gal_virtual_machine::set_slot_outer(gal_slot_type slot, gal_slot_type class_slot, gal_size_type size)

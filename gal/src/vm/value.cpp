@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cstdarg>
 #include <utility>
 #include <utils/assert.hpp>
 #include <utils/utils.hpp>
@@ -111,37 +110,6 @@ namespace gal
 		// string_ = std_format::format("{:<-.14f}", value);
 
 		std_format::format_to(get_appender(), "{:<-.14f}", value);
-	}
-
-	object_string::object_string(gal_virtual_machine_state& state, const char* format, ...)
-		: object{object_type::STRING_TYPE, state.string_class_}
-	{
-		va_list arg_list;
-		va_start(arg_list, format);
-		for (auto* c = format; *c != '\0'; ++c)
-		{
-			switch (*c)
-			{
-				case '$':
-				{
-					auto* str = va_arg(arg_list, const char*);
-					append(str);
-					break;
-				}
-				case '@':
-				{
-					auto* str = va_arg(arg_list, magic_value).as_string();
-					append(*str);
-					break;
-				}
-				default:
-				{
-					// Any other character is interpreted literally.
-					push_back(*c);
-				}
-			}
-		}
-		va_end(arg_list);
 	}
 
 	object_string::object_string(gal_virtual_machine_state& state, int value)
@@ -292,7 +260,7 @@ namespace gal
 		  frames_{},
 		  open_upvalues_{},
 		  caller_{nullptr},
-		  error_message_{nullptr},
+		  error_{},
 		  state_{fiber_state::other_state}
 	{
 		if (closure)
@@ -455,7 +423,7 @@ namespace gal
 		gal_assert(has_error(), "Should only call this after an error.");
 
 		auto* current = this;
-		auto  error	  = error_message_;
+		auto  error	  = error_;
 
 		do {
 			// Every fiber along the call chain gets aborted with the same error.
@@ -465,7 +433,7 @@ namespace gal
 			if (current->state_ == fiber_state::try_state)
 			{
 				// Make the caller's try method return the error message.
-				current->caller_->set_stack_point(1, error->operator magic_value());
+				current->caller_->set_stack_point(1, *error);
 				return current->caller_;
 			}
 
@@ -511,7 +479,7 @@ namespace gal
 		meta_class->bind_super_class(*state.class_class_);
 
 		auto ret		   = std::make_shared<object_class>(num_fields, name);
-		ret->object_class_ = std::move(meta_class);
+		ret->object_class_ = meta_class;
 		ret->bind_super_class(*this);
 
 		return ret;
