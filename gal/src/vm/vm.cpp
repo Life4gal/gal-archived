@@ -841,7 +841,7 @@ namespace gal
 					if (is_local)
 					{
 						// Make a new upvalue to close over the parent's local variable.
-						closure->push_upvalue(&fiber->capature_upvalue(frame->stack_start[index]));
+						closure->push_upvalue(&fiber->capture_upvalue(frame->stack_start[index]));
 					}
 					else
 					{

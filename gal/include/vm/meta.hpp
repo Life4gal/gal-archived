@@ -16,6 +16,10 @@ namespace gal
 	object_class&  get_meta_class(magic_value value);
 
 	/**
+	 * @brief see value.hpp -> primitive_function_type
+	 */
+
+	/**
 	 * @brief Root object class, not superclass.
 	 */
 	struct meta_object : public object_class

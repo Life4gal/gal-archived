@@ -17,6 +17,7 @@ set(
 		src/vm/compiler.cpp
 		src/vm/debugger.cpp
 		src/vm/meta.cpp
+		src/vm/gc.cpp
 )
 
 if (${BUILD_GAL_AS_SHARED})
@@ -45,11 +46,19 @@ target_include_directories(
 		${PROJECT_SOURCE_DIR}/include
 )
 
-target_compile_features(
-		${PROJECT_NAME}
-		PRIVATE
-		cxx_std_20
-)
+if(MSVC)
+	target_compile_features(
+			${PROJECT_NAME}
+			PRIVATE
+			cxx_std_23
+	)
+else()
+	target_compile_features(
+			${PROJECT_NAME}
+			PRIVATE
+			cxx_std_20
+	)
+endif(MSVC)
 
 include(CheckCXXSourceCompiles)
 CHECK_CXX_SOURCE_COMPILES(

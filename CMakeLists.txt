@@ -1,4 +1,7 @@
-﻿cmake_minimum_required(VERSION 3.13)
+﻿# see https://cmake.org/cmake/help/latest/prop_gbl/CMAKE_CXX_KNOWN_FEATURES.html
+# For MSVC, we need to enable /c++:latest to use the full C++20 features, which requires cxx_std_23 (New in version 3.20.).
+# For others, only -std=c++20, which requires cxx_std_20 (New in version 3.20.).
+cmake_minimum_required(VERSION 3.20)
 
 set(
 		GAL_MAJOR_VERSION

@@ -4,7 +4,7 @@
 
 namespace gal
 {
-	int utf8_encode_num_bytes(int value)
+	int utf8_encode_num_bytes(const int value)
 	{
 		gal_assert(value >= 0, "Cannot encode a negative value.");
 
@@ -15,7 +15,7 @@ namespace gal
 		return 0;
 	}
 
-	int utf8_encode(int value, std::uint8_t* bytes)
+	int utf8_encode(const int value, std::uint8_t* bytes)
 	{
 		if (value <= 0x7f)
 		{
@@ -23,34 +23,34 @@ namespace gal
 			*bytes = value & 0x7f;
 			return 1;
 		}
-		else if (value <= 0x7ff)
+		if (value <= 0x7ff)
 		{
 			// Two byte sequence: 110xxxxx 10xxxxxx.
-			*bytes = 0xc0 | ((value & 0x7c0) >> 6);
+			*bytes = static_cast<std::uint8_t>(0xc0 | ((value & 0x7c0) >> 6));
 			++bytes;
-			*bytes = 0x80 | (value & 0x3f);
+			*bytes = static_cast<std::uint8_t>(0x80 | (value & 0x3f));
 			return 2;
 		}
-		else if (value <= 0xffff)
+		if (value <= 0xffff)
 		{
 			// Three byte sequence: 1110xxxx 10xxxxxx 10xxxxxx.
-			*bytes = 0xe0 | ((value & 0xf000) >> 12);
+			*bytes = static_cast<std::uint8_t>(0xe0 | ((value & 0xf000) >> 12));
 			++bytes;
-			*bytes = 0x80 | ((value & 0xfc0) >> 6);
+			*bytes = static_cast<std::uint8_t>(0x80 | ((value & 0xfc0) >> 6));
 			++bytes;
-			*bytes = 0x80 | (value & 0x3f);
+			*bytes = static_cast<std::uint8_t>(0x80 | (value & 0x3f));
 			return 3;
 		}
-		else if (value <= 0x10ffff)
+		if (value <= 0x10ffff)
 		{
 			// Four byte sequence: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx.
-			*bytes = 0xf0 | ((value & 0x1c0000) >> 18);
+			*bytes = static_cast<std::uint8_t>(0xf0 | ((value & 0x1c0000) >> 18));
 			++bytes;
-			*bytes = 0x80 | ((value & 0x3f000) >> 12);
+			*bytes = static_cast<std::uint8_t>(0x80 | ((value & 0x3f000) >> 12));
 			++bytes;
-			*bytes = 0x80 | ((value & 0xfc0) >> 6);
+			*bytes = static_cast<std::uint8_t>(0x80 | ((value & 0xfc0) >> 6));
 			++bytes;
-			*bytes = 0x80 | (value & 0x3f);
+			*bytes = static_cast<std::uint8_t>(0x80 | (value & 0x3f));
 			return 4;
 		}
 
