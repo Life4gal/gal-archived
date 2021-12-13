@@ -198,8 +198,6 @@ namespace gal
 		return gal_index_not_exist;
 	}
 
-	void object_upvalue::destroy() { closed_.destroy(); }
-
 	object_function::object_function(const gal_virtual_machine_state& state, object_module& module, gal_slot_type max_slots)
 		: object{object_type::FUNCTION_TYPE, state.function_class_},
 		  module_{module},
@@ -209,14 +207,15 @@ namespace gal
 
 	object_closure::object_closure(const gal_virtual_machine_state& state, object_function& function)
 		: object{object_type::CLOSURE_TYPE, state.function_class_},
-		  function_{function} { upvalues_.reserve(function.get_upvalues_size()); }
+		  function_{&function} { upvalues_.reserve(function.get_upvalues_size()); }
 
-	void object_closure::destroy()
+	object_closure::~object_closure()
 	{
 		// todo
-		gal_gc::add(&function_);
+		gal_gc::add(function_);
 	}
 
+	void object_fiber::free_stack() { for (gal_size_type i = 0; i < stack_capacity_; ++i) { get_stack_point(i)->destroy(); } }
 
 	object_fiber::object_fiber(const gal_virtual_machine_state& state, object_closure* closure)
 		: object{object_type::FIBER_TYPE, state.fiber_class_},
@@ -239,6 +238,22 @@ namespace gal
 			stack_top_[0] = closure->operator magic_value();
 			++stack_top_;
 		}
+	}
+
+	object_fiber::~object_fiber()
+	{
+		// todo
+		if (not caller_)
+		{
+			// If there is no caller, we are the owner of the error.
+			error_.destroy();
+		}
+
+		// Stack functions.
+		// Stack variables.
+		// Open upvalues.
+		// The caller.
+		free_stack();
 	}
 
 	void object_fiber::add_call_frame(object_closure& closure, magic_value& stack_start) { frames_.emplace_back(closure.get_function().get_code_data(), &closure, &stack_start); }
@@ -275,14 +290,6 @@ namespace gal
 
 		// old_stack discard in here
 	}
-
-	void object_fiber::pop_stack(const gal_size_type offset) noexcept
-	{
-		for (gal_size_type i = 0; i < offset; ++i) { get_stack_point(i)->destroy(); }
-
-		stack_top_ -= offset;
-	}
-
 
 	object_upvalue& object_fiber::capture_upvalue(magic_value& local)
 	{
@@ -393,22 +400,6 @@ namespace gal
 		return nullptr;
 	}
 
-	void object_fiber::destroy()
-	{
-		// todo
-		if (not caller_)
-		{
-			// If there is no caller, we are the owner of the error.
-			error_.destroy();
-		}
-
-		// Stack functions.
-		// Stack variables.
-		// Open upvalues.
-		// The caller.
-	}
-
-
 	void object_class::bind_super_class(object_class& superclass)
 	{
 		superclass_ = &superclass;
@@ -442,16 +433,21 @@ namespace gal
 		return ret;
 	}
 
-	void object_instance::destroy() { std::ranges::for_each(fields_, [](magic_value v) { v.destroy(); }); }
+	object_instance::~object_instance() { std::ranges::for_each(fields_, [](magic_value v) { v.destroy(); }); }
 
 	object_list::object_list(const gal_virtual_machine_state& state)
 		: object{object_type::LIST_TYPE, state.list_class_} { }
+
+	object_list::~object_list() { std::ranges::for_each(elements_, [](list_buffer_value_type v) { v.destroy(); }); }
+
 
 	gal_index_type object_list::index_of(const magic_value value) const
 	{
 		if (const auto it = std::ranges::find(elements_, value); it != elements_.end()) { return std::distance(elements_.begin(), it); }
 		return gal_index_not_exist;
 	}
+
+	object_module::~object_module() { for (auto& [_, variable]: variables_ | std::views::values) { variable.destroy(); } }
 
 	magic_value object_module::get_variable(const object_string& name) const
 	{
@@ -569,8 +565,16 @@ namespace gal
 
 	void object_module::copy_variables(const object_module& other) { for (const auto& [name, variable]: other.variables_ | std::views::values) { define_variable(name, variable); } }
 
-	void object_module::destroy() { for (auto& [_, variable]: variables_ | std::views::values) { variable.destroy(); } }
-
 	object_map::object_map(const gal_virtual_machine_state& state)
 		: object{object_type::MAP_TYPE, state.map_class_} { }
+
+	object_map::~object_map()
+	{
+		while (not entries_.empty())
+		{
+			auto node = entries_.extract(entries_.begin());
+			node.key().destroy();
+			node.mapped().destroy();
+		}
+	}
 }// namespace gal

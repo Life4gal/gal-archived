@@ -93,6 +93,13 @@ namespace gal
 		object(object_type type, object_class* obj_class) noexcept;
 
 	public:
+		/**
+		 * @brief Destroy all dynamically allocated objects in the class, generally called before the object will be recycled (destructed)
+		 *
+		 * Usually, this function does not need to do anything (because the memory is managed by the STL components),
+		 * but if the class contains a container for storing polymorphic objects (such as map),
+		 * then you need to call this function to destroy all of them.
+		 */
 		virtual ~object() noexcept = 0;
 
 		object(const object&) = default;
@@ -144,16 +151,6 @@ namespace gal
 		 * @brief Try to get the amount of memory used by the object
 		 */
 		[[nodiscard]] virtual gal_size_type memory_usage() const noexcept = 0;
-
-	private:
-		/**
-		 * @brief Destroy all dynamically allocated objects in the class, generally called before the object will be recycled (destructed)
-		 *
-		 * Usually, this function does not need to do anything (because the memory is managed by the STL components),
-		 * but if the class contains a container for storing polymorphic objects (such as map),
-		 * then you need to call this function to destroy all of them.
-		 */
-		virtual void destroy() {}
 	};
 
 	/**
@@ -218,12 +215,11 @@ namespace gal
 
 	static_assert(std::numeric_limits<double>::is_iec559);
 
-	class magic_value
+	class magic_value final
 	{
 	public:
 		using value_type = std::uint64_t;
 
-	public:
 		/**
 		 * @brief Masks out the tag bits used to identify the singleton value.
 		 */
@@ -291,6 +287,14 @@ namespace gal
 		explicit magic_value(const object* obj) noexcept
 			: data_{reinterpret_cast<std::uintptr_t>(obj)} {}
 
+		/**
+		 * @brief If the value stores a pointer to object, add it to the gc sequence.
+		 *
+		 * @note Not all magic_value need to be destroyed (for example, they have no ownership), so we should not set this function as a destructor.
+		 *
+		 * todo: This function can be modified to const, if we don't need to set data to null_val.
+		 * And many operations can be simplified (for example, map does not need to modify the key).
+		 */
 		void destroy();
 
 		[[nodiscard]] constexpr value_type get_data() const noexcept { return data_; }
@@ -743,6 +747,27 @@ namespace gal
 			: object{object_type::UPVALUE_TYPE, nullptr},
 			  value_{&value} { }
 
+		object_upvalue(const object_upvalue&) = delete;
+		object_upvalue& operator=(const object_upvalue&) = delete;
+
+		object_upvalue(object_upvalue&& other) noexcept
+			: object{object_type::UPVALUE_TYPE, nullptr},
+			  value_{other.value_},
+			  closed_{other.closed_}
+		{
+			other.value_ = nullptr;
+			other.closed_ = magic_value_null;
+		}
+
+		object_upvalue& operator=(object_upvalue&& other) noexcept
+		{
+			std::exchange(value_, other.value_);
+			std::exchange(closed_, other.closed_);
+			return *this;
+		}
+
+		~object_upvalue() override { closed_.destroy(); }
+
 		[[nodiscard]] const magic_value* get_value() const noexcept { return value_; }
 
 		void reset_value(magic_value* value) noexcept { value_ = value; }
@@ -758,9 +783,6 @@ namespace gal
 			// todo
 			return 0;
 		}
-
-	private:
-		void destroy() override;
 	};
 
 	/**
@@ -872,7 +894,7 @@ namespace gal
 
 		[[nodiscard]] bool has_code() const noexcept { return not code_.empty(); }
 
-		object_function& append_code(code_buffer_value_type data)
+		object_function& append_code(const code_buffer_value_type data)
 		{
 			code_.push_back(data);
 			return *this;
@@ -918,7 +940,7 @@ namespace gal
 		 *
 		 * todo: Heap allocation maybe is not necessary.
 		 */
-		object_function& function_;
+		object_function* function_;
 		upvalue_container upvalues_;
 
 	public:
@@ -928,9 +950,30 @@ namespace gal
 		 */
 		object_closure(const gal_virtual_machine_state& state, object_function& function);
 
-		[[nodiscard]] object_function& get_function() noexcept { return function_; }
+		object_closure(const object_closure&) = delete;
+		object_closure& operator=(const object_closure&) = delete;
 
-		[[nodiscard]] const object_function& get_function() const noexcept { return function_; }
+		object_closure(object_closure&& other) noexcept
+			: object{object_type::CLOSURE_TYPE, other.object_class_},
+			  function_{other.function_},
+			  upvalues_{std::move(other.upvalues_)}
+		{
+			other.function_ = nullptr;
+			other.upvalues_.clear();
+		}
+
+		object_closure& operator=(object_closure&& other) noexcept
+		{
+			std::exchange(function_, other.function_);
+			std::exchange(upvalues_, other.upvalues_);
+			return *this;
+		}
+
+		~object_closure() override;
+
+		[[nodiscard]] object_function& get_function() noexcept { return *function_; }
+
+		[[nodiscard]] const object_function& get_function() const noexcept { return *function_; }
 
 		[[nodiscard]] upvalue_container_value_type get_upvalue(const upvalue_container_size_type index) const noexcept { return upvalues_[index]; }
 
@@ -941,9 +984,6 @@ namespace gal
 			// todo
 			return 0;
 		}
-
-	private:
-		void destroy() override;
 	};
 
 	struct call_frame
@@ -1043,11 +1083,21 @@ namespace gal
 
 		fiber_state state_;
 
+		void free_stack();
+
 	public:
 		/**
 		 * @brief Creates a new fiber object that will invoke [closure].
 		 */
 		object_fiber(const gal_virtual_machine_state& state, object_closure* closure);
+
+		object_fiber(const object_fiber&) = delete;
+		object_fiber& operator=(const object_fiber&) = delete;
+		// todo: define move ctor if needed.
+		object_fiber(object_fiber&&) = default;
+		object_fiber& operator=(object_fiber&&) = default;
+
+		~object_fiber() override;
 
 		[[nodiscard]] bool has_frame() const noexcept { return frames_.empty(); }
 
@@ -1094,11 +1144,15 @@ namespace gal
 
 		void set_stack_point(const gal_size_type offset, const magic_value value) noexcept { stack_top_[-offset] = value; }
 
-		void set_stack_top(magic_value* new_top) noexcept { stack_top_ = new_top; }
+		void set_stack_top(magic_value* new_top) noexcept
+		{
+			// todo: free previous stack?
+			stack_top_ = new_top;
+		}
 
 		void stack_top_rebase(const gal_size_type offset) noexcept { stack_top_ = stack_.get() + offset; }
 
-		void pop_stack(gal_size_type offset) noexcept;
+		void pop_stack(const gal_size_type offset) noexcept { stack_top_ -= offset; }
 
 		/**
 		 * @brief Captures the local variable [local] into an [object_upvalue]. If that local is
@@ -1171,9 +1225,6 @@ namespace gal
 			// todo
 			return 0;
 		}
-
-	private:
-		void destroy() override;
 	};
 
 	enum class method_type
@@ -1276,6 +1327,13 @@ namespace gal
 			  num_fields_{num_fields},
 			  name_{std::move(name)} {}
 
+		// ~object_class() override;
+		// todo
+		// The metaclass.
+		// The superclass.
+		// Method function objects.
+		// attributes
+
 		/**
 		 * @brief Makes [superclass] the superclass of [subclass], and causes subclass to
 		 * inherit its methods. This should be called before any methods are defined
@@ -1327,16 +1385,6 @@ namespace gal
 		{
 			// todo
 			return 0;
-		}
-
-	private:
-		void destroy() override
-		{
-			// todo
-			// The metaclass.
-			// The superclass.
-			// Method function objects.
-			// attributes
 		}
 	};
 
@@ -1394,6 +1442,13 @@ namespace gal
 			for (auto i = size; i > 0; --i) { fields_.push_back(magic_value_null); }
 		}
 
+		object_instance(const object_instance&) = default;
+		object_instance& operator=(const object_instance&) = default;
+		object_instance(object_instance&&) = default;
+		object_instance& operator=(object_instance&&) = default;
+
+		~object_instance() override;
+
 		[[nodiscard]] auto get_field_size() const noexcept { return object_class_->get_field_size(); }
 
 		[[nodiscard]] field_buffer_type_reference get_field(const field_buffer_size_type index) noexcept { return fields_[index]; }
@@ -1405,9 +1460,6 @@ namespace gal
 			// todo
 			return 0;
 		}
-
-	private:
-		void destroy() override;
 	};
 
 	class object_list final : public object
@@ -1421,12 +1473,18 @@ namespace gal
 		using list_buffer_reference = list_buffer_type::reference;
 		using list_buffer_const_reference = list_buffer_type::const_reference;
 
-
 	private:
 		list_buffer_type elements_;
 
 	public:
 		explicit object_list(const gal_virtual_machine_state& state);
+
+		object_list(const object_list&) = delete;
+		object_list& operator=(const object_list&) = delete;
+		object_list(object_list&&) = default;
+		object_list& operator=(object_list&&) = default;
+
+		~object_list() override;
 
 		[[nodiscard]] list_buffer_size_type size() const noexcept { return elements_.size(); }
 
@@ -1487,13 +1545,6 @@ namespace gal
 		{
 			// todo
 			return 0;
-		}
-
-	private:
-		void destroy() override
-		{
-			// todo
-			// elements
 		}
 	};
 }// namespace gal
@@ -1637,6 +1688,13 @@ namespace gal
 			: object{object_type::MODULE_TYPE, nullptr},
 			  name_{std::move(name)} { }
 
+		object_module(const object_module&) = delete;
+		object_module& operator=(const object_module&) = delete;
+		object_module(object_module&&) = default;
+		object_module& operator=(object_module&&) = default;
+
+		~object_module() override;
+
 		[[nodiscard]] const object_string& get_name() const noexcept { return name_; }
 
 		[[nodiscard]] size_type size() const noexcept { return variables_.size(); }
@@ -1756,9 +1814,6 @@ namespace gal
 			// todo
 			return 0;
 		}
-
-	private:
-		void destroy() override;
 	};
 
 	/**
@@ -1789,6 +1844,13 @@ namespace gal
 
 	public:
 		explicit object_map(const gal_virtual_machine_state& state);
+
+		object_map(const object_map&) = delete;
+		object_map& operator=(const object_map&) = delete;
+		object_map(object_map&&) = default;
+		object_map& operator=(object_map&&) = default;
+
+		~object_map() override;
 
 		/**
 		 * @brief Validates that [arg] is a valid object for use as a map key. Returns true if
@@ -1887,12 +1949,6 @@ namespace gal
 		{
 			// todo
 			return 0;
-		}
-
-	private:
-		void destroy() override
-		{
-			// todo
 		}
 	};
 
