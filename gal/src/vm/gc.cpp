@@ -16,10 +16,11 @@ namespace gal
 
 	void gal_gc::clear()
 	{
+		// todo: Maybe we need a lock.
 		auto copy{std::move(objects)};
 		objects.clear();
 
 		std::ranges::for_each(copy,
-		                      [](object* obj) { object::dtor(obj); });
+		                      [](object* obj) { object::destroy(obj); });
 	}
 }

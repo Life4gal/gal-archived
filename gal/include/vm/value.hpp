@@ -27,7 +27,7 @@
  * The main type exposed by this is [magic_value]. A C++ variable of that type is a
  * storage location that can hold any GAL value. The stack, module variables,
  * and instance fields are all implemented in C++ as variables of type [magic_value].
- * The built-in types for booleans, numbers, and null are unboxed: their value
+ * The built-in types for booleans, numbers, and null are un-boxed: their value
  * is stored directly in the [magic_value], and copying a [magic_value] copies the
  * value. Other types--classes, instances of classes, functions, lists, and strings--are
  * all reference types. They are stored on the heap and the [magic_value] just stores a
@@ -125,7 +125,7 @@ namespace gal
 		 */
 		template<typename T, typename... Args>
 			requires std::is_base_of_v<object, T>
-		static auto ctor(Args&&... args)
+		static auto create(Args&&... args)
 		{
 			using allocator_type = gal_allocator<T>;
 			auto allocator = allocator_type{};
@@ -139,7 +139,7 @@ namespace gal
 		 */
 		template<typename T>
 			requires std::is_base_of_v<object, T>
-		static void dtor(T* ptr)
+		static void destroy(T* ptr)
 		{
 			using allocator_type = gal_allocator<T>;
 			auto allocator = allocator_type{};
@@ -282,7 +282,7 @@ namespace gal
 			: data_{b ? true_val : false_val} {}
 
 		constexpr explicit magic_value(const double d) noexcept
-			: data_{double_to_bits(d)} {}
+			: data_{std::bit_cast<value_type>(d)} {}
 
 		explicit magic_value(const object* obj) noexcept
 			: data_{reinterpret_cast<std::uintptr_t>(obj)} {}
@@ -292,10 +292,41 @@ namespace gal
 		 *
 		 * @note Not all magic_value need to be destroyed (for example, they have no ownership), so we should not set this function as a destructor.
 		 *
-		 * todo: This function can be modified to const, if we don't need to set data to null_val.
-		 * And many operations can be simplified (for example, map does not need to modify the key).
+		 * @note If a magic_value calls destroy, it means that the user will no longer use (no longer need) this magic_value, so we don't have to set data to null_val.
+		 * Furthermore, destroy can be modified as const, which provides convenience for many calls.
+		 *
+		 * @note If you continue to use a destroyed magic_value and it refers to an object before, then that object will be released twice.
 		 */
-		void destroy();
+		void destroy() const;
+
+		/**
+		 * @brief Set the value to a new value and destroy the previous value.
+		 *
+		 * @note Calling this function indicates that the user discards the ownership of the object referred to by the magic_value passed as a parameter.
+		 */
+		void discard_set(const magic_value value)
+		{
+			destroy();
+			data_ = value.data_;
+		}
+
+		/**
+		 * @brief Set the value to a new value and return the previous value.
+		 *
+		 * @note Responsibility for memory release is given to the party who gets the return value.
+		 */
+		[[nodiscard("Use `discard_set` instead")]] magic_value exchange_set(const magic_value value) noexcept
+		{
+			return magic_value{std::exchange(data_, value.data_)};
+		}
+
+		/**
+		 * @brief Give up the ownership and set the value empty(null_val).
+		 */
+		[[nodiscard("Use `destroy` instead")]] magic_value relinquish_set() noexcept
+		{
+			return magic_value{std::exchange(data_, null_val)};
+		}
 
 		[[nodiscard]] constexpr value_type get_data() const noexcept { return data_; }
 
@@ -411,8 +442,9 @@ namespace gal
 
 	public:
 		magic_value_buffer() = default;
-		magic_value_buffer(const magic_value_buffer&) = default;
-		magic_value_buffer& operator=(const magic_value_buffer&) = default;
+		// todo: Copy requires deep copy, that is, all magic_value of objects need to copy the objects they refer to.
+		magic_value_buffer(const magic_value_buffer&) = delete;
+		magic_value_buffer& operator=(const magic_value_buffer&) = delete;
 		magic_value_buffer(magic_value_buffer&&) = default;
 		magic_value_buffer& operator=(magic_value_buffer&&) = default;
 
@@ -590,7 +622,7 @@ namespace gal
 		/**
 		 * @brief Returns true if [text] and [string] represent the same string.
 		 */
-		friend bool operator==(const_pointer text, const object_string& string) { return string.string_ == text; }
+		friend bool operator==(const const_pointer text, const object_string& string) { return string.string_ == text; }
 
 		/**
 		 * @brief Returns true if [text] and [this] represent the same string.
@@ -792,6 +824,18 @@ namespace gal
 	  * VM internals. It is passed the arguments in [args]. If it returns a value,
 	  * it places it in `args[0]` and returns `true`. If it causes a runtime error
 	  * or modifies the running fiber, it returns `false`.
+	  *
+	  *	@note If the return value is false, the function will not modify the value of args, that is, the responsibility of releasing args(include args[0]) will be returned to the caller.
+	  *
+	  *	@note We will only modify the first parameter (args[0]), and the caller is responsible for the release of other parameters
+	  *	if the ownership of the parameters will be passed to the constructed object, then the parameters can be placed in args[0].
+	  *
+	  *	@note If the returned value has requirements for the life cycle of the parameter (such as get an object's name or get an object's super type),
+	  *	args[0] should be blanked(all existing values on args[0] will be destroyed and overwritten) to receive the return value, and args[1] should be used to place the parameter.
+	  *	args[1] should be released after the return value of args[0] is used.
+	  *	todo: maybe we can make a copy of the value, but this requires the user to release it.
+	  *
+	  *	@note Correspondingly, if the return value does not depend on the life cycle of the parameter, we will directly destroy the original value in args[0].
 	  */
 	using primitive_function_type = bool (*)([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args);
 
@@ -1091,6 +1135,7 @@ namespace gal
 		 */
 		object_fiber(const gal_virtual_machine_state& state, object_closure* closure);
 
+		// todo: Copy requires deep copy, that is, all magic_value of objects need to copy the objects they refer to.
 		object_fiber(const object_fiber&) = delete;
 		object_fiber& operator=(const object_fiber&) = delete;
 		// todo: define move ctor if needed.
@@ -1142,7 +1187,10 @@ namespace gal
 
 		[[nodiscard]] const magic_value* get_stack_point(const gal_size_type offset) const noexcept { return stack_top_ - offset; }
 
-		void set_stack_point(const gal_size_type offset, const magic_value value) noexcept { stack_top_[-offset] = value; }
+		void set_stack_point(const gal_size_type offset, const magic_value value) noexcept
+		{
+			stack_top_[-offset].discard_set(value);
+		}
 
 		void set_stack_top(magic_value* new_top) noexcept
 		{
@@ -1329,7 +1377,7 @@ namespace gal
 
 		// ~object_class() override;
 		// todo
-		// The metaclass.
+		// The meta-class.
 		// The superclass.
 		// Method function objects.
 		// attributes
@@ -1442,8 +1490,9 @@ namespace gal
 			for (auto i = size; i > 0; --i) { fields_.push_back(magic_value_null); }
 		}
 
-		object_instance(const object_instance&) = default;
-		object_instance& operator=(const object_instance&) = default;
+		// todo: Copy requires deep copy, that is, all magic_value of objects need to copy the objects they refer to.
+		object_instance(const object_instance&) = delete;
+		object_instance& operator=(const object_instance&) = delete;
 		object_instance(object_instance&&) = default;
 		object_instance& operator=(object_instance&&) = default;
 
@@ -1479,6 +1528,7 @@ namespace gal
 	public:
 		explicit object_list(const gal_virtual_machine_state& state);
 
+		// todo: Copy requires deep copy, that is, all magic_value of objects need to copy the objects they refer to.
 		object_list(const object_list&) = delete;
 		object_list& operator=(const object_list&) = delete;
 		object_list(object_list&&) = default;
@@ -1514,7 +1564,7 @@ namespace gal
 		 */
 		void discard(const list_buffer_size_type index)
 		{
-			auto removed = elements_[index];
+			const auto removed = elements_[index];
 			elements_.erase(std::next(elements_.begin(), static_cast<list_buffer_difference_type>(index)));
 			removed.destroy();
 		}
@@ -1845,6 +1895,7 @@ namespace gal
 	public:
 		explicit object_map(const gal_virtual_machine_state& state);
 
+		// todo: Copy requires deep copy, that is, all magic_value of objects need to copy the objects they refer to.
 		object_map(const object_map&) = delete;
 		object_map& operator=(const object_map&) = delete;
 		object_map(object_map&&) = default;
@@ -1956,7 +2007,7 @@ namespace gal
 
 	inline bool magic_value::is_object(const object_type type) const noexcept { return is_object() && as_object()->type() == type; }
 
-	constexpr double magic_value::as_number() const noexcept { return bits_to_double(data_); }
+	constexpr double magic_value::as_number() const noexcept { return std::bit_cast<double>(data_); }
 
 	inline object_string* magic_value::as_string() const noexcept { return dynamic_cast<object_string*>(as_object()); }
 

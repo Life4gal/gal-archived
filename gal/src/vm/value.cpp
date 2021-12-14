@@ -16,10 +16,9 @@ namespace gal
 		: type_{type},
 		  object_class_{obj_class} { }
 
-	void magic_value::destroy()
+	void magic_value::destroy() const
 	{
 		if (is_object()) { gal_gc::add(as_object()); }
-		data_ = null_val;
 	}
 
 	bool magic_value::equal(const magic_value& other) const
@@ -51,7 +50,7 @@ namespace gal
 	magic_value_buffer::~magic_value_buffer()
 	{
 		std::ranges::for_each(buffer_,
-		                      [](magic_value v) { v.destroy(); });
+		                      [](const magic_value v) { v.destroy(); });
 	}
 
 	object_string::object_string(const gal_virtual_machine_state& state)
@@ -90,9 +89,6 @@ namespace gal
 	object_string::object_string(gal_virtual_machine_state& state, double value)
 		: object{object_type::STRING_TYPE, state.string_class_}
 	{
-		// todo: different allocator?
-		// string_ = std_format::format("{:<-.14f}", value);
-
 		std_format::format_to(get_appender(), "{:<-.14f}", value);
 	}
 
@@ -198,7 +194,7 @@ namespace gal
 		return gal_index_not_exist;
 	}
 
-	object_function::object_function(const gal_virtual_machine_state& state, object_module& module, gal_slot_type max_slots)
+	object_function::object_function(const gal_virtual_machine_state& state, object_module& module, const gal_slot_type max_slots)
 		: object{object_type::FUNCTION_TYPE, state.function_class_},
 		  module_{module},
 		  max_slots_{max_slots},
@@ -223,10 +219,7 @@ namespace gal
 		  stack_{std::make_unique<magic_value[]>(closure ? bit_ceil(closure->get_function().get_slots_size() + 1) : 1)},
 		  stack_top_{stack_.get()},
 		  stack_capacity_{closure ? bit_ceil(closure->get_function().get_slots_size() + 1) : 1},
-		  frames_{},
-		  open_upvalues_{},
 		  caller_{nullptr},
-		  error_{},
 		  state_{fiber_state::other_state}
 	{
 		if (closure)
@@ -419,7 +412,7 @@ namespace gal
 		object_string meta_class_name{state};
 		meta_class_name.append(name).append("@metaclass@");
 
-		const auto meta_class = ctor<object_class>(0, std::move(meta_class_name));
+		const auto meta_class = create<object_class>(0, std::move(meta_class_name));
 		meta_class->object_class_ = state.class_class_;
 
 		// Meta-classes always inherit Class and do not parallel the non-meta-class
@@ -433,13 +426,12 @@ namespace gal
 		return ret;
 	}
 
-	object_instance::~object_instance() { std::ranges::for_each(fields_, [](magic_value v) { v.destroy(); }); }
+	object_instance::~object_instance() { std::ranges::for_each(fields_, [](const magic_value v) { v.destroy(); }); }
 
 	object_list::object_list(const gal_virtual_machine_state& state)
 		: object{object_type::LIST_TYPE, state.list_class_} { }
 
-	object_list::~object_list() { std::ranges::for_each(elements_, [](list_buffer_value_type v) { v.destroy(); }); }
-
+	object_list::~object_list() { std::ranges::for_each(elements_, [](const list_buffer_value_type v) { v.destroy(); }); }
 
 	gal_index_type object_list::index_of(const magic_value value) const
 	{
@@ -570,11 +562,16 @@ namespace gal
 
 	object_map::~object_map()
 	{
-		while (not entries_.empty())
+		// while (not entries_.empty())
+		// {
+		// 	auto node = entries_.extract(entries_.begin());
+		// 	node.key().destroy();
+		// 	node.mapped().destroy();
+		// }
+		for (const auto& [key, value] : entries_)
 		{
-			auto node = entries_.extract(entries_.begin());
-			node.key().destroy();
-			node.mapped().destroy();
+			key.destroy();
+			value.destroy();
 		}
 	}
 }// namespace gal

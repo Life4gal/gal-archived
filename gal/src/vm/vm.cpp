@@ -15,7 +15,7 @@ namespace gal
 		// Make sure the superclass is a class.
 		if (not superclass_value.is_class())
 		{
-			auto error = object::ctor<object_string>(*this);
+			auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from a non-class object.", name.str());
 			return error->operator magic_value();
 		}
@@ -36,21 +36,21 @@ namespace gal
 				superclass == null_class_ ||
 				superclass == number_class_)
 		{
-			auto error = object::ctor<object_string>(*this);
+			auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from built-in class '{}'.", name.str(), superclass->get_class_name().str());
 			return error->operator magic_value();
 		}
 
 		if (superclass->is_outer_class())
 		{
-			auto error = object::ctor<object_string>(*this);
+			auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from outer class '{}'.", name.str(), superclass->get_class_name().str());
 			return error->operator magic_value();
 		}
 
 		if (superclass->get_remain_field_size() < num_fields)
 		{
-			auto error = object::ctor<object_string>(*this);
+			auto error = object::create<object_string>(*this);
 			std_format::format_to(
 					error->get_appender(),
 					"There are currently {} fields in class, and {} fields will be added, but there can only be {} fields at most, including inherited ones.",
@@ -144,7 +144,7 @@ namespace gal
 			}
 			else
 			{
-				auto error = object::ctor<object_string>(*this);
+				auto error = object::create<object_string>(*this);
 				std_format::format_to(error->get_appender(), "Could not find outer method '{}' for class '{}' in module '{}'.", name, real_obj->get_class_name().str(), module.get_name().str());
 				fiber_->set_error(error->operator magic_value());
 				return;
@@ -194,7 +194,7 @@ namespace gal
 
 	void gal_virtual_machine_state::method_not_found(object_class &obj_class, gal_index_type symbol)
 	{
-		auto error = object::ctor<object_string>(*this);
+		auto error = object::create<object_string>(*this);
 		std_format::format_to(error->get_appender(), "{} does not implement '{}'.", obj_class.get_class_name().str(), method_names_[symbol].str());
 		fiber_->set_error(error->operator magic_value());
 	}
@@ -211,7 +211,7 @@ namespace gal
 		auto *module = get_module(name);
 		if (not module)
 		{
-			module = object::ctor<object_module>(*name.as_string());
+			module = object::create<object_module>(*name.as_string());
 
 			modules_.set(name, module->operator magic_value());
 
@@ -226,7 +226,7 @@ namespace gal
 			return nullptr;
 		}
 
-		return object::ctor<object_closure>(*this, *function);
+		return object::create<object_closure>(*this, *function);
 	}
 
 	void gal_virtual_machine_state::create_outer(magic_value *stack)
@@ -266,7 +266,7 @@ namespace gal
 
 		if (not resolved)
 		{
-			auto error = object::ctor<object_string>(*this);
+			auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Could not resolve module '{}' imported from '{}'.", name.str(), importer.str());
 			fiber_->set_error(error->operator magic_value());
 		}
@@ -310,7 +310,7 @@ namespace gal
 
 		if (result.source == nullptr)
 		{
-			auto error = object::ctor<object_string>(*this);
+			auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Could not load module '{}'.", read_name.str());
 			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
@@ -326,7 +326,7 @@ namespace gal
 
 		if (not module_closure)
 		{
-			auto error = object::ctor<object_string>(*this);
+			auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Could not compile module '{}'.", read_name.str());
 			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
@@ -346,7 +346,7 @@ namespace gal
 			return variable;
 		}
 
-		auto error = object::ctor<object_string>(*this);
+		auto error = object::create<object_string>(*this);
 		std_format::format_to(
 				error->get_appender(),
 				"Could not find a variable named '{}' in module '{}'.",
@@ -369,7 +369,7 @@ namespace gal
 			return true;
 		}
 
-		auto error = object::ctor<object_string>(*this);
+		auto error = object::create<object_string>(*this);
 		std_format::format_to(
 				error->get_appender(),
 				"Function {} expects {} argument(s), but only given {} argument(s).",
@@ -812,7 +812,7 @@ namespace gal
 			case opcodes_type::CODE_CONSTRUCT:
 			{
 				gal_assert(stack_start[0].is_class(), "'this' should be a class.");
-				stack_start[0] = object::ctor<object_instance>(stack_start[0].as_class())->operator magic_value();
+				stack_start[0] = object::create<object_instance>(stack_start[0].as_class())->operator magic_value();
 				goto loop_back;
 			}
 			case opcodes_type::CODE_OUTER_CONSTRUCT:
@@ -830,7 +830,7 @@ namespace gal
 				// Create the closure and push it on the stack before creating upvalues
 				// so that it doesn't get collected.
 				auto *func	  = function->get_constant(read_short()).as_function();
-				auto *closure = object::ctor<object_closure>(*this, *func);
+				auto *closure = object::create<object_closure>(*this, *func);
 				fiber->stack_push(closure->operator magic_value());
 
 				// Capture upvalues, if any.
@@ -956,7 +956,7 @@ namespace gal
 
 	bool gal_virtual_machine_state::validate_helper(const char *arg_name, const char *requires_type)
 	{
-		auto error = object::ctor<object_string>(*this);
+		const auto error = object::create<object_string>(*this);
 		std_format::format_to(error->get_appender(), "{} must be a {}.", arg_name, requires_type);
 		fiber_->set_error(error->operator magic_value());
 		return false;
@@ -1032,7 +1032,7 @@ namespace gal
 			return static_cast<gal_index_type>(value);
 		}
 
-		auto error = object::ctor<object_string>(*this);
+		auto error = object::create<object_string>(*this);
 		std_format::format_to(error->get_appender(), "{} out of bound {}.", arg_name, count);
 		fiber_->set_error(error->operator magic_value());
 		return gal_index_not_exist;
@@ -1171,7 +1171,7 @@ namespace gal
 		auto *module = get_module(module_name);
 		if (not module)
 		{
-			auto error = object::ctor<object_string>(*this);
+			auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Module '{}' is not loaded.", module_name.as_string()->str());
 			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
@@ -1184,7 +1184,7 @@ namespace gal
 		auto *module = get_module(module_name);
 		if (not module)
 		{
-			auto error = object::ctor<object_string>(*this);
+			auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Module '{}' is not loaded.", module_name.as_string()->str());
 			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
@@ -1262,11 +1262,11 @@ namespace gal
 
 		// Create a little stub function that assumes the arguments are on the stack
 		// and calls the method.
-		auto *function = object::ctor<object_function>(state, *global_module, num_params + 1);
+		auto *function = object::create<object_function>(state, *global_module, num_params + 1);
 
 		// Wrap the function in a closure and then in a handle. Do this here, so it
 		// doesn't get collected as we fill it in.
-		auto *handle   = state.make_handle(object::ctor<object_closure>(state, *function)->operator magic_value());
+		auto *handle   = state.make_handle(object::create<object_closure>(state, *function)->operator magic_value());
 
 		function->append_code(code_to_scalar(opcodes_type::CODE_CALL_0) + num_params).append_code((method >> 8) & 0xff).append_code(method & 0xff).append_code(code_to_scalar(opcodes_type::CODE_RETURN)).append_code(code_to_scalar(opcodes_type::CODE_END));
 
@@ -1326,7 +1326,7 @@ namespace gal
 
 		if (current->value.is_object())
 		{
-			object::dtor(current->value.as_object());
+			object::destroy(current->value.as_object());
 		}
 		state.handles_.erase_after(prev);
 	}
@@ -1398,7 +1398,7 @@ namespace gal
 	void gal_virtual_machine::set_slot_bytes(gal_slot_type slot, const char *bytes, gal_size_type length)
 	{
 		gal_assert(bytes, "Byte array cannot be nullptr.");
-		state.set_slot_value(slot, object::ctor<object_string>(state, bytes, length)->operator magic_value());
+		state.set_slot_value(slot, object::create<object_string>(state, bytes, length)->operator magic_value());
 	}
 
 	void gal_virtual_machine::set_slot_number(gal_slot_type slot, double value)
@@ -1414,7 +1414,7 @@ namespace gal
 		auto *obj_class = target.as_class();
 		gal_assert(obj_class->is_outer_class(), "Class must be a outer class.");
 
-		auto *outer = object::ctor<object_outer>(obj_class, size);
+		auto *outer = object::create<object_outer>(obj_class, size);
 		state.set_slot_value(slot, outer->operator magic_value());
 
 		return outer->get_data();
@@ -1422,12 +1422,12 @@ namespace gal
 
 	void gal_virtual_machine::set_slot_list(gal_slot_type slot)
 	{
-		state.set_slot_value(slot, object::ctor<object_list>(state)->operator magic_value());
+		state.set_slot_value(slot, object::create<object_list>(state)->operator magic_value());
 	}
 
 	void gal_virtual_machine::set_slot_map(gal_slot_type slot)
 	{
-		state.set_slot_value(slot, object::ctor<object_map>(state)->operator magic_value());
+		state.set_slot_value(slot, object::create<object_map>(state)->operator magic_value());
 	}
 
 	void gal_virtual_machine::set_slot_null(gal_slot_type slot)
@@ -1438,7 +1438,7 @@ namespace gal
 	void gal_virtual_machine::set_slot_string(gal_slot_type slot, const char *text, gal_size_type length)
 	{
 		gal_assert(text, "String cannot be nullptr.");
-		state.set_slot_value(slot, object::ctor<object_string>(state, text, length)->operator magic_value());
+		state.set_slot_value(slot, object::create<object_string>(state, text, length)->operator magic_value());
 	}
 
 	void gal_virtual_machine::set_slot_handle(gal_slot_type slot, gal_handle &handle)

@@ -239,7 +239,7 @@ namespace gal
 		requires std::is_base_of_v<object, T>
 		auto make_object(Args&&... args)
 		{
-			return dynamic_cast<T*>(objects_.template emplace_front(object::ctor<T>(std::forward<Args>(args)...)));
+			return dynamic_cast<T*>(objects_.template emplace_front(object::create<T>(std::forward<Args>(args)...)));
 		}
 
 		/**
