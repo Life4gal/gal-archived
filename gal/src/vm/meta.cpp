@@ -6,9 +6,25 @@
 
 namespace gal
 {
-	meta_object& meta_object::instance(const gal_virtual_machine_state& state)
+	object_class& get_meta_class(const magic_value value)
 	{
-		static meta_object o{static_cast<gal_size_type>(0), object_string{state, name, name_length}};
+		if (value.is_number()) { return meta_number::instance();  }
+		if (value.is_object()) { return *value.as_object()->get_class(); }
+
+		switch (value.get_tag())
+		{
+			case magic_value::tag_nan: return meta_number::instance();
+			case magic_value::tag_null: return meta_null::instance();
+			case magic_value::tag_false:
+			case magic_value::tag_true: return meta_boolean::instance();
+			case magic_value::tag_undefined: 
+			default:	 UNREACHABLE();
+		}
+	}
+
+	meta_object& meta_object::instance()
+	{
+		static meta_object o{static_cast<gal_size_type>(0), name};
 		return o;
 	}
 
@@ -70,9 +86,9 @@ namespace gal
 		return true;
 	}
 
-	meta_class& meta_class::instance(const gal_virtual_machine_state& state)
+	meta_class& meta_class::instance()
 	{
-		static meta_class o{static_cast<gal_size_type>(0), object_string{state, name, name_length}};
+		static meta_class o{static_cast<gal_size_type>(0), name};
 		return o;
 	}
 
@@ -103,9 +119,9 @@ namespace gal
 		return true;
 	}
 
-	meta_object_metaclass& meta_object_metaclass::instance(const gal_virtual_machine_state& state)
+	meta_object_metaclass& meta_object_metaclass::instance()
 	{
-		static meta_object_metaclass o{static_cast<gal_size_type>(0), object_string{state, name, name_length}};
+		static meta_object_metaclass o{static_cast<gal_size_type>(0), name};
 		return o;
 	}
 
@@ -115,9 +131,9 @@ namespace gal
 		return true;
 	}
 
-	meta_boolean& meta_boolean::instance(const gal_virtual_machine_state& state)
+	meta_boolean& meta_boolean::instance()
 	{
-		static meta_boolean o{static_cast<gal_size_type>(0), object_string{state, name, name_length}};
+		static meta_boolean o{static_cast<gal_size_type>(0), name};
 		return o;
 	}
 
@@ -127,24 +143,22 @@ namespace gal
 		return true;
 	}
 
-	bool meta_boolean::operator_to_string(const gal_virtual_machine_state& state, magic_value* args)
+	bool meta_boolean::operator_to_string([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
 	{
 		if (args[0].as_boolean())
 		{
-			static object_string true_str{state, true_name, true_name_length};
-			args[0] = true_str.operator magic_value();
+			args[0] = true_name.operator magic_value();
 		}
 		else
 		{
-			static object_string false_str{state, false_name, false_name_length};
-			args[0] = false_str.operator magic_value();
+			args[0] = false_name.operator magic_value();
 		}
 		return true;
 	}
 
-	meta_fiber& meta_fiber::instance(const gal_virtual_machine_state& state)
+	meta_fiber& meta_fiber::instance()
 	{
-		static meta_fiber o{static_cast<gal_size_type>(0), object_string{state, name, name_length}};
+		static meta_fiber o{static_cast<gal_size_type>(0), name};
 		return o;
 	}
 
@@ -166,7 +180,7 @@ namespace gal
 		return true;
 	}
 
-	bool meta_fiber::operator_abort(const gal_virtual_machine_state& state, const magic_value* args)
+	bool meta_fiber::operator_abort(gal_virtual_machine_state& state, magic_value* args)
 	{
 		state.fiber_->set_error(args[1]);
 
@@ -174,7 +188,7 @@ namespace gal
 		return args[1].is_null();
 	}
 
-	bool meta_fiber::operator_current(const gal_virtual_machine_state& state, magic_value* args)
+	bool meta_fiber::operator_current(gal_virtual_machine_state& state, magic_value* args)
 	{
 		args[0].discard_set(state.fiber_->operator magic_value());
 		return true;
@@ -205,7 +219,7 @@ namespace gal
 		return false;
 	}
 
-	bool meta_fiber::operator_yield_has_args(gal_virtual_machine_state& state, const magic_value* args)
+	bool meta_fiber::operator_yield_has_args(gal_virtual_machine_state& state, magic_value* args)
 	{
 		auto* current = state.fiber_;
 		state.fiber_ = current->get_caller();
@@ -357,13 +371,13 @@ namespace gal
 		return false;
 	}
 
-	meta_function& meta_function::instance(const gal_virtual_machine_state& state)
+	meta_function& meta_function::instance()
 	{
-		static meta_function o{static_cast<gal_size_type>(0), object_string{state, name, name_length}};
+		static meta_function o{static_cast<gal_size_type>(0), name};
 		return o;
 	}
 
-	bool meta_function::operator_new(gal_virtual_machine_state& state, const magic_value* args)
+	bool meta_function::operator_new(gal_virtual_machine_state& state, magic_value* args)
 	{
 		if (not state.validate_function(args[0], "Argument")) { return false; }
 
@@ -379,7 +393,7 @@ namespace gal
 
 	namespace
 	{
-		bool call_function(gal_virtual_machine_state& state, const magic_value* args, const gal_size_type num_args)
+		bool call_function(gal_virtual_machine_state& state, magic_value* args, const gal_size_type num_args)
 		{
 			// +1 to include the function itself.
 			state.fiber_->call_function(state, *args[0].as_closure(), num_args + 1);
@@ -387,43 +401,43 @@ namespace gal
 		}
 	}// namespace
 
-	bool meta_function::operator_call0(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 0); }
+	bool meta_function::operator_call0(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 0); }
 
-	bool meta_function::operator_call1(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 1); }
+	bool meta_function::operator_call1(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 1); }
 
-	bool meta_function::operator_call2(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 2); }
+	bool meta_function::operator_call2(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 2); }
 
-	bool meta_function::operator_call3(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 3); }
+	bool meta_function::operator_call3(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 3); }
 
-	bool meta_function::operator_call4(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 4); }
+	bool meta_function::operator_call4(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 4); }
 
-	bool meta_function::operator_call5(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 5); }
+	bool meta_function::operator_call5(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 5); }
 
-	bool meta_function::operator_call6(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 6); }
+	bool meta_function::operator_call6(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 6); }
 
-	bool meta_function::operator_call7(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 7); }
+	bool meta_function::operator_call7(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 7); }
 
-	bool meta_function::operator_call8(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 8); }
+	bool meta_function::operator_call8(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 8); }
 
-	bool meta_function::operator_call9(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 9); }
+	bool meta_function::operator_call9(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 9); }
 
-	bool meta_function::operator_call10(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 10); }
+	bool meta_function::operator_call10(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 10); }
 
-	bool meta_function::operator_call11(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 11); }
+	bool meta_function::operator_call11(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 11); }
 
-	bool meta_function::operator_call12(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 12); }
+	bool meta_function::operator_call12(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 12); }
 
-	bool meta_function::operator_call13(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 13); }
+	bool meta_function::operator_call13(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 13); }
 
-	bool meta_function::operator_call14(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 14); }
+	bool meta_function::operator_call14(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 14); }
 
-	bool meta_function::operator_call15(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 15); }
+	bool meta_function::operator_call15(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 15); }
 
-	bool meta_function::operator_call16(gal_virtual_machine_state& state, const magic_value* args) { return call_function(state, args, 16); }
+	bool meta_function::operator_call16(gal_virtual_machine_state& state, magic_value* args) { return call_function(state, args, 16); }
 
-	meta_null& meta_null::instance(const gal_virtual_machine_state& state)
+	meta_null& meta_null::instance()
 	{
-		static meta_null o{static_cast<gal_size_type>(0), object_string{state, name, name_length}};
+		static meta_null o{static_cast<gal_size_type>(0), name};
 		return o;
 	}
 
@@ -433,52 +447,16 @@ namespace gal
 		return true;
 	}
 
-	bool meta_null::operator_to_string(const gal_virtual_machine_state& state, magic_value* args)
+	bool meta_null::operator_to_string([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
 	{
-		static object_string null_str{state, null_name, null_name_length};
-		args[0] = null_str.operator magic_value();
+		args[0] = null_name.operator magic_value();
 		return true;
 	}
 
-	meta_number& meta_number::instance(const gal_virtual_machine_state& state)
+	meta_number& meta_number::instance()
 	{
-		static meta_number o{static_cast<gal_size_type>(0), object_string{state, name, name_length}};
+		static meta_number o{static_cast<gal_size_type>(0), name};
 		return o;
-	}
-
-	namespace 
-	{
-		template<std::floating_point T>
-		constexpr bool float_eq(T lhs, std::type_identity_t<T> rhs) noexcept
-		{
-			return lhs - rhs <= std::numeric_limits<T>::epsilon() && rhs - lhs <= std::numeric_limits<T>::epsilon();
-		}
-	}
-
-	bool meta_number::operator_eq(gal_virtual_machine_state& state, magic_value* args)
-	{
-		if (not args[1].is_number())
-		{
-			args[0] = magic_value_false;
-		}
-		else
-		{
-			args[0] = float_eq(args[0].as_number(), args[1].as_number()) ? magic_value_true : magic_value_false;
-		}
-		return true;
-	}
-
-	bool meta_number::operator_not_eq(gal_virtual_machine_state& state, magic_value* args)
-	{
-		if (not args[1].is_number())
-		{
-			args[0] = magic_value_true;
-		}
-		else
-		{
-			args[0] = float_eq(args[0].as_number(), args[1].as_number()) ? magic_value_false : magic_value_true;
-		}
-		return true;
 	}
 
 	bool meta_number::operator_from_string(gal_virtual_machine_state& state, magic_value* args)
@@ -551,26 +529,26 @@ namespace gal
 		return true;
 	}
 
-	bool meta_number::operator_max_safe_integer(gal_virtual_machine_state& state, magic_value* args)
+	bool meta_number::operator_max_safe_integer([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
 	{
 		args[0] = magic_value{9007199254740991.0};
 		return true;
 	}
 
-	bool meta_number::operator_min_safe_integer(gal_virtual_machine_state& state, magic_value* args)
+	bool meta_number::operator_min_safe_integer([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
 	{
 		args[0] = magic_value{-9007199254740991.0};
 		return true;
 	}
 
-	bool meta_number::operator_fraction(gal_virtual_machine_state& state, magic_value* args)
+	bool meta_number::operator_fraction([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
 	{
 		double dummy{};
 		args[0] = magic_value{std::modf(args[0].as_number(), &dummy)};
 		return true;
 	}
 
-	bool meta_number::operator_truncate(gal_virtual_machine_state& state, magic_value* args)
+	bool meta_number::operator_truncate([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
 	{
 		double ret{};
 		std::modf(args[0].as_number(), &ret);
@@ -578,13 +556,13 @@ namespace gal
 		return true;
 	}
 
-	bool meta_number::operator_is_inf(gal_virtual_machine_state& state, magic_value* args)
+	bool meta_number::operator_is_inf([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
 	{
 		args[0] = std::isinf(args[0].as_number()) ? magic_value_true : magic_value_false;
 		return true;
 	}
 
-	bool meta_number::operator_is_nan(gal_virtual_machine_state& state, magic_value* args)
+	bool meta_number::operator_is_nan([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
 	{
 		args[0] = std::isnan(args[0].as_number()) ? magic_value_true : magic_value_false;
 		return true;
@@ -598,7 +576,7 @@ namespace gal
 		return true;
 	}
 
-	bool meta_number::operator_sign(gal_virtual_machine_state& state, magic_value* args)
+	bool meta_number::operator_sign([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
 	{
 		if (const auto num = args[0].as_number(); num > 0) { args[0] = magic_value{decltype(num){1}}; }
 		else if (num < 0) { args[0] = magic_value{decltype(num){-1}}; }
@@ -827,5 +805,129 @@ namespace gal
 	{
 		args[0] = magic_value{std::round(args[0].as_number())};
 		return true;
+	}
+
+	namespace
+	{
+		template<std::floating_point T>
+		constexpr bool float_eq(T lhs, std::type_identity_t<T> rhs) noexcept
+		{
+			return lhs - rhs <= std::numeric_limits<T>::epsilon() && rhs - lhs <= std::numeric_limits<T>::epsilon();
+		}
+	}// namespace
+
+	bool meta_number::operator_eq([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
+	{
+		if (not args[1].is_number())
+		{
+			args[0] = magic_value_false;
+		}
+		else
+		{
+			args[0] = float_eq(args[0].as_number(), args[1].as_number()) ? magic_value_true : magic_value_false;
+		}
+		return true;
+	}
+
+	bool meta_number::operator_not_eq([[maybe_unused]] gal_virtual_machine_state& state, magic_value* args)
+	{
+		if (not args[1].is_number())
+		{
+			args[0] = magic_value_true;
+		}
+		else
+		{
+			args[0] = float_eq(args[0].as_number(), args[1].as_number()) ? magic_value_false : magic_value_true;
+		}
+		return true;
+	}
+
+	meta_string& meta_string::instance()
+	{
+		static meta_string o{static_cast<gal_size_type>(0), name};
+		return o;
+	}
+
+	bool meta_string::operator_from_code_point(gal_virtual_machine_state& state, magic_value* args)
+	{
+		if (not state.validate_int(args[0], "Code point"))
+		{
+			return false;
+		}
+
+		const int code_point = static_cast<int>(args[0].as_number());
+		if (code_point < 0)
+		{
+			const auto error = object::create<object_string>(state);
+			std_format::format_to(error->get_appender(), "Code point cannot be negative: {}.", code_point);
+			state.fiber_->set_error(error->operator magic_value());
+			return false;
+		}
+		if (code_point > 0x10ffff)
+		{
+			const auto error = object::create<object_string>(state);
+			std_format::format_to(error->get_appender(), "Code point cannot be greater than 0x10ffff: {}.", code_point);
+			state.fiber_->set_error(error->operator magic_value());
+			return false;
+		}
+
+		args[0].discard_set(object::create<object_string>(state, code_point)->operator magic_value());
+		return true;
+	}
+
+	bool meta_string::operator_from_byte(gal_virtual_machine_state& state, magic_value* args)
+	{
+		if (not state.validate_int(args[0], "Byte"))
+		{
+			return false;
+		}
+
+		const auto byte = static_cast<int>(args[0].as_number());
+		if (byte < 0)
+		{
+			const auto error = object::create<object_string>(state);
+			std_format::format_to(error->get_appender(), "Byte cannot be negative: {}.", byte);
+			state.fiber_->set_error(error->operator magic_value());
+			return false;
+		}
+		if (byte > 0xff)
+		{
+			const auto error = object::create<object_string>(state);
+			std_format::format_to(error->get_appender(), "Byte cannot be greater than 0xff: {}.", byte);
+			state.fiber_->set_error(error->operator magic_value());
+			return false;
+		}
+
+		args[0].discard_set(object::create<object_string>(state, static_cast<std::uint8_t>(byte))->operator magic_value());
+		return true;
+	}
+
+	bool meta_string::operator_append(gal_virtual_machine_state& state, magic_value* args)
+	{
+		if (state.validate_string(args[1], "Right operand"))
+		{
+			return false;
+		}
+
+		args[0].as_string()->append(*args[1].as_string());
+		return true;
+	}
+
+	meta_list& meta_list::instance()
+	{
+		static meta_list o{static_cast<gal_size_type>(0), name};
+		return o;
+	}
+
+	meta_map& meta_map::instance()
+	{
+		static meta_map o{static_cast<gal_size_type>(0), name};
+		return o;
+	}
+
+	meta_system& meta_system::instance()
+	{
+		static meta_system o{static_cast<gal_size_type>(0), name};
+		return o;
 	}
 }// namespace gal

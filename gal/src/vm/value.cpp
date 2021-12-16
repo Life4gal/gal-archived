@@ -7,6 +7,7 @@
 #include <vm/value.hpp>
 #include <vm/vm.hpp>
 #include <vm/gc.hpp>
+#include <vm/meta.hpp>
 
 namespace gal
 {
@@ -53,23 +54,24 @@ namespace gal
 		                      [](const magic_value v) { v.destroy(); });
 	}
 
-	object_string::object_string(const gal_virtual_machine_state& state)
-		: object{object_type::STRING_TYPE, state.string_class_} { }
+	object_string::object_string()
+		: object{object_type::STRING_TYPE, &meta_string::instance()} { }
 
-	object_string::object_string(const gal_virtual_machine_state& state, size_type length, char c)
-		: object{object_type::STRING_TYPE, state.string_class_},
+	object_string::object_string(size_type length, char c)
+		: object{object_type::STRING_TYPE, &meta_string::instance()},
 		  string_(length, c) { }
 
-	object_string::object_string(const gal_virtual_machine_state& state, const char* text, const size_type length)
-		: object{object_type::STRING_TYPE, state.string_class_},
+	object_string::object_string(const char* text, const size_type length)
+		: object{object_type::STRING_TYPE, &meta_string::instance()},
 		  string_{text, length} { }
 
-	object_string::object_string(const gal_virtual_machine_state& state, string_type&& string)
-		: object{object_type::STRING_TYPE, state.string_class_},
-		  string_{std::move(string)} { }
+	object_string::object_string(const const_pointer text)
+		: object{object_type::STRING_TYPE, &meta_string::instance()},
+		  string_{text}
+	{  }
 
-	object_string::object_string(gal_virtual_machine_state& state, const object_string& source, const size_type begin, const size_type count, const size_type step)
-		: object{object_type::STRING_TYPE, state.string_class_}
+	object_string::object_string(const object_string& source, const size_type begin, const size_type count, const size_type step)
+		: object{object_type::STRING_TYPE, &meta_string::instance()}
 	{
 		auto* from = reinterpret_cast<const std::uint8_t*>(source.data());
 		size_type length = 0;
@@ -86,22 +88,22 @@ namespace gal
 		}
 	}
 
-	object_string::object_string(gal_virtual_machine_state& state, double value)
-		: object{object_type::STRING_TYPE, state.string_class_}
+	object_string::object_string(double value)
+		: object{object_type::STRING_TYPE, &meta_string::instance()}
 	{
 		std_format::format_to(get_appender(), "{:<-.14f}", value);
 	}
 
-	object_string::object_string(gal_virtual_machine_state& state, const int value)
-		: object{object_type::STRING_TYPE, state.string_class_},
+	object_string::object_string(const int value)
+		: object{object_type::STRING_TYPE, &meta_string::instance()},
 		  string_(static_cast<size_type>(utf8_encode_num_bytes(value)), 0) { utf8_encode(value, reinterpret_cast<std::uint8_t*>(data())); }
 
-	object_string::object_string(gal_virtual_machine_state& state, const std::uint8_t value)
-		: object{object_type::STRING_TYPE, state.string_class_},
+	object_string::object_string(const std::uint8_t value)
+		: object{object_type::STRING_TYPE, &meta_string::instance()},
 		  string_(static_cast<size_type>(1), static_cast<char>(value)) { }
 
-	object_string::object_string(gal_virtual_machine_state& state, object_string& string, const size_type index)
-		: object{object_type::STRING_TYPE, state.string_class_}
+	object_string::object_string(object_string& string, const size_type index)
+		: object{object_type::STRING_TYPE, &meta_string::instance()}
 	{
 		gal_assert(index < string.size(), "Index out of bounds.");
 
@@ -194,15 +196,15 @@ namespace gal
 		return gal_index_not_exist;
 	}
 
-	object_function::object_function(const gal_virtual_machine_state& state, object_module& module, const gal_slot_type max_slots)
-		: object{object_type::FUNCTION_TYPE, state.function_class_},
+	object_function::object_function(object_module& module, const gal_slot_type max_slots)
+		: object{object_type::FUNCTION_TYPE, &meta_function::instance()},
 		  module_{module},
 		  max_slots_{max_slots},
 		  num_upvalues_{0},
 		  arity_{0} { }
 
-	object_closure::object_closure(const gal_virtual_machine_state& state, object_function& function)
-		: object{object_type::CLOSURE_TYPE, state.function_class_},
+	object_closure::object_closure(object_function& function)
+		: object{object_type::CLOSURE_TYPE, &meta_function::instance()},
 		  function_{&function} { upvalues_.reserve(function.get_upvalues_size()); }
 
 	object_closure::~object_closure()
@@ -213,8 +215,8 @@ namespace gal
 
 	void object_fiber::free_stack() { for (gal_size_type i = 0; i < stack_capacity_; ++i) { get_stack_point(i)->destroy(); } }
 
-	object_fiber::object_fiber(const gal_virtual_machine_state& state, object_closure* closure)
-		: object{object_type::FIBER_TYPE, state.fiber_class_},
+	object_fiber::object_fiber(object_closure* closure)
+		: object{object_type::FIBER_TYPE, &meta_fiber::instance()},
 		  // Add one slot for the unused implicit receiver slot that the compiler assumes all functions have.
 		  stack_{std::make_unique<magic_value[]>(closure ? bit_ceil(closure->get_function().get_slots_size() + 1) : 1)},
 		  stack_top_{stack_.get()},
@@ -332,7 +334,7 @@ namespace gal
 		}
 	}
 
-	void object_fiber::create_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_module* module)
+	void object_fiber::create_class(gal_virtual_machine_state& state, const gal_size_type num_fields, object_module* module)
 	{
 		// Pull the name and superclass off the stack.
 		const auto superclass = get_stack_point(1);
@@ -342,11 +344,11 @@ namespace gal
 		// the other slot.
 		pop_stack(1);
 
-		set_error(state.validate_superclass(*name, *superclass, num_fields));
+		set_error(object_class::validate_superclass(*name, *superclass, num_fields));
 		if (has_error()) { return; }
 
-		const auto obj_class = superclass->as_class()->create_derived_class(state, num_fields, std::move(*name));
-		set_stack_point(1, state.class_class_->operator magic_value());
+		auto* obj_class = superclass->as_class()->create_derived_class(num_fields, std::move(*name));
+		set_stack_point(1, obj_class->operator magic_value());
 
 		if (object_class::is_outer_class_fields(num_fields)) { state.bind_outer_class(*obj_class, *module); }
 	}
@@ -402,34 +404,84 @@ namespace gal
 		else { gal_assert(superclass.is_interface_class(), "A outer class cannot inherit from a class with fields."); }
 
 		// Inherit methods from its superclass.
-		// todo: Do we need to support multiple inheritance?
 		methods_ = superclass_->methods_;
 	}
 
-	std::shared_ptr<object_class> object_class::create_derived_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_string&& name)
+	object_class* object_class::create_derived_class(const gal_size_type num_fields, object_string&& name)
 	{
 		// Create the meta-class.
-		object_string meta_class_name{state};
+		object_string meta_class_name{};
 		meta_class_name.append(name).append("@metaclass@");
 
-		const auto meta_class = create<object_class>(0, std::move(meta_class_name));
-		meta_class->object_class_ = state.class_class_;
+		const auto meta_class	  = object::create<object_class>(0, std::move(meta_class_name));
+		meta_class->object_class_ = &meta_class::instance();
 
 		// Meta-classes always inherit Class and do not parallel the non-meta-class
 		// hierarchy.
-		meta_class->bind_super_class(*state.class_class_);
+		meta_class->bind_super_class(meta_class::instance());
 
-		auto ret = std::make_shared<object_class>(num_fields, std::move(name));
+		auto* ret					  = object::create<object_class>(num_fields, std::move(name));
 		ret->object_class_ = meta_class;
 		ret->bind_super_class(*this);
 
 		return ret;
 	}
 
+	magic_value object_class::validate_superclass(const object_string& name, const magic_value superclass_value, gal_size_type num_fields)
+	{
+		// Make sure the superclass is a class.
+		if (not superclass_value.is_class())
+		{
+			const auto error = object::create<object_string>();
+			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from a non-class object.", name.str());
+			return error->operator magic_value();
+		}
+
+		// Make sure it doesn't inherit from a sealed built-in type. Primitive methods
+		// on these classes assume the instance is one of the other object_xxx types and
+		// will fail horribly if it's actually an object_instance.
+		auto* superclass = superclass_value.as_class();
+		if (superclass == &meta_class::instance() ||
+			superclass == &meta_fiber::instance() ||
+			superclass == &meta_function::instance() ||
+			superclass == &meta_list::instance() ||
+			superclass == &meta_map::instance() || 
+			superclass == &meta_string::instance() ||
+			superclass == &meta_boolean::instance() ||
+			superclass == &meta_null::instance() ||
+			superclass == &meta_number::instance())
+		{
+			const auto error = object::create<object_string>();
+			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from built-in class '{}'.", name.str(), superclass->get_class_name().str());
+			return error->operator magic_value();
+		}
+
+		if (superclass->is_outer_class())
+		{
+			const auto error = object::create<object_string>();
+			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from outer class '{}'.", name.str(), superclass->get_class_name().str());
+			return error->operator magic_value();
+		}
+
+		if (superclass->get_remain_field_size() < num_fields)
+		{
+			const auto error = object::create<object_string>();
+			std_format::format_to(
+					error->get_appender(),
+					"There are currently {} fields in class, and {} fields will be added, but there can only be {} fields at most, including inherited ones.",
+					superclass->get_field_size(),
+					num_fields,
+					max_fields);
+			return error->operator magic_value();
+		}
+
+		return magic_value_null;
+	}
+
 	object_instance::~object_instance() { std::ranges::for_each(fields_, [](const magic_value v) { v.destroy(); }); }
 
-	object_list::object_list(const gal_virtual_machine_state& state)
-		: object{object_type::LIST_TYPE, state.list_class_} { }
+	object_list::object_list()
+		: object{object_type::LIST_TYPE, &meta_list::instance()} {}
 
 	object_list::~object_list() { std::ranges::for_each(elements_, [](const list_buffer_value_type v) { v.destroy(); }); }
 
@@ -557,8 +609,8 @@ namespace gal
 
 	void object_module::copy_variables(const object_module& other) { for (const auto& [name, variable]: other.variables_ | std::views::values) { define_variable(name, variable); } }
 
-	object_map::object_map(const gal_virtual_machine_state& state)
-		: object{object_type::MAP_TYPE, state.map_class_} { }
+	object_map::object_map()
+		: object{object_type::MAP_TYPE, &meta_map::instance()} {}
 
 	object_map::~object_map()
 	{

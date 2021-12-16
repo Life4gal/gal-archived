@@ -7,7 +7,6 @@
 #include <allocator.hpp>
 #include <vm/common.hpp>
 #include <utility>
-#include <utils/utils.hpp>
 
 #include <limits>
 #include <vector>
@@ -110,6 +109,7 @@ namespace gal
 		[[nodiscard]] constexpr object_type type() const noexcept { return type_; }
 		[[nodiscard]] object_class* get_class() noexcept { return object_class_; }
 		[[nodiscard]] const object_class* get_class() const noexcept { return object_class_; }
+		void								set_class(object_class& obj_class) noexcept { object_class_ = &obj_class; }
 
 		explicit operator magic_value() const noexcept;
 
@@ -502,53 +502,51 @@ namespace gal
 		/**
 		 * @brief Creates a new empty string object
 		 */
-		explicit object_string(const gal_virtual_machine_state& state);
+		explicit object_string();
 
 		/**
 		 * @brief Creates a new string object of [length] and init with [c].
 		 */
-		object_string(const gal_virtual_machine_state& state, size_type length, value_type c = 0);
+		explicit object_string(size_type length, value_type c = 0);
 
 		/**
 		 * @brief Creates a new string object of [length] and copies [text] into it.
 		 */
-		object_string(const gal_virtual_machine_state& state, const_pointer text, size_type length);
+		object_string(const_pointer text, size_type length);
 
 		/**
-		 * @brief Move an exist string into [this]
-		 *
-		 * todo: remove this
+		 * @brief Creates a new string object and copies [text] into it.
 		 */
-		object_string(const gal_virtual_machine_state& state, string_type&& string);
+		explicit object_string(const_pointer text);
 
 		/**
 		 * @brief Creates a new string object by taking a range of characters from [source].
 		* The range starts at [begin], contains [count] bytes, and increments by
 		* [step].
 		 */
-		object_string(gal_virtual_machine_state& state, const object_string& source, size_type begin, size_type count, size_type step = 1);
+		object_string(const object_string& source, size_type begin, size_type count, size_type step = 1);
 
 		/**
 		 * @brief Produces a string representation of [value].
 		 */
-		object_string(gal_virtual_machine_state& state, double value);
+		explicit object_string(double value);
 
 		/**
 		 * @brief Creates a new string containing the UTF-8 encoding of [value].
 		 */
-		object_string(gal_virtual_machine_state& state, int value);
+		explicit object_string(int value);
 
 		/**
 		 * @brief Creates a new string from the integer representation of a byte
 		 */
-		object_string(gal_virtual_machine_state& state, std::uint8_t value);
+		explicit object_string(std::uint8_t value);
 
 		/**
 		 * @brief Creates a new string containing the code point in [string] starting at byte
 		 * [index]. If [index] points into the middle of a UTF-8 sequence, returns an
 		 * empty string.
 		 */
-		object_string(gal_virtual_machine_state& state, object_string& string, size_type index);
+		object_string(object_string& string, size_type index);
 
 		[[nodiscard]] bool empty() const noexcept { return string_.empty(); }
 
@@ -560,9 +558,9 @@ namespace gal
 
 		[[nodiscard]] const string_type& str() const noexcept { return string_; }
 
-		[[nodiscard]] reference operator[](size_type index) noexcept { return string_[index]; }
+		[[nodiscard]] reference operator[](const size_type index) noexcept { return string_[index]; }
 
-		[[nodiscard]] const_reference operator[](size_type index) const noexcept { return string_[index]; }
+		[[nodiscard]] const_reference operator[](const size_type index) const noexcept { return string_[index]; }
 
 		[[nodiscard]] iterator begin() noexcept { return string_.begin(); }
 
@@ -679,16 +677,16 @@ namespace gal
 
 		void clear() { table_.clear(); }
 
-		void push(gal_virtual_machine_state& state, const char* name, object_string::size_type length) { table_.emplace_back(state, name, length); }
+		void push(const char* name, object_string::size_type length) { table_.emplace_back(name, length); }
 
 		void push(object_string&& string) { table_.push_back(std::move(string)); }
 
 		/**
 		 * @brief Adds name to the symbol table. Returns the index of it in the table.
 		 */
-		[[nodiscard]] gal_index_type add(gal_virtual_machine_state& state, const char* name, object_string::size_type length)
+		[[nodiscard]] gal_index_type add(const char* name, object_string::size_type length)
 		{
-			table_.emplace_back(state, name, length);
+			table_.emplace_back(name, length);
 			return table_.size() - 1;
 		}
 
@@ -724,13 +722,13 @@ namespace gal
 		 * @brief Adds name to the symbol table. Returns the index of it in the table.
 		 * Will use an existing symbol if already present.
 		 */
-		[[nodiscard]] gal_index_type ensure(gal_virtual_machine_state& state, const char* name, object_string::size_type length)
+		[[nodiscard]] gal_index_type ensure(const char* name, const object_string::size_type length)
 		{
 			// See if the symbol is already defined.
 			if (const auto index = find(name, length); index == gal_index_not_exist)
 			{
 				// New symbol, so add it.
-				return add(state, name, length);
+				return add(name, length);
 			}
 			else { return index; }
 		}
@@ -922,7 +920,7 @@ namespace gal
 		 * @brief Creates a new empty function. Before being used, it must have code,
 		 * constants, etc. added to it.
 		 */
-		object_function(const gal_virtual_machine_state& state, object_module& module, gal_slot_type max_slots);
+		object_function(object_module& module, gal_slot_type max_slots);
 
 		[[nodiscard]] const auto& get_name() const noexcept { return debug_.name; }
 
@@ -992,7 +990,7 @@ namespace gal
 		 * @brief Creates a new closure object that invokes [function]. Allocates room for its
 		 * upvalues, but assumes outside code will populate it.
 		 */
-		object_closure(const gal_virtual_machine_state& state, object_function& function);
+		object_closure(object_function& function);
 
 		object_closure(const object_closure&) = delete;
 		object_closure& operator=(const object_closure&) = delete;
@@ -1133,7 +1131,7 @@ namespace gal
 		/**
 		 * @brief Creates a new fiber object that will invoke [closure].
 		 */
-		object_fiber(const gal_virtual_machine_state& state, object_closure* closure);
+		object_fiber(object_closure* closure);
 
 		// todo: Copy requires deep copy, that is, all magic_value of objects need to copy the objects they refer to.
 		object_fiber(const object_fiber&) = delete;
@@ -1189,7 +1187,7 @@ namespace gal
 
 		void set_stack_point(const gal_size_type offset, const magic_value value) noexcept
 		{
-			stack_top_[-offset].discard_set(value);
+			(stack_top_ - offset)->discard_set(value);
 		}
 
 		void set_stack_top(magic_value* new_top) noexcept
@@ -1375,6 +1373,17 @@ namespace gal
 			  num_fields_{num_fields},
 			  name_{std::move(name)} {}
 
+		/**
+		 * @brief Creates a new "raw" class. It has no meta-class or superclass whatsoever.
+		 * This is only used for bootstrapping the initial Object and Class classes,
+		 * which are a little special.
+		 */
+		object_class(const gal_size_type num_fields, const object_string& name)
+			: object{object_type::CLASS_TYPE, nullptr},
+			  superclass_{nullptr},
+			  num_fields_{num_fields},
+			  name_{name} {}
+
 		// ~object_class() override;
 		// todo
 		// The meta-class.
@@ -1394,7 +1403,7 @@ namespace gal
 		/**
 		 * @brief Creates a new class object as well as its associated meta-class.
 		 */
-		std::shared_ptr<object_class> create_derived_class(gal_virtual_machine_state& state, gal_size_type num_fields, object_string&& name);
+		object_class* create_derived_class(gal_size_type num_fields, object_string&& name);
 
 		[[nodiscard]] method_buffer_size_type get_methods_size() const noexcept { return methods_.size(); }
 
@@ -1428,6 +1437,17 @@ namespace gal
 
 		[[nodiscard]] static bool is_outer_class_fields(const gal_size_type num_fields) noexcept { return num_fields == outer_class_fields_size; }
 		[[nodiscard]] static bool is_interface_class_fields(const gal_size_type num_fields) noexcept { return num_fields == interface_class_fields_size; }
+		/**
+		 * @brief Verifies that [superclass_value] is a valid object to inherit from. That
+		 * means it must be a class and cannot be the class of any built-in type.
+		 *
+		 * Also validates that it does not result in a class with too many fields and
+		 * the other limitations outer classes have.
+		 *
+		 * If successful, returns magic_value_null. Otherwise, returns a string for the runtime
+		 * error message.
+		 */
+		[[nodiscard]] static magic_value  validate_superclass(const object_string& name, magic_value superclass_value, gal_size_type num_fields);
 
 		[[nodiscard]] gal_size_type memory_usage() const noexcept override
 		{
@@ -1526,7 +1546,7 @@ namespace gal
 		list_buffer_type elements_;
 
 	public:
-		explicit object_list(const gal_virtual_machine_state& state);
+		explicit object_list();
 
 		// todo: Copy requires deep copy, that is, all magic_value of objects need to copy the objects they refer to.
 		object_list(const object_list&) = delete;
@@ -1679,7 +1699,7 @@ namespace std
 					}
 				}
 			}
-			else { return hash_bits(value.get_data()); }
+			return hash_bits(value.get_data());
 		}
 	};
 }// namespace std
@@ -1893,7 +1913,7 @@ namespace gal
 		map_buffer_type entries_;
 
 	public:
-		explicit object_map(const gal_virtual_machine_state& state);
+		explicit object_map();
 
 		// todo: Copy requires deep copy, that is, all magic_value of objects need to copy the objects they refer to.
 		object_map(const object_map&) = delete;

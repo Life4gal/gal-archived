@@ -2,67 +2,16 @@
 #include <gal.hpp>
 #include <utils/assert.hpp>
 #include <utils/format.hpp>
+#include <utils/utils.hpp>
 #include <vm/common.hpp>
 #include <vm/compiler.hpp>
 #include <vm/debugger.hpp>
 #include <vm/value.hpp>
 #include <vm/vm.hpp>
+#include <vm/meta.hpp>
 
 namespace gal
 {
-	magic_value gal_virtual_machine_state::validate_superclass(const object_string &name, magic_value superclass_value, gal_size_type num_fields)
-	{
-		// Make sure the superclass is a class.
-		if (not superclass_value.is_class())
-		{
-			auto error = object::create<object_string>(*this);
-			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from a non-class object.", name.str());
-			return error->operator magic_value();
-		}
-
-		// Make sure it doesn't inherit from a sealed built-in type. Primitive methods
-		// on these classes assume the instance is one of the other object_xxx types and
-		// will fail horribly if it's actually an object_instance.
-		auto *superclass = superclass_value.as_class();
-		if (
-				superclass == class_class_ ||
-				superclass == fiber_class_ ||
-				superclass == function_class_ ||
-				superclass == list_class_ ||
-				superclass == map_class_ ||
-				superclass == range_class_ ||
-				superclass == string_class_ ||
-				superclass == boolean_class_ ||
-				superclass == null_class_ ||
-				superclass == number_class_)
-		{
-			auto error = object::create<object_string>(*this);
-			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from built-in class '{}'.", name.str(), superclass->get_class_name().str());
-			return error->operator magic_value();
-		}
-
-		if (superclass->is_outer_class())
-		{
-			auto error = object::create<object_string>(*this);
-			std_format::format_to(error->get_appender(), "Class '{}' cannot inherit from outer class '{}'.", name.str(), superclass->get_class_name().str());
-			return error->operator magic_value();
-		}
-
-		if (superclass->get_remain_field_size() < num_fields)
-		{
-			auto error = object::create<object_string>(*this);
-			std_format::format_to(
-					error->get_appender(),
-					"There are currently {} fields in class, and {} fields will be added, but there can only be {} fields at most, including inherited ones.",
-					superclass->get_field_size(),
-					num_fields,
-					max_fields);
-			return error->operator magic_value();
-		}
-
-		return magic_value_null;
-	}
-
 	void gal_virtual_machine_state::bind_outer_class(object_class &obj_class, object_module &module)
 	{
 		gal_configuration::gal_outer_class_method methods{};
@@ -79,12 +28,11 @@ namespace gal
 			// todo: built-in module
 		}
 
-		method m{};
-		m.type		= method_type::outer_type;
+		method m{.type = method_type::outer_type};
 
 		// Add the symbol even if there is no allocator, so we can ensure that the
 		// symbol itself is always in the symbol table.
-		auto symbol = method_names_.ensure(*this, gal_configuration::gal_outer_class_method::allocate_symbol_name, gal_configuration::gal_outer_class_method::allocate_symbol_name_length);
+		auto symbol = method_names_.ensure(gal_configuration::gal_outer_class_method::allocate_symbol_name, gal_configuration::gal_outer_class_method::allocate_symbol_name_length);
 		if (methods.allocate != nullptr)
 		{
 			m.as.outer_method_function = methods.allocate;
@@ -93,13 +41,252 @@ namespace gal
 
 		// Add the symbol even if there is no finalizer, so we can ensure that the
 		// symbol itself is always in the symbol table.
-		symbol = method_names_.ensure(*this, gal_configuration::gal_outer_class_method::finalize_symbol_name, gal_configuration::gal_outer_class_method::finalize_symbol_name_length);
+		symbol = method_names_.ensure(gal_configuration::gal_outer_class_method::finalize_symbol_name, gal_configuration::gal_outer_class_method::finalize_symbol_name_length);
 		if (methods.finalize != nullptr)
 		{
 			m.as.outer_method_function = reinterpret_cast<gal_outer_method_function_type>(methods.finalize);
 			obj_class.set_method(symbol, m);
 		}
 	}
+
+	void gal_virtual_machine_state::init_core_module()
+	{
+		auto* core_module = object::create<object_module>(object_string{core_module_name, core_module_name_length});
+		modules_.set(core_module_key, core_module->operator magic_value());
+
+		auto define_primitive = [&](object_class &obj_class, primitive_function_type function, const object_string &function_name, method_type type = method_type::primitive_type)
+		{
+			const auto symbol = method_names_.ensure(function_name);
+			const method m{.type = type, .as{.primitive_function = function}};
+			obj_class.set_method(symbol, m);
+		};
+
+		{
+			// Define the root Object class. This has to be done a little specially
+			// because it has no superclass.
+			auto &m_object = meta_object::instance();
+			core_module->define_variable(meta_object::name, m_object.operator magic_value());
+
+			define_primitive(m_object, meta_object::operator_not, meta_object::operator_not_name);
+			define_primitive(m_object, meta_object::operator_eq, meta_object::operator_eq_name);
+			define_primitive(m_object, meta_object::operator_not_eq, meta_object::operator_not_eq_name);
+			define_primitive(m_object, meta_object::operator_instance_of, meta_object::operator_instance_of_name);
+			define_primitive(m_object, meta_object::operator_to_string, meta_object::operator_to_string_name);
+			define_primitive(m_object, meta_object::operator_typeof, meta_object::operator_typeof_name);
+
+			// Now we can define Class, which is a subclass of Object.
+			auto &m_class = meta_class::instance();
+			core_module->define_variable(meta_class::name, m_class.operator magic_value());
+
+			define_primitive(m_class, meta_class::operator_nameof, meta_class::operator_nameof_name);
+			define_primitive(m_class, meta_class::operator_super_type, meta_class::operator_super_type_name);
+			define_primitive(m_class, meta_class::operator_to_string, meta_class::operator_to_string_name);
+			define_primitive(m_class, meta_class::operator_attributes, meta_class::operator_attributes_name);
+
+			// Finally, we can define Object's meta-class which is a subclass of Class.
+			auto &m_metaclass = meta_object_metaclass::instance();
+			core_module->define_variable(meta_object_metaclass::name, m_metaclass.operator magic_value());
+
+			// Wire up the meta-class relationships now that all three classes are built.
+			m_object.set_class(m_metaclass);
+			m_metaclass.set_class(m_class);
+			m_class.set_class(m_class);
+
+			m_metaclass.bind_super_class(m_class);
+
+			define_primitive(m_metaclass, meta_object_metaclass::operator_is_same, meta_object_metaclass::operator_is_same_name);
+		}
+
+		/**
+		 * The core class diagram ends up looking like this, where single lines point
+		 * to a class's superclass, and double lines point to its metaclass:
+		 *
+		 *        .------------------------------------. .====.
+		 *        |                  .---------------. | #    #
+		 *        v                  |               v | v    #
+		 *   .---------.   .-------------------.   .-------.  #
+		 *   | Object  |==>| Object metaclass  |==>| Class |=="
+		 *   '---------'   '-------------------'   '-------'
+		 *        ^                                 ^ ^ ^ ^
+		 *        |                  .--------------' # | #
+		 *        |                  |                # | #
+		 *   .---------.   .-------------------.      # | # -.
+		 *   |  Base   |==>|  Base metaclass   |======" | #  |
+		 *   '---------'   '-------------------'        | #  |
+		 *        ^                                     | #  |
+		 *        |                  .------------------' #  | Example classes
+		 *        |                  |                    #  |
+		 *   .---------.   .-------------------.          #  |
+		 *   | Derived |==>| Derived metaclass |=========="  |
+		 *   '---------'   '-------------------'            -'
+		 *
+		 */
+
+		// The rest of the classes can now be defined normally.
+		// todo
+
+		{
+			auto &m_boolean = meta_boolean::instance();
+			core_module->define_variable(meta_boolean::name, m_boolean.operator magic_value());
+
+			define_primitive(m_boolean, meta_boolean::operator_not, meta_boolean::operator_not_name);
+			define_primitive(m_boolean, meta_boolean::operator_to_string, meta_boolean::operator_to_string_name);
+		}
+		{
+			auto &m_fiber = meta_fiber::instance();
+			core_module->define_variable(meta_fiber::name, m_fiber.operator magic_value());
+
+			define_primitive(*m_fiber.get_class(), meta_fiber::operator_new, meta_fiber::operator_new_name);
+			define_primitive(*m_fiber.get_class(), meta_fiber::operator_abort, meta_fiber::operator_abort_name);
+			define_primitive(*m_fiber.get_class(), meta_fiber::operator_current, meta_fiber::operator_current_name);
+			define_primitive(*m_fiber.get_class(), meta_fiber::operator_suspend, meta_fiber::operator_suspend_name);
+			define_primitive(*m_fiber.get_class(), meta_fiber::operator_yield_no_args, meta_fiber::operator_yield_no_args_name);
+			define_primitive(*m_fiber.get_class(), meta_fiber::operator_yield_has_args, meta_fiber::operator_yield_has_args_name);
+
+			define_primitive(m_fiber, meta_fiber::operator_call_no_args, meta_fiber::operator_call_no_args_name);
+			define_primitive(m_fiber, meta_fiber::operator_call_has_args, meta_fiber::operator_call_has_args_name);
+			define_primitive(m_fiber, meta_fiber::operator_error, meta_fiber::operator_error_name);
+			define_primitive(m_fiber, meta_fiber::operator_done, meta_fiber::operator_done_name);
+			define_primitive(m_fiber, meta_fiber::operator_transfer_no_args, meta_fiber::operator_transfer_no_args_name);
+			define_primitive(m_fiber, meta_fiber::operator_transfer_has_args, meta_fiber::operator_transfer_has_args_name);
+			define_primitive(m_fiber, meta_fiber::operator_transfer_error, meta_fiber::operator_transfer_error_name);
+			define_primitive(m_fiber, meta_fiber::operator_try_no_args, meta_fiber::operator_try_no_args_name);
+			define_primitive(m_fiber, meta_fiber::operator_try_has_args, meta_fiber::operator_try_has_args_name);
+		}
+		{
+			auto &m_function = meta_function::instance();
+			core_module->define_variable(meta_function::name, m_function.operator magic_value());
+
+			define_primitive(*m_function.get_class(), meta_function::operator_new, meta_function::operator_new_name);
+
+			define_primitive(m_function, meta_function::operator_arity, meta_function::operator_arity_name);
+
+			define_primitive(m_function, meta_function::operator_call0, meta_function::operator_call0_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call1, meta_function::operator_call1_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call2, meta_function::operator_call2_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call3, meta_function::operator_call3_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call4, meta_function::operator_call4_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call5, meta_function::operator_call5_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call6, meta_function::operator_call6_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call7, meta_function::operator_call7_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call8, meta_function::operator_call8_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call9, meta_function::operator_call9_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call10, meta_function::operator_call10_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call11, meta_function::operator_call11_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call12, meta_function::operator_call12_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call13, meta_function::operator_call13_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call14, meta_function::operator_call14_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call15, meta_function::operator_call15_name, method_type::function_call_type);
+			define_primitive(m_function, meta_function::operator_call16, meta_function::operator_call16_name, method_type::function_call_type);
+		}
+		{
+			auto &m_null = meta_null ::instance();
+			core_module->define_variable(meta_null::name, m_null.operator magic_value());
+
+			define_primitive(m_null, meta_null::operator_not, meta_null::operator_not_name);
+			define_primitive(m_null, meta_null::operator_to_string, meta_null::operator_to_string_name);
+		}
+		{
+			auto &m_number = meta_number::instance();
+			core_module->define_variable(meta_number::name, m_number.operator magic_value());
+
+			define_primitive(*m_number.get_class(), meta_number::operator_from_string, meta_number::operator_from_string_name);
+			define_primitive(*m_number.get_class(), meta_number::operator_infinity, meta_number::operator_infinity_name);
+			define_primitive(*m_number.get_class(), meta_number::operator_nan, meta_number::operator_nan_name);
+			define_primitive(*m_number.get_class(), meta_number::operator_pi, meta_number::operator_pi_name);
+			define_primitive(*m_number.get_class(), meta_number::operator_tau, meta_number::operator_tau_name);
+			define_primitive(*m_number.get_class(), meta_number::operator_max, meta_number::operator_max_name);
+			define_primitive(*m_number.get_class(), meta_number::operator_min, meta_number::operator_min_name);
+			define_primitive(*m_number.get_class(), meta_number::operator_max_safe_integer, meta_number::operator_max_safe_integer_name);
+			define_primitive(*m_number.get_class(), meta_number::operator_min_safe_integer, meta_number::operator_min_safe_integer_name);
+
+			define_primitive(m_number, meta_number::operator_fraction, meta_number::operator_fraction_name);
+			define_primitive(m_number, meta_number::operator_truncate, meta_number::operator_truncate_name);
+			define_primitive(m_number, meta_number::operator_is_inf, meta_number::operator_is_inf_name);
+			define_primitive(m_number, meta_number::operator_is_nan, meta_number::operator_is_nan_name);
+			define_primitive(m_number, meta_number::operator_is_integer, meta_number::operator_is_integer_name);
+			define_primitive(m_number, meta_number::operator_sign, meta_number::operator_sign_name);
+			define_primitive(m_number, meta_number::operator_to_string, meta_number::operator_to_string_name);
+			define_primitive(m_number, meta_number::operator_plus, meta_number::operator_plus_name);
+			define_primitive(m_number, meta_number::operator_minus, meta_number::operator_minus_name);
+			define_primitive(m_number, meta_number::operator_multiplies, meta_number::operator_multiplies_name);
+			define_primitive(m_number, meta_number::operator_divides, meta_number::operator_divides_name);
+			define_primitive(m_number, meta_number::operator_modulus, meta_number::operator_modulus_name);
+			define_primitive(m_number, meta_number::operator_less, meta_number::operator_less_name);
+			define_primitive(m_number, meta_number::operator_less_equal, meta_number::operator_less_equal_name);
+			define_primitive(m_number, meta_number::operator_greater, meta_number::operator_greater_name);
+			define_primitive(m_number, meta_number::operator_greater_equal, meta_number::operator_greater_equal_name);
+			define_primitive(m_number, meta_number::operator_bitwise_and, meta_number::operator_bitwise_and_name);
+			define_primitive(m_number, meta_number::operator_bitwise_or, meta_number::operator_bitwise_or_name);
+			define_primitive(m_number, meta_number::operator_bitwise_xor, meta_number::operator_bitwise_xor_name);
+			define_primitive(m_number, meta_number::operator_bitwise_left_shift, meta_number::operator_bitwise_left_shift_name);
+			define_primitive(m_number, meta_number::operator_bitwise_right_shift, meta_number::operator_bitwise_right_shift_name);
+			define_primitive(m_number, meta_number::operator_bitwise_not, meta_number::operator_bitwise_not_name);
+			define_primitive(m_number, meta_number::operator_cmp_min, meta_number::operator_cmp_min_name);
+			define_primitive(m_number, meta_number::operator_cmp_max, meta_number::operator_cmp_max_name);
+			define_primitive(m_number, meta_number::operator_clamp, meta_number::operator_clamp_name);
+			define_primitive(m_number, meta_number::operator_abs, meta_number::operator_abs_name);
+			define_primitive(m_number, meta_number::operator_negate, meta_number::operator_negate_name);
+			define_primitive(m_number, meta_number::operator_sqrt, meta_number::operator_sqrt_name);
+			define_primitive(m_number, meta_number::operator_pow, meta_number::operator_pow_name);
+			define_primitive(m_number, meta_number::operator_cos, meta_number::operator_cos_name);
+			define_primitive(m_number, meta_number::operator_sin, meta_number::operator_sin_name);
+			define_primitive(m_number, meta_number::operator_tan, meta_number::operator_tan_name);
+			define_primitive(m_number, meta_number::operator_log, meta_number::operator_log_name);
+			define_primitive(m_number, meta_number::operator_log2, meta_number::operator_log2_name);
+			define_primitive(m_number, meta_number::operator_exp, meta_number::operator_exp_name);
+			define_primitive(m_number, meta_number::operator_exp2, meta_number::operator_exp2_name);
+			define_primitive(m_number, meta_number::operator_acos, meta_number::operator_acos_name);
+			define_primitive(m_number, meta_number::operator_asin, meta_number::operator_asin_name);
+			define_primitive(m_number, meta_number::operator_atan, meta_number::operator_atan_name);
+			define_primitive(m_number, meta_number::operator_atan2, meta_number::operator_atan2_name);
+			define_primitive(m_number, meta_number::operator_cbrt, meta_number::operator_cbrt_name);
+			define_primitive(m_number, meta_number::operator_ceil, meta_number::operator_ceil_name);
+			define_primitive(m_number, meta_number::operator_floor, meta_number::operator_floor_name);
+			define_primitive(m_number, meta_number::operator_round, meta_number::operator_round_name);
+			define_primitive(m_number, meta_number::operator_eq, meta_number::operator_eq_name);
+			define_primitive(m_number, meta_number::operator_not_eq, meta_number::operator_not_eq_name);
+		}
+		{
+			auto &m_string = meta_string::instance();
+			core_module->define_variable(meta_string::name, m_string.operator magic_value());
+
+			define_primitive(*m_string.get_class(), meta_string::operator_from_code_point, meta_string::operator_from_code_point_name);
+			define_primitive(*m_string.get_class(), meta_string::operator_from_byte, meta_string::operator_from_byte_name);
+
+			define_primitive(m_string, meta_string::operator_append, meta_string::operator_append_name);
+
+			// todo: string's interface
+		}
+		{
+			auto &m_list = meta_list::instance();
+			core_module->define_variable(meta_list::name, m_list.operator magic_value());
+
+			// todo: list's interface
+		}
+		{
+			auto &m_map = meta_map::instance();
+			core_module->define_variable(meta_map::name, m_map.operator magic_value());
+
+			// todo: map's interface
+		}
+		{
+			auto &m_system = meta_system::instance();
+			core_module->define_variable(meta_system::name, m_system.operator magic_value());
+
+			// todo: system's interface
+		}
+
+		// While bootstrapping the core types and running the core module, a number
+		// of string objects have been created, many of which were instantiated
+		// before meta_string was stored in the VM. Some of them *must* be created
+		// first -- the `class` for string itself has a reference to the object_string
+		// for its name.
+		//
+		// todo: These all currently have a null pointer, how we go back and assign
+		// them now that the string class is known?
+	}
+
 
 	gal_outer_method_function_type gal_virtual_machine_state::find_outer_method(const char *module_name, const char *class_name, bool is_static, const char *signature)
 	{
@@ -119,7 +306,7 @@ namespace gal
 		return method;
 	}
 
-	void gal_virtual_machine_state::bind_method(opcodes_type method_type, gal_index_type symbol, object_module &module, object_class &obj_class, magic_value method_value)
+	void gal_virtual_machine_state::bind_method(const opcodes_type method_type, gal_index_type symbol, const object_module &module, object_class &obj_class, magic_value method_value)
 	{
 		object_class *real_obj = &obj_class;
 		if (method_type == opcodes_type::CODE_METHOD_STATIC)
@@ -127,24 +314,23 @@ namespace gal
 			real_obj = obj_class.get_class();
 		}
 
-		method m{};
+		method m;
 		if (method_value.is_string())
 		{
 			const auto *name  = method_value.as_string()->data();
 
 			m.type			  = method_type::outer_type;
-			auto outer_method = find_outer_method(
+			if (const auto outer_method = find_outer_method(
 					module.get_name().data(),
 					obj_class.get_class_name().data(),
 					method_type == opcodes_type::CODE_METHOD_STATIC,
-					name);
-			if (outer_method)
+					name))
 			{
 				m.as.outer_method_function = outer_method;
 			}
 			else
 			{
-				auto error = object::create<object_string>(*this);
+				const auto error = object::create<object_string>(*this);
 				std_format::format_to(error->get_appender(), "Could not find outer method '{}' for class '{}' in module '{}'.", name, real_obj->get_class_name().str(), module.get_name().str());
 				fiber_->set_error(error->operator magic_value());
 				return;
@@ -155,7 +341,7 @@ namespace gal
 			m.type		 = method_type::block_type;
 			m.as.closure = method_value.as_closure();
 
-			// Patch up the bytecode now that we know the superclass.
+			// Patch up the byte-code now that we know the superclass.
 			set_class_method(*real_obj, m.as.closure->get_function());
 		}
 
@@ -201,7 +387,7 @@ namespace gal
 
 	object_module *gal_virtual_machine_state::get_module(magic_value name) const
 	{
-		auto module = modules_.get(name);
+		const auto module = modules_.get(name);
 		return module == magic_value_undefined ? nullptr : module.as_module();
 	}
 
@@ -239,7 +425,7 @@ namespace gal
 		gal_assert(symbol != gal_index_not_exist, "Should have defined <allocate> symbol.");
 
 		gal_assert(std::cmp_greater(obj_class->get_methods_size(), symbol), "Class should have allocator.");
-		auto &method = obj_class->get_method(symbol);
+		const auto &method = obj_class->get_method(symbol);
 		gal_assert(method.type == method_type::outer_type, "Allocator should be outer.");
 
 		// Pass the constructor arguments to the allocator as well.
@@ -266,7 +452,7 @@ namespace gal
 
 		if (not resolved)
 		{
-			auto error = object::create<object_string>(*this);
+			const auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Could not resolve module '{}' imported from '{}'.", name.str(), importer.str());
 			fiber_->set_error(error->operator magic_value());
 		}
@@ -279,7 +465,7 @@ namespace gal
 
 		// Copy the string into a GAL String object.
 		// todo: `resolved` sequence is dynamic allocated, we maybe need to delete it here.
-		return {*this, resolved, std::strlen(resolved)};
+		return {resolved, std::strlen(resolved)};
 	}
 
 	magic_value gal_virtual_machine_state::import_module(const object_string &name)
@@ -287,7 +473,7 @@ namespace gal
 		auto read_name = resolve_module(name);
 
 		// If the module is already loaded, we don't need to do anything.
-		auto existing  = modules_.get(read_name.operator magic_value());
+		const auto existing  = modules_.get(read_name.operator magic_value());
 		if (existing != magic_value_undefined)
 		{
 			return existing;
@@ -310,7 +496,7 @@ namespace gal
 
 		if (result.source == nullptr)
 		{
-			auto error = object::create<object_string>(*this);
+			const auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Could not load module '{}'.", read_name.str());
 			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
@@ -326,7 +512,7 @@ namespace gal
 
 		if (not module_closure)
 		{
-			auto error = object::create<object_string>(*this);
+			const auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Could not compile module '{}'.", read_name.str());
 			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
@@ -338,7 +524,7 @@ namespace gal
 
 	magic_value gal_virtual_machine_state::get_module_variable(object_module &module, const object_string &variable_name)
 	{
-		auto variable = module.get_variable(variable_name);
+		const auto variable = module.get_variable(variable_name);
 
 		// It's a runtime error if the imported variable does not exist.
 		if (variable != magic_value_undefined)
@@ -346,7 +532,7 @@ namespace gal
 			return variable;
 		}
 
-		auto error = object::create<object_string>(*this);
+		const auto error = object::create<object_string>(*this);
 		std_format::format_to(
 				error->get_appender(),
 				"Could not find a variable named '{}' in module '{}'.",
@@ -356,10 +542,10 @@ namespace gal
 		return magic_value_null;
 	}
 
-	bool gal_virtual_machine_state::check_arity(magic_value value, gal_size_type num_args)
+	bool gal_virtual_machine_state::check_arity(magic_value value, gal_size_type num_args) const
 	{
 		gal_assert(value.is_closure(), "Receiver must be a closure.");
-		auto &function = value.as_closure()->get_function();
+		const auto &function = value.as_closure()->get_function();
 
 		// We only care about missing arguments, not extras. The "- 1" is because
 		// num_args includes the receiver, the function itself, which we don't want to
@@ -369,7 +555,7 @@ namespace gal
 			return true;
 		}
 
-		auto error = object::create<object_string>(*this);
+		const auto error = object::create<object_string>();
 		std_format::format_to(
 				error->get_appender(),
 				"Function {} expects {} argument(s), but only given {} argument(s).",
@@ -548,7 +734,7 @@ namespace gal
 
 						// The receiver is the first argument.
 						args	  = fiber->get_stack_point(num_args);
-						obj_class = get_class(args[0]);
+						obj_class = &get_meta_class(args[0]);
 						goto complete_call;
 					}
 					case opcodes_type::CODE_SUPER_0:
@@ -1032,7 +1218,7 @@ namespace gal
 			return static_cast<gal_index_type>(value);
 		}
 
-		auto error = object::create<object_string>(*this);
+		const auto error = object::create<object_string>(*this);
 		std_format::format_to(error->get_appender(), "{} out of bound {}.", arg_name, count);
 		fiber_->set_error(error->operator magic_value());
 		return gal_index_not_exist;
@@ -1073,8 +1259,7 @@ namespace gal
 			api_stack_ = fiber_->get_stack_bottom();
 		}
 
-		const auto current = fiber_->get_current_stack_size();
-		if (current >= slots)
+		if (const auto current = fiber_->get_current_stack_size(); current >= slots)
 		{
 			return;
 		}
@@ -1090,7 +1275,7 @@ namespace gal
 	{
 		validate_slot(slot);
 
-		auto target = get_slot_value(slot);
+		const auto target = get_slot_value(slot);
 		if (target.is_boolean())
 		{
 			return gal_object_type::BOOLEAN_TYPE;
@@ -1126,7 +1311,7 @@ namespace gal
 	void gal_virtual_machine_state::finalize_outer(object_outer &outer) const
 	{
 		// TODO: Don't look up every time.
-		auto symbol = method_names_.find(gal_configuration::gal_outer_class_method::finalize_symbol_name, gal_configuration::gal_outer_class_method::finalize_symbol_name_length);
+		const auto symbol = method_names_.find(gal_configuration::gal_outer_class_method::finalize_symbol_name, gal_configuration::gal_outer_class_method::finalize_symbol_name_length);
 		gal_assert(symbol != gal_index_not_exist, "Should have defined <finalize> symbol.");
 
 		// If there are no finalizers, don't finalize it.
@@ -1142,15 +1327,15 @@ namespace gal
 			return;
 		}
 
-		auto &method = obj->get_method(symbol);
-		if (method.type == method_type::none_type)
+		const auto & [type, as] = obj->get_method(symbol);
+		if (type == method_type::none_type)
 		{
 			return;
 		}
 
-		gal_assert(method.type == method_type::outer_type, "Finalizer should be outer.");
+		gal_assert(type == method_type::outer_type, "Finalizer should be outer.");
 
-		auto finalizer = reinterpret_cast<gal_finalize_function_type>(method.as.outer_method_function);
+		const auto finalizer = reinterpret_cast<gal_finalize_function_type>(as.outer_method_function);
 		finalizer(outer.get_data());
 	}
 
@@ -1161,17 +1346,17 @@ namespace gal
 
 	object_closure *gal_virtual_machine_state::compile_source(const char *module, const char *source, bool is_expression, bool print_errors)
 	{
-		magic_value name = module ? object_string{*this, module, std::strlen(module)}.operator magic_value() : magic_value_null;
+		const magic_value name = module ? object_string{module, std::strlen(module)}.operator magic_value() : magic_value_null;
 
 		return compile_in_module(name, source, is_expression, print_errors);
 	}
 
-	magic_value gal_virtual_machine_state::get_module_variable(magic_value module_name, const object_string &variable_name)
+	magic_value gal_virtual_machine_state::get_module_variable(const magic_value module_name, const object_string &variable_name)
 	{
 		auto *module = get_module(module_name);
 		if (not module)
 		{
-			auto error = object::create<object_string>(*this);
+			const auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Module '{}' is not loaded.", module_name.as_string()->str());
 			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
@@ -1184,7 +1369,7 @@ namespace gal
 		auto *module = get_module(module_name);
 		if (not module)
 		{
-			auto error = object::create<object_string>(*this);
+			const auto error = object::create<object_string>(*this);
 			std_format::format_to(error->get_appender(), "Module '{}' is not loaded.", module_name.as_string()->str());
 			fiber_->set_error(error->operator magic_value());
 			return magic_value_null;
@@ -1228,7 +1413,7 @@ namespace gal
 		gal_assert(signature_length > 0, "Signature cannot be empty.");
 
 		// todo: check global module
-		auto		 *global_module = state.get_module(magic_value_null);
+		auto		 *global_module = state.get_module(gal_virtual_machine_state::core_module_key);
 
 		// todo: pattern
 
@@ -1238,7 +1423,7 @@ namespace gal
 		{
 			for (auto i = signature_length - 1; i > 0 && signature[i] != '('; --i)
 			{
-				if (signature[i] == '_')
+				if (signature[i] == arg_placeholder)
 				{
 					++num_params;
 				}
@@ -1250,7 +1435,7 @@ namespace gal
 		{
 			for (decltype(signature_length) i = 0; i < signature_length && signature[i] != ']'; ++i)
 			{
-				if (signature[i] == '_')
+				if (signature[i] == arg_placeholder)
 				{
 					++num_params;
 				}
@@ -1258,10 +1443,11 @@ namespace gal
 		}
 
 		// Add the signature to the method table.
-		auto  method   = state.method_names_.ensure(state, signature, signature_length);
+		auto  method   = state.method_names_.ensure(signature, signature_length);
 
 		// Create a little stub function that assumes the arguments are on the stack
 		// and calls the method.
+		// todo: global module or a dummy module?
 		auto *function = object::create<object_function>(state, *global_module, num_params + 1);
 
 		// Wrap the function in a closure and then in a handle. Do this here, so it
@@ -1299,7 +1485,7 @@ namespace gal
 		state.fiber_->stack_top_rebase(closure->get_function().get_slots_size());
 
 		state.fiber_->call_function(state, *closure, 0);
-		auto result = state.run_interpreter(state.fiber_);
+		const auto result = state.run_interpreter(state.fiber_);
 
 		// If the call didn't abort, then set up the API stack to point to the
 		// beginning of the stack so the host can access the call's return value.
@@ -1559,7 +1745,7 @@ namespace gal
 		gal_assert(module_name, "Module name cannot be nullptr.");
 		gal_assert(variable_name, "Variable name cannot be nullptr");
 
-		const auto module_name_str																		= object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
+		const auto module_name_str																		= object_string{module_name, std::strlen(module_name)}.operator magic_value();
 
 		const auto																			   *module = state.get_module(module_name_str);
 		gal_assert(module, "Could not find module.");
@@ -1575,7 +1761,7 @@ namespace gal
 		gal_assert(module_name, "Module name cannot be nullptr.");
 		gal_assert(variable_name, "Variable name cannot be nullptr");
 
-		const auto module_name_str																		= object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
+		const auto module_name_str																		= object_string{module_name, std::strlen(module_name)}.operator magic_value();
 
 		const auto																			   *module = state.get_module(module_name_str);
 		gal_assert(module, "Could not find module.");
@@ -1588,7 +1774,7 @@ namespace gal
 	{
 		gal_assert(module_name, "Module name cannot be nullptr.");
 
-		const auto module_name_str																		= object_string{state, module_name, std::strlen(module_name)}.operator magic_value();
+		const auto module_name_str																		= object_string{module_name, std::strlen(module_name)}.operator magic_value();
 
 		const auto																			   *module = state.get_module(module_name_str);
 

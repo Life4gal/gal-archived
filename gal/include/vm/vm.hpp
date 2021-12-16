@@ -42,17 +42,9 @@ namespace gal
 	public:
 		friend class gal_virtual_machine;
 
-		object_class*											 boolean_class_{nullptr};
-		object_class*											 class_class_{nullptr};
-		object_class*											 fiber_class_{nullptr};
-		object_class*											 function_class_{nullptr};
-		object_class*											 list_class_{nullptr};
-		object_class*											 map_class_{nullptr};
-		object_class*											 null_class_{nullptr};
-		object_class*											 number_class_{nullptr};
-		object_class*											 object_class_{nullptr};
-		object_class*											 range_class_{nullptr};
-		object_class*											 string_class_{nullptr};
+		constexpr static magic_value							 core_module_key = magic_value_null;
+		constexpr static const char								 core_module_name[] = "global";
+		constexpr static auto									 core_module_name_length = sizeof(core_module_name) - 1;
 
 		/**
 		 * @brief The fiber that is currently running.
@@ -61,10 +53,8 @@ namespace gal
 
 		/**
 		 * @brief The loaded modules. Each key is an object_string (except for
-		 * the main module, whose key is null) for the module's name and the
-		 * value is the object_module for the module.
-		 *
-		 * todo: maybe we need a global module?
+		 * the main module, whose key is magic_value_null) for the module's
+		 * name and the value is the object_module for the module.
 		 */
 		object_map												 modules_;
 
@@ -132,7 +122,7 @@ namespace gal
 		symbol_table											 method_names_;
 
 		explicit gal_virtual_machine_state(gal_configuration configuration)
-			: modules_(*this),
+			: 
 			  next_gc_(configuration.min_heap_size),
 			  configuration_(configuration) {}
 
@@ -208,26 +198,6 @@ namespace gal
 		magic_value					  get_module_variable(magic_value module_name, object_string::const_pointer variable_name);
 
 		/**
-		 * @brief Returns the class of [value].
-		 */
-		[[nodiscard]] object_class*	  get_class(magic_value value) const
-		{
-			if (value.is_number()) { return number_class_; }
-			if (value.is_object()) { return value.as_object()->get_class(); }
-
-			switch (value.get_tag())
-			{
-				case magic_value::tag_nan: return number_class_;
-				case magic_value::tag_null: return null_class_;
-				case magic_value::tag_false:
-				case magic_value::tag_true: return boolean_class_;
-				case magic_value::tag_undefined: UNREACHABLE();
-			}
-
-			UNREACHABLE();
-		}
-
-		/**
 		 * @brief Create an object on the heap and add it to the linked list.
 		 *
 		 * The reason why this function is needed is to avoid explicitly allocating objects
@@ -239,24 +209,14 @@ namespace gal
 		requires std::is_base_of_v<object, T>
 		auto make_object(Args&&... args)
 		{
-			return dynamic_cast<T*>(objects_.template emplace_front(object::create<T>(std::forward<Args>(args)...)));
+			return dynamic_cast<T*>(objects_.emplace_front(object::create<T>(std::forward<Args>(args)...)));
 		}
-
-		/**
-		 * @brief Verifies that [superclass_value] is a valid object to inherit from. That
-		 * means it must be a class and cannot be the class of any built-in type.
-		 *
-		 * Also validates that it doesn't result in a class with too many fields and
-		 * the other limitations outer classes have.
-		 *
-		 * If successful, returns empty object_string. Otherwise, returns a string for the runtime
-		 * error message.
-		 */
-		magic_value validate_superclass(const object_string& name, magic_value superclass_value, gal_size_type num_fields);
 
 		void		bind_outer_class(object_class& obj_class, object_module& module);
 
 	private:
+		void						   init_core_module();
+
 		/**
 		 * @brief Looks up a outer method in [module_name] on [class_name] with [signature].
 		 *
@@ -274,7 +234,7 @@ namespace gal
 		 * Aborts the current fiber if the method is a outer method that could not be
 		 * found.
 		 */
-		void						   bind_method(opcodes_type method_type, gal_index_type symbol, object_module& module, object_class& obj_class, magic_value method_value);
+		void						   bind_method(opcodes_type method_type, gal_index_type symbol, const object_module& module, object_class& obj_class, magic_value method_value);
 
 		void						   call_outer(object_fiber& fiber, gal_outer_method_function_type outer, gal_size_type num_args);
 
@@ -312,10 +272,10 @@ namespace gal
 
 		magic_value					   get_module_variable(object_module& module, const object_string& variable_name);
 
-		bool						   check_arity(magic_value value, gal_size_type num_args);
+		bool						   check_arity(magic_value value, gal_size_type num_args) const;
 
 		/**
-		 * @brief The main bytecode interpreter loop. This is where the magic happens. It is
+		 * @brief The main byte-code interpreter loop. This is where the magic happens. It is
 		 * also, as you can imagine, highly performance critical.
 		 */
 		gal_interpret_result		   run_interpreter(object_fiber* fiber);

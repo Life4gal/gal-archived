@@ -1,39 +1,39 @@
-name: build-and-test
-
-on:
-    push:
-        branches:
-            - master
-
-permissions: read-all
-
-jobs:
-    build-and-test:
-        name: ${{ matrix.toolchain }}
-        runs-on: ${{ matrix.os }}
-        
-        strategy:
-            fail-fast: false
-            matrix:
-                platform: [ x64 ]
-                # os: [ ubuntu-latest, windows-latest, macos-latest ]
-                os: [ ubuntu-latest, windows-latest ] # AppleClang 12.0.0.12000032 not support source_location yet!
-                configuration: [ Debug, Release, MinSizeRel, RelWithDebInfo ]
-        
-        steps:
-            -   name: Checkout Code
-                uses: actions/checkout@v2
-                with:
-                    submodules: true
-            
-            -   name: Configure (${{ matrix.configuration }})
-                run: cmake -S . -Bbuild -DCMAKE_BUILD_TYPE=${{ matrix.configuration }}
-            
-            -   name: Build with ${{ matrix.compiler }}
-                run: cmake --build build -j8
-            
-            -   name: Build and run test
-                working-directory: build
-                env:
-                    CTEST_OUTPUT_ON_FAILURE: 1
-                run: ctest -C ${{ matrix.configuration }}
+#name: build-and-test
+#
+#on:
+#    push:
+#        branches:
+#            - master
+#
+#permissions: read-all
+#
+#jobs:
+#    build-and-test:
+#        name: ${{ matrix.toolchain }}
+#        runs-on: ${{ matrix.os }}
+#        
+#        strategy:
+#            fail-fast: false
+#            matrix:
+#                platform: [ x64 ]
+#                # os: [ ubuntu-latest, windows-latest, macos-latest ]
+#                os: [ ubuntu-latest, windows-latest ] # AppleClang 12.0.0.12000032 not support source_location yet!
+#                configuration: [ Debug, Release, MinSizeRel, RelWithDebInfo ]
+#        
+#        steps:
+#            -   name: Checkout Code
+#                uses: actions/checkout@v2
+#                with:
+#                    submodules: true
+#            
+#            -   name: Configure (${{ matrix.configuration }})
+#                run: cmake -S . -Bbuild -DCMAKE_BUILD_TYPE=${{ matrix.configuration }}
+#            
+#            -   name: Build with ${{ matrix.compiler }}
+#                run: cmake --build build -j8
+#            
+#            -   name: Build and run test
+#                working-directory: build
+#                env:
+#                    CTEST_OUTPUT_ON_FAILURE: 1
+#                run: ctest -C ${{ matrix.configuration }}
