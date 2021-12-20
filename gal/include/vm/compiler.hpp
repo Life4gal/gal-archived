@@ -25,7 +25,7 @@
 
 namespace gal
 {
-	class compiler;
+	class gal_compiler;
 	class object_function;
 	class object_module;
 	class object_class;

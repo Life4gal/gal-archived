@@ -10,8 +10,7 @@ set(
 		include/gal.hpp
 
 		src/utils/assert.cpp
-		src/utils/utils.cpp
-
+		
 		src/vm/value.cpp
 		src/vm/vm.cpp
 		src/vm/compiler.cpp

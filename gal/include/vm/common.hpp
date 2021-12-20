@@ -54,12 +54,6 @@ namespace gal
 	constexpr auto max_method_signature		= max_method_name + (max_parameters * 2) + 6;
 
 	/**
-	 * @brief The maximum length of an identifier. The only real reason for this limitation
-	 * is so that error messages mentioning variables can be allocated at stack.
-	 */
-	constexpr auto max_variable_name		= 1 << 6;// 64
-
-	/**
 	 * @brief The maximum number of fields a class can have, including inherited fields.
 	 * This is explicit in the bytecode since `CODE_CLASS` and `CODE_SUBCLASS` take
 	 * a single byte for the number of fields. Note that it's 255 and not 256

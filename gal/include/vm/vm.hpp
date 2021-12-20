@@ -4,14 +4,11 @@
 	#define GAL_LANG_VM_HPP
 
 	#include <allocator.hpp>
-	#include <array>
 	#include <forward_list>
 	#include <gal.hpp>
 	#include <stack>
-	#include <memory>
-	#include <vm/common.hpp>
 	#include <vm/compiler.hpp>
-	#include <vm/value.hpp>
+#include <vm/value.hpp>
 
 namespace gal
 {
@@ -22,7 +19,7 @@ namespace gal
 	#undef OPCODE
 	};
 
-	std::uint8_t code_to_scalar(opcodes_type code)
+	inline std::uint8_t code_to_scalar(opcodes_type code)
 	{
 		return static_cast<std::uint8_t>(code);
 	}
@@ -113,7 +110,7 @@ namespace gal
 		 * allocated objects used by the compiler can be found if a GC is kicked off
 		 * in the middle of a compile.
 		 */
-		compiler*												 compiler_{nullptr};
+		gal_compiler*												 compiler_{nullptr};
 
 		/**
 		 * @brief There is a single global symbol table for all method names on all classes.

@@ -4,6 +4,7 @@
 	#define GAL_LANG_GAL_HPP
 
 	#include <cstdint>
+	#include <string_view>
 
 namespace gal
 {
@@ -101,7 +102,7 @@ namespace gal
 		/**
 		 * @brief Output a string of text to the user.
 		 */
-		using standard_output_function_type		   = void (*)(gal_virtual_machine& virtual_machine, const char* text);
+		using standard_output_function_type		   = void (*)(gal_virtual_machine& virtual_machine, std::string text);
 
 		/**
 		 * @brief Reports an error to the user.
@@ -116,7 +117,7 @@ namespace gal
 		 * [module] and [line] where the method or function is defined and [message] is
 		 * the name of the method or function.
 		 */
-		using standard_error_handler_function_type = void (*)(gal_virtual_machine& virtual_machine, gal_error_type type, const char* module, int line, const char* message);
+		using standard_error_handler_function_type = void (*)(gal_virtual_machine_state& state, gal_error_type type, std::string_view module_name, int line, std::string_view reason, std::string_view detail);
 
 		/**
 		 * @brief Gives the host a chance to canonicalize the imported module name,

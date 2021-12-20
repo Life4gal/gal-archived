@@ -243,6 +243,13 @@ namespace gal
 		constexpr static value_type sign_bit{value_type{1} << 63};
 
 		/**
+		 * @brief This is a temporary solution, only the magic_value marked with strong_ref_bit will be recycled.
+		 *
+		 * @note This means that we only have 50 valid bits to refer to an address (pointer).
+		 */
+		constexpr static value_type					 strong_ref_bit{value_type{1} << 50};
+
+		/**
 		 * @brief The bits that must be set to indicate a quiet NaN.
 		 *
 		 * note:
@@ -258,7 +265,7 @@ namespace gal
 		 */
 		constexpr static value_type quiet_nan{0x7ffc000000000000};
 
-		constexpr static value_type pointer_mask{quiet_nan | sign_bit};
+		constexpr static value_type pointer_mask{quiet_nan | sign_bit | strong_ref_bit};
 
 		/**
 		 * @brief Singleton values.
@@ -286,6 +293,18 @@ namespace gal
 
 		explicit magic_value(const object* obj) noexcept
 			: data_{reinterpret_cast<std::uintptr_t>(obj)} {}
+
+		/**
+		 * @brief Obtain a magic_value that does not have ownership in a scenario that may share the same magic_value.
+		 *
+		 * @note Because the mechanism of magic_value causes us to be very careful when using it,
+		 * we must ensure that the ownership of the magic_value is in the longest life cycle,
+		 * otherwise the other magic_value will refer to a dangling address.
+		 */
+		magic_value weak_this() const noexcept
+		{
+			return magic_value{data_ ^ strong_ref_bit};
+		}
 
 		/**
 		 * @brief If the value stores a pointer to object, add it to the gc sequence.
@@ -467,6 +486,12 @@ namespace gal
 		void clear() { buffer_.clear(); }
 
 		void push(const value_type data) { buffer_.push_back(data); }
+
+		[[nodiscard]] gal_index_type push_get(const value_type data)
+		{
+			push(data);
+			return buffer_.size() - 1;
+		}
 
 		void fill(const value_type data, const size_type size) { for (size_type i = 0; i < size; ++i) { push(data); } }
 
@@ -942,9 +967,24 @@ namespace gal
 			return *this;
 		}
 
+		[[nodiscard]] constants_buffer_size_type get_constant_size() const noexcept
+		{
+			return constants_.size();
+		}
+
 		[[nodiscard]] decltype(auto) get_constant(const constants_buffer_size_type index) noexcept { return constants_[index]; }
 
 		[[nodiscard]] decltype(auto) get_constant(const constants_buffer_size_type index) const noexcept { return constants_[index]; }
+
+		void						 add_constant(const constants_buffer_value_type constant)
+		{
+			constants_.push(constant);
+		}
+
+		[[nodiscard]] gal_index_type add_constant_get(const constants_buffer_value_type constant)
+		{
+			return constants_.push_get(constant);
+		}
 
 		[[nodiscard]] gal_size_type get_parameters_arity() const noexcept { return arity_; }
 
