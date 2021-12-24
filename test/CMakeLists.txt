@@ -8,7 +8,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(
 		${PROJECT_NAME}_SOURCE
-		src/test_allocator.cpp
+		
+		src/test_point.cpp
 )
 
 add_executable(
@@ -27,7 +28,8 @@ include(${GAL_3RDPARTY_PATH}/google-test.cmake)
 target_link_libraries(
 		${PROJECT_NAME}
 		PRIVATE
-		gal
+		gal::UTILS
+		gal::AST
 		gtest_main
 )
 
