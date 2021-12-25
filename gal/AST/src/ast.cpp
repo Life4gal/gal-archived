@@ -2,21 +2,14 @@
 
 namespace gal
 {
-	constexpr ast_visitor::~ast_visitor() = default;
+	void ast_local::visit(ast_visitor& visitor) const { if (annotation) { annotation->visit(visitor); } }
 
-	void ast_visitor::visit(const ast_type_list& list)
+	void ast_type_list::visit(ast_visitor& visitor) const
 	{
-		const auto& [types, tail_type] = list;
+		for (const auto& type: types) { type->visit(visitor); }
 
-		for (const auto& type : types)
-		{
-			type->visit(*this);
-		}
-
-		if (tail_type)
-		{
-			tail_type->visit(*this);
-		}
+		if (tail_type) { tail_type->visit(visitor); }
 	}
 
+	constexpr ast_visitor::~ast_visitor() = default;
 }
