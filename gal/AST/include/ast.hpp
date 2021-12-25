@@ -45,6 +45,8 @@ namespace gal
 		ast_type* annotation;
 
 		void visit(ast_visitor& visitor) const;
+
+		[[nodiscard]] const ast_name& get_name() const noexcept { return name; }
 	};
 
 	template<typename T>
@@ -140,7 +142,7 @@ namespace gal
 		[[nodiscard]] constexpr T* as() noexcept { return class_index_ == T::get_rtti_index() ? static_cast<T*>(this) : nullptr; }
 
 		template<has_rtti_index T>
-		[[nodiscard]] constexpr T* as() const noexcept { return class_index_ == T::get_rtti_index() ? static_cast<const T*>(this) : nullptr; }
+		[[nodiscard]] constexpr const T* as() const noexcept { return class_index_ == T::get_rtti_index() ? static_cast<const T*>(this) : nullptr; }
 	};
 
 	class ast_expression : public ast_node
@@ -149,6 +151,8 @@ namespace gal
 		using ast_node::ast_node;
 
 		ast_expression* as_expression() override { return this; }
+
+		[[nodiscard]] ast_name		get_identifier() const noexcept;
 	};
 
 	class ast_expression_error final : public ast_expression
@@ -220,7 +224,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_error)
 
-		ast_statement_error(const location loc, error_expressions_type expressions, error_statements_type statements, unsigned message_index)
+		ast_statement_error(const location loc, error_expressions_type expressions, error_statements_type statements, const unsigned message_index)
 			: ast_statement{get_rtti_index(), loc},
 			  expressions_{std::move(expressions)},
 			  statements_{std::move(statements)},
@@ -273,6 +277,57 @@ namespace gal
 			  message_index_{message_index} {}
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { for (const auto& type: types_) { type->visit(visitor); } } }
+
+		// todo: interface
+	};
+
+	class ast_type_pack_explicit final : public ast_type_pack
+	{
+	private:
+		ast_type_list types_;
+
+	public:
+		GAL_SET_RTTI(ast_type_pack_explicit)
+
+		ast_type_pack_explicit(const location loc, ast_type_list types)
+			: ast_type_pack{get_rtti_index(), loc},
+			  types_{std::move(types)} {}
+
+		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { types_.visit(visitor); } }
+
+		// todo: interface
+	};
+
+	class ast_type_pack_variadic final : public ast_type_pack
+	{
+	private:
+		ast_type* variadic_type_;
+
+	public:
+		GAL_SET_RTTI(ast_type_pack_variadic)
+
+		constexpr ast_type_pack_variadic(const location loc, ast_type* variadic_type)
+			: ast_type_pack{get_rtti_index(), loc},
+			  variadic_type_{variadic_type} {}
+
+		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { variadic_type_->visit(visitor); } }
+
+		// todo: interface
+	};
+
+	class ast_type_pack_generic final : public ast_type_pack
+	{
+	private:
+		ast_name generic_name_;
+
+	public:
+		GAL_SET_RTTI(ast_type_pack_generic)
+
+		ast_type_pack_generic(const location loc, ast_name generic_name)
+			: ast_type_pack{get_rtti_index(), loc},
+			  generic_name_{std::move(generic_name)} {}
+
+		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
 
 		// todo: interface
 	};
@@ -468,6 +523,42 @@ namespace gal
 		ast_type_intersection(const location loc, intersection_types_type types)
 			: ast_type{get_rtti_index(), loc},
 			  types_{std::move(types)} {}
+
+		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { for (const auto& type: types_) { type->visit(visitor); } } }
+
+		// todo: interface
+	};
+
+	class ast_type_singleton_boolean final : public ast_type
+	{
+	private:
+		gal_boolean_type value_;
+
+	public:
+		GAL_SET_RTTI(ast_type_singleton_boolean)
+
+		constexpr ast_type_singleton_boolean(const location loc, gal_boolean_type value)
+			: ast_type{get_rtti_index(), loc},
+			  value_{value} {}
+
+		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
+
+		// todo: interface
+	};
+
+	class ast_type_singleton_string final : public ast_type
+	{
+	private:
+		gal_string_type value_;
+
+	public:
+		GAL_SET_RTTI(ast_type_singleton_string)
+
+		ast_type_singleton_string(const location loc, gal_string_type value)
+			: ast_type{get_rtti_index(), loc},
+			  value_{std::move(value)} {}
+
+		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
 
 		// todo: interface
 	};
