@@ -17,7 +17,7 @@ namespace gal
 		requires std::is_enum_v<T>
 	constexpr bool is_enum_between_of(T current_enum, std::type_identity_t<T> enum_begin, std::type_identity_t<T> enum_end) noexcept
 	{
-		using underlying_type = std::underlying_type<T>;
+		using underlying_type = std::underlying_type_t<T>;
 
 		const auto current = static_cast<underlying_type>(current_enum);
 
