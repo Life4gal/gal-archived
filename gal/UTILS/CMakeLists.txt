@@ -8,6 +8,8 @@ set(
 
 		src/assert.cpp
 		src/point.cpp
+		src/string_utils.cpp
+		src/confusable.cpp
 )
 
 message("${PROJECT_NAME} info: build ${PROJECT_NAME} as a shared module.")

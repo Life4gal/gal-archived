@@ -10,6 +10,7 @@ set(
 		${PROJECT_NAME}_SOURCE
 		
 		src/test_point.cpp
+		src/test_string_utils.cpp
 )
 
 add_executable(
@@ -17,11 +18,19 @@ add_executable(
 		${${PROJECT_NAME}_SOURCE}
 )
 
-target_compile_features(
-		${PROJECT_NAME}
-		PRIVATE
-		cxx_std_20
-)
+if(MSVC)
+	target_compile_features(
+			${PROJECT_NAME}
+			PRIVATE
+			cxx_std_23
+	)
+else()
+	target_compile_features(
+			${PROJECT_NAME}
+			PRIVATE
+			cxx_std_20
+	)
+endif(MSVC)
 
 include(${GAL_3RDPARTY_PATH}/google-test.cmake)
 

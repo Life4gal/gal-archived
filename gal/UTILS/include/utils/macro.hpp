@@ -5,14 +5,13 @@
 
 namespace gal
 {
-	// Tell the compiler that this part of the code will never be reached.
-	#if defined(_MSC_VER)
+	#ifdef _MSC_VER
 		#define UNREACHABLE() __assume(0)
-	#elif (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5))
-		#define UNREACHABLE() __builtin_unreachable()
+		#define DEBUG_TRAP() __debugbreak()
 	#else
-		#define UNREACHABLE()
-	#endif
+		#define UNREACHABLE() __builtin_unreachable()
+		#define DEBUG_TRAP() __builtin_trap()
+	#endif// _MSC_VER
 }
 
 #endif // GAL_LANG_UTILS_MACRO_HPP

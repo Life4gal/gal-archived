@@ -7,6 +7,7 @@ set(
 		${PROJECT_NAME}_SOURCE
 
 		src/ast.cpp
+		src/lexer.cpp
 )
 
 add_library(

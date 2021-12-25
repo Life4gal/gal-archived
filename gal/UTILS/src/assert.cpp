@@ -1,7 +1,8 @@
 #include <utils/assert.hpp>
+#include <utils/macro.hpp>
 
 #ifdef GAL_FMT_NOT_SUPPORT
-	#include <fmt/format.h>
+#include <fmt/format.h>
 #else
 	#include <format>
 #endif
@@ -11,22 +12,23 @@
 namespace gal
 {
 	void gal_assert(
-			[[maybe_unused]] bool						condition,
-			[[maybe_unused]] std::string_view			message,
+			[[maybe_unused]] const bool condition,
+			[[maybe_unused]] std::string_view message,
 			[[maybe_unused]] const std_source_location& location) noexcept
 	{
-#ifndef NDEBUG
+		#ifndef NDEBUG
 		if (not condition)
 		{
 			// todo: output to other places, or you can specify the output location
 
-	#ifdef GAL_FMT_NOT_SUPPORT
+			#ifdef GAL_FMT_NOT_SUPPORT
 			std::cerr << fmt::format("[FILE: {} -> FUNCTION: {} -> LINE: {}] assert failed: {}\n", location.file_name(), location.function_name(), location.line(), message);
-	#else
+			#else
 			std::cerr << std::format("[FILE: {} -> FUNCTION: {} -> LINE: {}] assert failed: {}\n", location.file_name(), location.function_name(), location.line(), message);
-	#endif
+			#endif
+			DEBUG_TRAP();
 			std::abort();
 		}
-#endif
+		#endif
 	}
 }// namespace gal
