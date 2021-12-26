@@ -11,6 +11,7 @@
 #include <utils/enum_utils.hpp>
 #include <utils/confusable.hpp>
 #include <utils/hash_container.hpp>
+#include <utils/string_pool.hpp>
 
 #include <ast/ast.hpp>
 
@@ -169,7 +170,7 @@ namespace gal
 
 		[[nodiscard]] std::string to_string() const noexcept
 		{
-			switch (type_)
+			switch (type_)  // NOLINT(clang-diagnostic-switch-enum)
 			{
 				case token_type::eof: { return "<eof>"; }
 				case token_type::equal: { return "'=='"; }
@@ -227,38 +228,123 @@ namespace gal
 	class ast_name_table
 	{
 	private:
+		struct table_entry_view
+		{
+			ast_name_view name;
+		};
+
 		struct table_entry
 		{
 			ast_name name;
 			lexeme_point::token_type type;
 
+			static table_entry		 empty_case()
+			{
+				table_entry empty_case{"", lexeme_point::token_type::eof};
+				return empty_case;
+			}
+
 			[[nodiscard]] constexpr bool operator==(const table_entry& rhs) const noexcept { return name == rhs.name; }
 
 			[[nodiscard]] constexpr bool empty() const noexcept { return type == lexeme_point::token_type::eof; }
-
-			struct table_entry_hasher
-			{
-				[[nodiscard]] std::size_t operator()(const table_entry& entry) const noexcept
-				{
-					// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
-					constexpr std::uint64_t hash_init{14695981039346656037ull};
-					constexpr std::uint64_t hash_prime{1099511628211ull};
-
-					auto hash = hash_init;
-					for (const auto c: entry.name)
-					{
-						hash ^= c;
-						hash *= hash_prime;
-					}
-					return hash;
-				}
-			};
 		};
 
-		hash_set<table_entry, table_entry::table_entry_hasher> data_;
-		managed_allocator& allocator_;
+		struct entry_hasher
+		{
+		private:
+			[[nodiscard]] std::size_t operator()(const ast_name_view name) const noexcept
+			{
+				// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
+				constexpr std::uint64_t hash_init{14695981039346656037ull};
+				constexpr std::uint64_t hash_prime{1099511628211ull};
+
+				auto					hash = hash_init;
+				for (const auto c: name)
+				{
+					hash ^= c;
+					hash *= hash_prime;
+				}
+				return hash;
+			}
+
+		public:
+			using is_transparent = int;
+
+			[[nodiscard]] std::size_t operator()(const table_entry& entry) const noexcept
+			{
+				return this->operator()(entry.name);
+			}
+
+			[[nodiscard]] std::size_t operator()(const table_entry_view& entry) const noexcept
+			{
+				return this->operator()(entry.name);
+			}
+		};
+
+		struct entry_equal
+		{
+			using is_transparent = int;
+
+			friend constexpr bool operator==(const table_entry_view& entry_view, const table_entry& entry)
+			{
+				return entry_view.name == entry.name;
+			}
+
+			friend constexpr bool operator==(const table_entry& entry, const table_entry_view& entry_view)
+			{
+				return entry.name == entry_view.name;
+			}
+
+			friend constexpr bool operator==(const table_entry& entry1, const table_entry& entry2)
+			{
+				return entry1 == entry2;
+			}
+		};
+
+		hash_set<table_entry, entry_hasher, entry_equal> data_;
 	public:
-		explicit ast_name_table(managed_allocator& allocator);
+		ast_name_table()
+		{
+			// todo: maybe we need a string pool ?
+
+			using enum lexeme_point::token_type;
+			constexpr auto begin = static_cast<lexeme_point::token_underlying_type>(keyword_sentinel_begin) + 1;
+			constexpr auto end	 = static_cast<lexeme_point::token_underlying_type>(keyword_sentinel_end);
+			for (auto i = begin; i < end; ++i)
+			{
+				insert(lexeme_point::keywords[i - begin].data(), static_cast<lexeme_point::token_type>(i));
+			}
+		}
+
+		ast_name_view insert(ast_name name, const lexeme_point::token_type type)
+		{
+			const auto [it, inserted] = data_.emplace(std::move(name), type);
+			gal_assert(inserted, "Cannot insert an existed entry!");
+
+			return it->name;
+		}
+
+		std::pair<ast_name_view, lexeme_point::token_type> insert_if_not_exist(const ast_name_view name)
+		{
+			if (const auto it = data_.find(table_entry_view{name}); it != data_.end())
+			{
+				return std::make_pair(ast_name_view{it->name}, it->type);
+			}
+
+			const auto [it, inserted] = data_.emplace(name, lexeme_point::token_type::name);
+			gal_assert(inserted, "This should not happened!");
+
+			return std::make_pair(ast_name_view{it->name}, it->type);
+		}
+
+		std::pair<ast_name_view, lexeme_point::token_type> get(const ast_name_view name)
+		{
+			if (const auto it = data_.find(table_entry_view{name}); it != data_.end())
+			{
+				return std::make_pair(ast_name_view{it->name}, it->type);
+			}
+			return std::make_pair(ast_name_view{}, lexeme_point::token_type::name);
+		}
 	};
 }
 

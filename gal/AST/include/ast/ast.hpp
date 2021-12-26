@@ -4,6 +4,7 @@
 #define GAL_LANG_AST_AST_HPP
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <functional>
 #include <optional>
@@ -21,6 +22,7 @@ namespace gal
 	using gal_string_type = std::string;
 
 	using ast_name = std::string;
+	using ast_name_view = std::string_view;
 
 	class ast_visitor;
 
