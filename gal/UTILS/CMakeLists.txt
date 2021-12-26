@@ -84,4 +84,12 @@ else ()
 	)
 endif (${COMPILER_SUPPORT_FORMAT})
 
+include(${GAL_3RDPARTY_PATH}/range-v3.cmake)
+message("${PROJECT_NAME} info: use range-v3 as a temporary solution, build fmtlib as a public module of ${PROJECT_NAME}.")
+target_link_libraries(
+			${PROJECT_NAME}
+			PUBLIC
+			range-v3
+)
+
 include(${GAL_MODULE_PATH}/config_build_type.cmake)

@@ -153,7 +153,7 @@ namespace gal
 		lexeme_point(const token_underlying_type type, const location loc)
 			: lexeme_point(static_cast<token_type>(type), loc) {}
 
-		lexeme_point(const token_type type, const location loc, const char* data, length_type length)
+		lexeme_point(const token_type type, const location loc, const char* data, const length_type length)
 			: type_{type},
 			  loc_{loc},
 			  data_{data},
