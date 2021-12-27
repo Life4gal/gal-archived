@@ -11,12 +11,12 @@
 
 namespace gal
 {
+	#ifndef GAL_NO_ASSERT
 	void gal_assert(
-			[[maybe_unused]] const bool condition,
-			[[maybe_unused]] std::string_view message,
-			[[maybe_unused]] const std_source_location& location) noexcept
+			const bool condition,
+			std::string_view message,
+			const std_source_location& location) noexcept
 	{
-		#ifndef NDEBUG
 		if (not condition)
 		{
 			// todo: output to other places, or you can specify the output location
@@ -29,6 +29,6 @@ namespace gal
 			DEBUG_TRAP();
 			std::abort();
 		}
-		#endif
 	}
+	#endif
 }// namespace gal

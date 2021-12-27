@@ -178,7 +178,7 @@ namespace gal
 		static_assert(std::size(keywords) == static_cast<token_underlying_type>(token_type::keyword_sentinel_end) - static_cast<token_underlying_type>(token_type::keyword_sentinel_begin) + 1 - 2);
 
 		constexpr static bool is_keyword(const ast_name_view keyword) noexcept { return std::ranges::find(keywords, keyword) != std::ranges::end(keywords); }
-		constexpr static codepoint_type bad_codepoint = -1;
+		constexpr static codepoint_type bad_codepoint = static_cast<codepoint_type>(-1);
 
 	private:
 		token_type type_;
@@ -303,7 +303,7 @@ namespace gal
 		struct entry_hasher
 		{
 		private:
-			[[nodiscard]] std::size_t operator()(const ast_name_view name) const noexcept
+			[[nodiscard]] constexpr std::size_t operator()(const ast_name_view name) const noexcept
 			{
 				// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
 				constexpr std::uint64_t hash_init{14695981039346656037ull};
@@ -321,20 +321,20 @@ namespace gal
 		public:
 			using is_transparent = int;
 
-			[[nodiscard]] std::size_t operator()(const table_entry& entry) const noexcept { return this->operator()(entry.name); }
+			[[nodiscard]] constexpr std::size_t operator()(const table_entry& entry) const noexcept { return this->operator()(entry.name); }
 
-			[[nodiscard]] std::size_t operator()(const table_entry_view& entry) const noexcept { return this->operator()(entry.name); }
+			[[nodiscard]] constexpr std::size_t operator()(const table_entry_view& entry) const noexcept { return this->operator()(entry.name); }
 		};
 
 		struct entry_equal
 		{
 			using is_transparent = int;
 
-			friend constexpr bool operator==(const table_entry_view& entry_view, const table_entry& entry) { return entry_view.name == entry.name; }
+			[[nodiscard]] constexpr bool operator()(const table_entry_view& entry_view, const table_entry& entry) const noexcept { return entry_view.name == entry.name; }
 
-			friend constexpr bool operator==(const table_entry& entry, const table_entry_view& entry_view) { return entry.name == entry_view.name; }
+			[[nodiscard]] constexpr bool operator()(const table_entry& entry, const table_entry_view& entry_view) const noexcept { return entry.name == entry_view.name; }
 
-			friend constexpr bool operator==(const table_entry& entry1, const table_entry& entry2) { return entry1 == entry2; }
+			[[nodiscard]] constexpr bool operator()(const table_entry& entry1, const table_entry& entry2) const noexcept { return entry1 == entry2; }
 		};
 
 		hash_set<table_entry, entry_hasher, entry_equal> data_;
@@ -424,9 +424,9 @@ namespace gal
 
 		[[nodiscard]] location previous_location() const noexcept { return previous_loc_; }
 
-		constexpr const lexeme_point& next() { return next(skip_comment_); }
+		const lexeme_point& next() { return next(skip_comment_); }
 
-		constexpr const lexeme_point& next(const bool skip_comment)
+		const lexeme_point& next(const bool skip_comment)
 		{
 			do
 			{
@@ -440,7 +440,7 @@ namespace gal
 			return point_;
 		}
 
-		constexpr void next_line()
+		void next_line()
 		{
 			consume_until([](const auto c) { return c && not is_new_line(c); });
 
@@ -554,7 +554,7 @@ namespace gal
 
 		[[nodiscard]] constexpr bool is_quoted_string_end(const char c) const noexcept { return peek_char(0) == c && peek_char(1) == c && peek_char(2) == c; }
 
-		constexpr void consume_quoted_string_begin_or_end() noexcept
+		GAL_ASSERT_CONSTEXPR void consume_quoted_string_begin_or_end() noexcept
 		{
 			gal_assert(is_quoted_string_begin().first || is_quoted_string_end(is_quoted_string_begin().second), "Wrong quoted string format!");
 
@@ -567,11 +567,11 @@ namespace gal
 
 		[[nodiscard]] std::pair<ast_name_table::name_type, lexeme_point::token_type> read_name();
 
-		[[nodiscard]] constexpr lexeme_point read_number(position begin, offset_type start_offset);
+		[[nodiscard]] lexeme_point read_number(position begin, offset_type start_offset);
 
-		[[nodiscard]] constexpr lexeme_point read_utf8_error();
+		[[nodiscard]] lexeme_point read_utf8_error();
 
-		[[nodiscard]] constexpr lexeme_point read_next();
+		[[nodiscard]] lexeme_point read_next();
 	};
 }
 

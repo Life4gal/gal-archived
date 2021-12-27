@@ -11,6 +11,7 @@ set(
 		
 		src/test_point.cpp
 		src/test_string_utils.cpp
+		src/test_string_pool.cpp
 )
 
 add_executable(

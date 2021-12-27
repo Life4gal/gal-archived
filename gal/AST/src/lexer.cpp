@@ -153,7 +153,7 @@ namespace gal
 			if (const auto sign = peek_char(); sign == '+' || sign == '-') { consume(); }
 		}
 
-		consume_until([](const char c) { is_alpha(c) || is_digit(c) || c == '_'; });
+		consume_until([](const char c) { return is_alpha(c) || is_digit(c) || c == '_'; });
 
 		return {lexeme_point::token_type::number, {begin, {0, 0}}, {buffer_.data() + start_offset, offset_ - start_offset}};
 	}
@@ -207,7 +207,7 @@ namespace gal
 		return {{begin, {0, 0}}, codepoint};
 	}
 
-	constexpr lexeme_point lexer::read_next()
+	lexeme_point lexer::read_next()
 	{
 		const auto begin = current_position();
 		auto make_location = [begin](const point::size_type length) { return make_horizontal_line(begin, length); };
