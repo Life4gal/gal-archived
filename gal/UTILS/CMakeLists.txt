@@ -8,8 +8,8 @@ set(
 
 		src/assert.cpp
 		src/point.cpp
-		
 		src/confusable.cpp
+		src/timer.cpp
 )
 
 message("${PROJECT_NAME} info: build ${PROJECT_NAME} as a shared module.")

@@ -108,7 +108,7 @@ namespace gal::utils
 	template<typename T1, typename T2>
 	constexpr bool operator==(const default_allocator<T1>& lhs, const default_allocator<T2>& rhs) { return lhs.allocator == rhs.allocator; }
 
-	class managed_allocator
+	class trivial_allocator
 	{
 	public:
 		using size_type = std::size_t;
@@ -125,14 +125,14 @@ namespace gal::utils
 		page_type root_{};
 		size_type offset_{0};
 	public:
-		managed_allocator() { root_.emplace_front(); }
-		managed_allocator(managed_allocator&&) = default;
-		managed_allocator& operator=(managed_allocator&&) = default;
+		trivial_allocator() { root_.emplace_front(); }
+		trivial_allocator(trivial_allocator&&) = default;
+		trivial_allocator& operator=(trivial_allocator&&) = default;
 
-		managed_allocator(const managed_allocator&) = delete;
-		managed_allocator& operator=(const managed_allocator&) = delete;
+		trivial_allocator(const trivial_allocator&) = delete;
+		trivial_allocator& operator=(const trivial_allocator&) = delete;
 
-		~managed_allocator() = default;
+		~trivial_allocator() = default;
 
 		void* allocate(
 				size_type n
@@ -174,7 +174,8 @@ namespace gal::utils
 		}
 
 		template<typename T, typename... Args>
-			requires std::is_trivially_constructible_v<T, Args...> && std::is_trivially_destructible_v<T>
+			// todo: add qualification
+			// requires std::is_trivially_constructible_v<T, Args...> && std::is_trivially_destructible_v<T>
 		T* new_object(Args&&... args)
 		{
 			// We have no way (and will not) to destruct the object allocated from this allocator, so the object must be trivial.

@@ -4,6 +4,7 @@
 #define GAL_LANG_AST_LEXER_HPP
 
 #include <variant>
+#include <concepts>
 
 #include <utils/point.hpp>
 #include <utils/allocator.hpp>
@@ -21,6 +22,11 @@ namespace gal::ast
 	class lexeme_point
 	{
 	public:
+		/**
+		 * @note
+		 *		lexeme_point::to_string
+		 *		lexer::read_next
+		 */
 		enum class token_type
 		{
 			eof = 0,
@@ -30,33 +36,21 @@ namespace gal::ast
 
 			char_sentinel_end = 256,
 
-			// =
-			assignment,
+			// **
+			pow,
 			// ==
 			equal,
 			// !=
 			not_equal,
-			// <
-			less_than,
 			// <=
 			less_equal,
-			// >
-			greater_than,
 			// >=
 			greater_equal,
 
-			// +
-			plus,
-			// -
-			minus,
-			// *
-			multiply,
-			// /
-			divide,
-			// %
-			modulus,
-			// **
-			pow,
+			// <<
+			bitwise_left_shift,
+			// >>
+			bitwise_right_shift,
 
 			// +=
 			plus_assign,
@@ -70,6 +64,22 @@ namespace gal::ast
 			modulus_assign,
 			// **=
 			pow_assign,
+			// &=
+			bitwise_and_assign,
+			// |=
+			bitwise_or_assign,
+			// ^=
+			bitwise_xor_assign,
+			// <<=
+			bitwise_left_shift_assign,
+			// >>=
+			bitwise_right_shift_assign,
+			// ::
+			double_colon,
+			// ->
+			right_arrow,
+			// ...
+			ellipsis,
 
 			raw_string,
 			// ''' string ''' or """ string """ 
@@ -84,30 +94,6 @@ namespace gal::ast
 			// string_l3 >[optional level number]>
 			// ===> string_l1string_l2sting_l3
 			block_comment,
-
-			// :
-			colon,
-			// ::
-			double_colon,
-			// ->
-			right_arrow,
-
-			// (
-			parentheses_bracket_open,
-			// )
-			parentheses_bracket_close,
-			// [
-			square_bracket_open,
-			// ]
-			square_bracket_close,
-			// {
-			curly_bracket_open,
-			// }
-			curly_bracket_close,
-			// ,
-			comma,
-			// ;
-			semicolon,
 
 			broken_string,
 			broken_comment,
@@ -139,10 +125,20 @@ namespace gal::ast
 			keyword_until,
 			keyword_while,
 
+			// this is also the sentinel of all tokens
 			keyword_sentinel_end,
 		};
 
-		constexpr static ast_name_view keywords[] =
+		using keyword_literal_type = ast_name;
+
+		using token_underlying_type = std::underlying_type_t<token_type>;
+
+		using data_or_name_type = ast_name;
+		using codepoint_type = std::uint32_t;
+
+		using data_type = std::variant<data_or_name_type, codepoint_type>;
+
+		constexpr static keyword_literal_type keywords[] =
 		{
 				{"and"},
 				{"break"},
@@ -168,16 +164,327 @@ namespace gal::ast
 				{"while"}
 		};
 
-		using token_underlying_type = std::underlying_type_t<token_type>;
-
-		using string_type = ast_name_view;
-		using codepoint_type = std::uint32_t;
-
-		using data_type = std::variant<string_type, codepoint_type>;
-
 		static_assert(std::size(keywords) == static_cast<token_underlying_type>(token_type::keyword_sentinel_end) - static_cast<token_underlying_type>(token_type::keyword_sentinel_begin) + 1 - 2);
 
-		constexpr static bool is_keyword(const ast_name_view keyword) noexcept { return std::ranges::find(keywords, keyword) != std::ranges::end(keywords); }
+		[[nodiscard]] constexpr static token_underlying_type token_to_scalar(token_type type) noexcept { return static_cast<token_underlying_type>(type); }
+
+		[[nodiscard]] constexpr static bool is_keyword(const ast_name keyword) noexcept { return std::ranges::find(keywords, keyword) != std::ranges::end(keywords); }
+
+		constexpr static keyword_literal_type non_token_keywords[] =
+		{
+				{"continue"},
+				{"export"},// export
+				{"using"}, // type alias
+				{"declare"},
+		};
+
+		[[nodiscard]] constexpr static keyword_literal_type get_continue_keyword() noexcept { return non_token_keywords[0]; }
+		[[nodiscard]] constexpr static keyword_literal_type get_export_keyword() noexcept { return non_token_keywords[1]; }
+		[[nodiscard]] constexpr static keyword_literal_type get_type_alias_keyword() noexcept { return non_token_keywords[2]; }
+		[[nodiscard]] constexpr static keyword_literal_type get_declare_keyword() noexcept { return non_token_keywords[3]; }
+
+		/**
+		 * @brief 1 ~ 255
+		 */
+		constexpr static char non_token_symbol[] =
+		{
+				'=',
+				'+',
+				'-',
+				'*',
+				'/',
+				'%',
+				'&',
+				'|',
+				'^',
+				'~',
+				',',
+				'!',
+				':',
+				'(',
+				')',
+				'[',
+				']',
+				'{',
+				'}',
+				';',
+				'.',
+				'<',
+				'>',
+				'#',
+				'\'',
+				'"',
+				'_',
+		};
+
+		[[nodiscard]] constexpr static char get_assignment_symbol() noexcept { return non_token_symbol[0]; }
+		[[nodiscard]] constexpr static char get_plus_symbol() noexcept { return non_token_symbol[1]; }
+		[[nodiscard]] constexpr static char get_minus_symbol() noexcept { return non_token_symbol[2]; }
+		[[nodiscard]] constexpr static char get_multiply_symbol() noexcept { return non_token_symbol[3]; }
+		[[nodiscard]] constexpr static char get_divide_symbol() noexcept { return non_token_symbol[4]; }
+		[[nodiscard]] constexpr static char get_modulus_symbol() noexcept { return non_token_symbol[5]; }
+		[[nodiscard]] constexpr static char get_bitwise_and_symbol() noexcept { return non_token_symbol[6]; }
+		[[nodiscard]] constexpr static char get_bitwise_or_symbol() noexcept { return non_token_symbol[7]; }
+		[[nodiscard]] constexpr static char get_bitwise_xor_symbol() noexcept { return non_token_symbol[8]; }
+		[[nodiscard]] constexpr static char get_bitwise_not_symbol() noexcept { return non_token_symbol[9]; }
+		[[nodiscard]] constexpr static char get_comma_symbol() noexcept { return non_token_symbol[10]; }
+		[[nodiscard]] constexpr static char get_not_symbol() noexcept { return non_token_symbol[11]; }
+		[[nodiscard]] constexpr static char get_colon_symbol() noexcept { return non_token_symbol[12]; }
+		[[nodiscard]] constexpr static char get_parentheses_bracket_open_symbol() noexcept { return non_token_symbol[13]; }
+		[[nodiscard]] constexpr static char get_parentheses_bracket_close_symbol() noexcept { return non_token_symbol[14]; }
+		[[nodiscard]] constexpr static char get_square_bracket_open_symbol() noexcept { return non_token_symbol[15]; }
+		[[nodiscard]] constexpr static char get_square_bracket_close_symbol() noexcept { return non_token_symbol[16]; }
+		[[nodiscard]] constexpr static char get_curly_bracket_open_symbol() noexcept { return non_token_symbol[17]; }
+		[[nodiscard]] constexpr static char get_curly_bracket_close_symbol() noexcept { return non_token_symbol[18]; }
+		[[nodiscard]] constexpr static char get_semicolon_symbol() noexcept { return non_token_symbol[19]; }
+		[[nodiscard]] constexpr static char get_dot_symbol() noexcept { return non_token_symbol[20]; }
+		[[nodiscard]] constexpr static char get_less_than_symbol() noexcept { return non_token_symbol[21]; }
+		[[nodiscard]] constexpr static char get_greater_than_symbol() noexcept { return non_token_symbol[22]; }
+		[[nodiscard]] constexpr static char get_sharp_symbol() noexcept { return non_token_symbol[23]; }
+		[[nodiscard]] constexpr static char get_single_quotation_symbol() noexcept { return non_token_symbol[24]; }
+		[[nodiscard]] constexpr static char get_double_quotation_symbol() noexcept { return non_token_symbol[25]; }
+		[[nodiscard]] constexpr static char get_underscore_symbol() noexcept { return non_token_symbol[26]; }
+
+		/**
+		 * @brief attempt to read a token, return the read token and the read length,
+		 * if the read length does not match the token, it means that the read has failed (for example token_type::ellipsis),
+		 * and then we can roll back at this time.
+		 *
+		 * @note changing the reading rules here requires corresponding changes to the output rules of to_string.
+		 */
+		template<typename SymbolGetter, typename SymbolConsumer, typename ExtremeCaseChecker>
+			requires std::is_invocable_r_v<char, SymbolGetter> && std::is_invocable_v<SymbolConsumer> && std::is_invocable_r_v<bool, ExtremeCaseChecker, char>
+		[[nodiscard]] constexpr static std::pair<token_type, std::size_t> get_compound_symbol(
+				SymbolGetter getter,
+				SymbolConsumer consumer,
+				ExtremeCaseChecker checker) noexcept(std::is_nothrow_invocable_r_v<char, SymbolGetter> && std::is_nothrow_invocable_v<SymbolConsumer> && std::is_nothrow_invocable_r_v<bool, ExtremeCaseChecker, char>)
+		{
+			std::size_t length = 0;
+
+			auto do_consume = [&]
+			{
+				consumer();
+				++length;
+			};
+
+			auto do_return = [&](token_type type) { return std::make_pair(type, length); };
+			auto do_return_cast = [&](std::convertible_to<token_underlying_type> auto type) { return std::make_pair(static_cast<token_type>(type), length); };
+
+			const auto c = getter();
+			if (not checker(c))
+			{
+				switch (c)
+				{
+					case get_multiply_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_multiply_symbol())
+						{
+							do_consume();
+							if (const auto next_next_c = getter(); next_next_c == get_assignment_symbol())
+							{
+								do_consume();
+								return do_return(token_type::pow_assign);
+							}
+							return do_return(token_type::pow);
+						}
+						else if (next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::pow_assign);
+						}
+						return do_return_cast(c);
+					}
+					case get_assignment_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::equal);
+						}
+						return do_return_cast(c);
+					}
+					case get_not_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::not_equal);
+						}
+						return do_return_cast(c);
+					}
+					case get_less_than_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::less_equal);
+						}
+						else if (next_c == get_less_than_symbol())
+						{
+							do_consume();
+							if (const auto next_next_c = getter(); next_next_c == get_assignment_symbol())
+							{
+								do_consume();
+								return do_return(token_type::bitwise_left_shift_assign);
+							}
+							return do_return(token_type::bitwise_left_shift);
+						}
+						return do_return_cast(c);
+					}
+					case get_greater_than_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::greater_equal);
+						}
+						else if (next_c == get_greater_than_symbol())
+						{
+							do_consume();
+							if (const auto next_next_c = getter(); next_next_c == get_assignment_symbol())
+							{
+								do_consume();
+								return do_return(token_type::bitwise_right_shift_assign);
+							}
+							return do_return(token_type::bitwise_right_shift);
+						}
+						return do_return_cast(c);
+					}
+					case get_plus_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::plus_assign);
+						}
+						return do_return_cast(c);
+					}
+					case get_minus_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::minus_assign);
+						}
+						else if (next_c == get_greater_than_symbol())
+						{
+							do_consume();
+							return do_return(token_type::right_arrow);
+						}
+						return do_return_cast(c);
+					}
+					case get_divide_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::divide_assign);
+						}
+						return do_return_cast(c);
+					}
+					case get_modulus_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::modulus_assign);
+						}
+						return do_return_cast(c);
+					}
+					case get_bitwise_and_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::bitwise_and_assign);
+						}
+						return do_return_cast(c);
+					}
+					case get_bitwise_or_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::bitwise_or_assign);
+						}
+						return do_return_cast(c);
+					}
+					case get_bitwise_xor_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_assignment_symbol())
+						{
+							do_consume();
+							return do_return(token_type::bitwise_xor_assign);
+						}
+						return do_return_cast(c);
+					}
+					case get_colon_symbol():
+					{
+						do_consume();
+						if (const auto next_c = getter(); next_c == get_colon_symbol())
+						{
+							do_consume();
+							return do_return(token_type::double_colon);
+						}
+						return do_return_cast(c);
+					}
+					case get_dot_symbol():
+					{
+						do_consume();
+						// if (const auto next_c = getter(); next_c == get_dot_symbol())
+						// {
+						// 	do_consume();
+						// 	if (const auto next_next_c = getter(); next_next_c == get_dot_symbol())
+						// 	{
+						// 		do_consume();
+						// 		return do_return(token_type::ellipsis);
+						// 	}
+						// }
+						return do_return_cast(c);
+					}
+					case get_sharp_symbol():
+					{
+						do_consume();
+						return do_return(token_type::comment);
+					}
+					case get_single_quotation_symbol(): { [[fallthrough]]; }
+					case get_double_quotation_symbol():
+					{
+						do_consume();
+						// if (const auto next_c = getter(); next_c == c)
+						// {
+						// 	do_consume();
+						// 	if (const auto next_next_c = getter(); next_next_c == c)
+						// 	{
+						// 		do_consume();
+						// 		return do_return(token_type::quoted_string);
+						// 	}
+						// }
+						return do_return_cast(c);
+					}
+					case get_underscore_symbol():
+					{
+						do_consume();
+						return do_return_cast(c);
+					}
+					default: { break; }
+				}
+			}
+			return do_return_cast(c);
+		}
+
 		constexpr static codepoint_type bad_codepoint = static_cast<codepoint_type>(-1);
 
 	private:
@@ -185,29 +492,27 @@ namespace gal::ast
 		utils::location loc_;
 
 		/*
-		 * data -> string/number/comment
-		 * name -> name
-		 * codepoint -> broken unicode
+		 * data -> string/number/comment -> own a piece of memory
+		 * name -> name -> a view pointing to the parsed file or existing memory
+		 * codepoint -> broken unicode -> just a number
 		 */
 		data_type data_;
 
 	public:
 		lexeme_point(const token_type type, const utils::location loc)
 			: type_{type},
-			  loc_{loc},
-			  data_{""} { }
+			  loc_{loc} { }
 
 		lexeme_point(const token_underlying_type type, const utils::location loc)
 			: lexeme_point(static_cast<token_type>(type), loc) {}
 
-		lexeme_point(const token_type type, const utils::location loc, string_type data_or_name)
+		lexeme_point(const token_type type, const utils::location loc, data_or_name_type data_or_name)
 			: type_{type},
 			  loc_{loc},
 			  data_{data_or_name}
 		{
 			gal_assert(
-					utils::is_any_enum_of(type, token_type::raw_string, token_type::quoted_string, token_type::number, token_type::comment, token_type::block_comment, token_type::name) ||
-					utils::is_enum_between_of<false, false>(type_, token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end),
+					utils::is_any_enum_of(type, token_type::raw_string, token_type::quoted_string, token_type::number, token_type::comment, token_type::block_comment, token_type::name) || utils::is_enum_between_of<false, false>(type_, token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end),
 					"Mismatch type! Type should be string/number/comment/name/keyword."
 					);
 		}
@@ -219,48 +524,145 @@ namespace gal::ast
 
 		[[nodiscard]] static lexeme_point bad_lexeme_point(const utils::location loc) { return {token_type::eof, loc}; }
 
-		[[nodiscard]] constexpr bool is_comment() const noexcept { return utils::is_any_enum_of(type_, token_type::comment, token_type::block_comment); }
+		template<typename... Args>
+			requires(std::is_convertible_v<Args, token_type> && ...)
+		[[nodiscard]] constexpr bool is_any_type_of(Args&&... types) const noexcept { return utils::is_any_enum_of(type_, std::forward<Args>(types)...); }
+
+		template<typename... Args>
+			requires(std::is_convertible_v<Args, token_underlying_type> && ...) && ((not std::is_convertible_v<Args, token_type>) && ...)
+		[[nodiscard]] constexpr bool is_any_type_of(Args&&... types) const noexcept { return is_any_type_of(static_cast<token_type>(static_cast<token_underlying_type>(types))...); }
+
+		[[nodiscard]] constexpr bool is_comment() const noexcept { return is_any_type_of(token_type::comment, token_type::block_comment); }
+
+		[[nodiscard]] constexpr bool has_follower() const noexcept { return is_any_type_of(token_type::eof, token_type::keyword_else, token_type::keyword_elif, token_type::keyword_end, token_type::keyword_until); }
+
+		[[nodiscard]] constexpr bool is_end_point() const noexcept { return type_ == token_type::eof; }
+
+		[[nodiscard]] constexpr token_type get_type() const noexcept { return type_; }
 
 		[[nodiscard]] constexpr utils::location get_location() const noexcept { return loc_; }
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR data_or_name_type get_data_or_name() const noexcept
+		{
+			gal_assert(std::holds_alternative<data_or_name_type>(data_), "We should be holding a string/number/comment/name/keyword, but in fact we don't.");
+			return std::get<data_or_name_type>(data_);
+		}
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR codepoint_type get_codepoint() const noexcept
+		{
+			gal_assert(std::holds_alternative<codepoint_type>(data_), "We should be holding a codepoint, but in fact we don't.");
+			return std::get<codepoint_type>(data_);
+		}
+
+		[[nodiscard]] constexpr std::optional<ast_expression_unary::operand_type> to_unary_operand() const noexcept
+		{
+			using enum ast_expression_unary::operand_type;
+			if (type_ == token_type::keyword_not) { return unary_not; }
+			const auto scalar = token_to_scalar(type_);
+			if (scalar == get_not_symbol()) { return unary_not; }
+			if (scalar == get_plus_symbol()) { return unary_plus; }
+			if (scalar == get_minus_symbol()) { return unary_minus; }
+			if (scalar == get_bitwise_not_symbol()) { return unary_bitwise_not; }
+			return std::nullopt;
+		}
+
+		[[nodiscard]] constexpr std::optional<ast_expression_binary::operand_type> to_binary_operand() const noexcept
+		{
+			using enum ast_expression_binary::operand_type;
+
+			switch (type_)// NOLINT(clang-diagnostic-switch-enum)
+			{
+				case token_type::pow: { return binary_pow; }
+				case token_type::bitwise_left_shift: { return binary_bitwise_left_shift; }
+				case token_type::bitwise_right_shift: { return binary_bitwise_right_shift; }
+				case token_type::keyword_and: { return binary_logical_and; }
+				case token_type::keyword_or: { return binary_logical_or; }
+				case token_type::equal: { return binary_equal; }
+				case token_type::not_equal: { return binary_not_equal; }
+				case token_type::less_equal: { return binary_less_equal; }
+				case token_type::greater_equal: { return binary_greater_equal; }
+				default: { break; }
+			}
+
+			const auto scalar = token_to_scalar(type_);
+			if (scalar == get_plus_symbol()) { return binary_plus; }
+			if (scalar == get_minus_symbol()) { return binary_minus; }
+			if (scalar == get_multiply_symbol()) { return binary_multiply; }
+			if (scalar == get_divide_symbol()) { return binary_divide; }
+			if (scalar == get_modulus_symbol()) { return binary_modulus; }
+			if (scalar == get_bitwise_and_symbol()) { return binary_bitwise_and; }
+			if (scalar == get_bitwise_or_symbol()) { return binary_bitwise_or; }
+			if (scalar == get_bitwise_xor_symbol()) { return binary_bitwise_xor; }
+			if (scalar == get_less_than_symbol()) { return binary_less_than; }
+			if (scalar == get_greater_than_symbol()) { return binary_greater_than; }
+
+			return std::nullopt;
+		}
+
+		[[nodiscard]] constexpr std::optional<ast_expression_binary::operand_type> to_compound_operand() const noexcept
+		{
+			using enum ast_expression_binary::operand_type;
+			switch (type_)// NOLINT(clang-diagnostic-switch-enum)
+			{
+				case token_type::plus_assign: { return binary_plus; }
+				case token_type::minus_assign: { return binary_minus; }
+				case token_type::multiply_assign: { return binary_multiply; }
+				case token_type::divide_assign: { return binary_divide; }
+				case token_type::modulus_assign: { return binary_modulus; }
+				case token_type::pow_assign: { return binary_pow; }
+				case token_type::bitwise_and_assign: { return binary_bitwise_and; }
+				case token_type::bitwise_or_assign: { return binary_bitwise_or; }
+				case token_type::bitwise_xor_assign: { return binary_bitwise_xor; }
+				case token_type::bitwise_left_shift_assign: { return binary_bitwise_left_shift; }
+				case token_type::bitwise_right_shift_assign: { return binary_bitwise_right_shift; }
+				default: { return std::nullopt; }
+			}
+		}
 
 		[[nodiscard]] std::string to_string() const noexcept
 		{
 			switch (type_)// NOLINT(clang-diagnostic-switch-enum)
 			{
 				case token_type::eof: { return "<eof>"; }
+				case token_type::pow: { return "'**'"; }
 				case token_type::equal: { return "'=='"; }
 				case token_type::not_equal: { return "'!='"; }
-				case token_type::less_than: { return "'<'"; }
 				case token_type::less_equal: { return "'<='"; }
-				case token_type::greater_than: { return "'>'"; }
 				case token_type::greater_equal: { return "'>='"; }
+				case token_type::bitwise_left_shift: { return "'<<'"; }
+				case token_type::bitwise_right_shift: { return "'>>'"; }
 				case token_type::plus_assign: { return "'+='"; }
 				case token_type::minus_assign: { return "'-='"; }
 				case token_type::multiply_assign: { return "'*='"; }
 				case token_type::divide_assign: { return "'/='"; }
 				case token_type::modulus_assign: { return "'%='"; }
 				case token_type::pow_assign: { return "'**='"; }
+				case token_type::bitwise_and_assign: { return "'&='"; }
+				case token_type::bitwise_or_assign: { return "'|='"; }
+				case token_type::bitwise_xor_assign: { return "'^='"; }
+				case token_type::bitwise_left_shift_assign: { return "'<<='"; }
+				case token_type::bitwise_right_shift_assign: { return "'>>='"; }
 				case token_type::raw_string:
 				case token_type::quoted_string:
 				case token_type::number:
-				case token_type::name:
 				{
-					gal_assert(std::holds_alternative<string_type>(data_), "We should be holding a string, but in fact we don't.");
-					if (const auto& data = std::get<string_type>(data_); not data.empty())
-					{
-						[[likely]]
-								return std_format::format("{}", data);
-					}
+					[[likely]] if (const auto& data = get_data_or_name(); not data.empty()) { return std_format::format("{}", data); }
 
 					[[unlikely]]
 					if (type_ == token_type::raw_string || type_ == token_type::quoted_string) { return "<string>"; }
 					if (type_ == token_type::number) { return "<number>"; }
 					return "<identifier>";
 				}
+				case token_type::name:
+				{
+					const auto name = get_data_or_name();
+					return std_format::format("{}", not name.empty() ? name : "identifier");
+				}
 				case token_type::comment:
 				case token_type::block_comment: { return "<comment>"; }
 				case token_type::double_colon: { return "'::'"; }
 				case token_type::right_arrow: { return "'->'"; }
+				case token_type::ellipsis: { return "'...'"; }
 				case token_type::broken_string: { return "<malformed string>"; }
 				case token_type::broken_comment: { return "<unfinished comment>"; }
 				case token_type::broken_unicode:
@@ -272,18 +674,30 @@ namespace gal::ast
 				}
 				default:
 				{
-					if (utils::is_enum_between_of<false, false>(type_, token_type::char_sentinel_begin, token_type::char_sentinel_end)) { return std_format::format("{}", static_cast<char>(type_)); }
-					if (utils::is_enum_between_of<false, false>(type_, token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end)) { return std_format::format("{}", keywords[static_cast<token_underlying_type>(type_) - static_cast<token_underlying_type>(token_type::keyword_sentinel_begin) - 1]); }
+					if (utils::is_enum_between_of<false, false>(type_, token_type::char_sentinel_begin, token_type::char_sentinel_end)) { return std_format::format("'{}'", static_cast<char>(type_)); }
+					if (utils::is_enum_between_of<false, false>(type_, token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end)) { return std_format::format("'{}'", keywords[static_cast<token_underlying_type>(type_) - static_cast<token_underlying_type>(token_type::keyword_sentinel_begin) - 1]); }
 					return "<unknown>";
 				}
 			}
 		}
 	};
 
+	struct comment
+	{
+		lexeme_point::token_type type;
+		utils::location loc;
+
+		[[nodiscard]] constexpr bool valid_comment() const noexcept
+		{
+			using enum lexeme_point::token_type;
+			return utils::is_any_enum_of(type, comment, block_comment, broken_comment);
+		}
+	};
+
 	class ast_name_table
 	{
 	public:
-		using name_type = ast_name_view;
+		using name_type = ast_name;
 		using name_pool_type = utils::string_pool<name_type::value_type, false, name_type::traits_type>;
 
 	private:
@@ -303,7 +717,7 @@ namespace gal::ast
 		struct entry_hasher
 		{
 		private:
-			[[nodiscard]] constexpr std::size_t operator()(const ast_name_view name) const noexcept
+			[[nodiscard]] constexpr std::size_t operator()(const name_type name) const noexcept
 			{
 				// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
 				constexpr std::uint64_t hash_init{14695981039346656037ull};
@@ -349,7 +763,7 @@ namespace gal::ast
 			for (auto i = begin; i < end; ++i) { insert(lexeme_point::keywords[i - begin].data(), static_cast<lexeme_point::token_type>(i)); }
 		}
 
-		name_type insert(const name_type name, const lexeme_point::token_type type)
+		name_type insert(const name_type name, const lexeme_point::token_type type = lexeme_point::token_type::name)
 		{
 			const auto [it, inserted] = data_.emplace(pool_.append(name), type);
 			gal_assert(inserted, "Cannot insert an existed entry!");
@@ -374,11 +788,10 @@ namespace gal::ast
 		}
 	};
 
-	// todo: lexer
 	class lexer
 	{
 	public:
-		using buffer_type = ast_name_view;
+		using buffer_type = ast_name;
 		using offset_type = buffer_type::size_type;
 
 		// must be signed
@@ -468,9 +881,9 @@ namespace gal::ast
 
 		[[nodiscard]] const lexeme_point& current() const noexcept { return point_; }
 
-		static bool write_quoted_string(ast_name data);
+		static bool write_quoted_string(ast_name_owned data);
 
-		static void write_multi_line_string(ast_name data);
+		static void write_multi_line_string(ast_name_owned data);
 
 	private:
 		[[nodiscard]] constexpr const char* current_data() const noexcept { return buffer_.data() + offset_; }
@@ -514,9 +927,9 @@ namespace gal::ast
 
 		constexpr void consume_comment_begin() noexcept { for (auto i = comment_begin_length(); i != 0; --i) { consume(); } }
 
-		[[nodiscard]] constexpr static char multi_line_string_begin() noexcept { return '<'; }
+		[[nodiscard]] constexpr static char multi_line_string_begin() noexcept { return lexeme_point::get_less_than_symbol(); }
 
-		[[nodiscard]] constexpr static char multi_line_string_end() noexcept { return '>'; }
+		[[nodiscard]] constexpr static char multi_line_string_end() noexcept { return lexeme_point::get_greater_than_symbol(); }
 
 		[[nodiscard]] constexpr bool is_multi_line_string_begin() const noexcept { return peek_char() == multi_line_string_begin(); }
 
@@ -561,7 +974,7 @@ namespace gal::ast
 			for (auto i = quoted_string_begin_or_end_length(); i != 0; --i) { consume(); }
 		}
 
-		[[nodiscard]] lexeme_point read_quoted_string();
+		[[nodiscard]] lexeme_point read_quoted_string(char quotation, std::size_t length);
 
 		[[nodiscard]] lexeme_point read_comment();
 

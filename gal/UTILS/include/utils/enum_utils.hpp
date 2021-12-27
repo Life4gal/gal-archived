@@ -9,7 +9,7 @@ namespace gal::utils
 		requires std::is_enum_v<T> && (std::is_convertible_v<Args, T> && ...)
 	constexpr bool is_any_enum_of(T current_enum, Args ... requires_enums) noexcept
 	{
-		return ([current_enum](auto requires_enum) { return current_enum == requires_enum; }(requires_enums) ||
+		return ([current_enum](auto requires_enum) { return current_enum == static_cast<T>(requires_enum); }(requires_enums) ||
 			...);
 	}
 

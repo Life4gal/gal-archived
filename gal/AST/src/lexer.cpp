@@ -5,9 +5,6 @@ namespace gal::ast
 {
 	lexer::multi_line_string_level_type lexer::read_multi_line_string_level()
 	{
-		gal_assert(is_multi_line_string_begin() || is_multi_line_string_end(), "Wrong multi line string format!");
-		consume();// eat the first '<' or '>'
-
 		multi_line_string_level_number_type number;
 		const auto [ptr, ec] = std::from_chars(current_data(), data_end(), number);
 
@@ -58,17 +55,13 @@ namespace gal::ast
 		return {broken, {begin, {0, 0}}};
 	}
 
-	lexeme_point lexer::read_quoted_string()
+	lexeme_point lexer::read_quoted_string(const char quotation, const std::size_t length)
 	{
 		const auto begin = current_position();
 
-		const auto [is_quoted, delimiter] = is_quoted_string_begin();
-		gal_assert(is_quoted, "Wrong quoted string format!");
-		consume_quoted_string_begin_or_end();
-
 		const auto start_offset = offset_;
 
-		for (const auto c = peek_char(); c != delimiter;)
+		for (const auto c = peek_char(); c != quotation;)
 		{
 			switch (c)
 			{
@@ -100,7 +93,7 @@ namespace gal::ast
 			}
 		}
 
-		consume_quoted_string_begin_or_end();
+		for (auto i = length; i != 0; --i) { consume(); }
 
 		return {lexeme_point::token_type::quoted_string, {begin, {0, 0}}, {buffer_.data() + start_offset, offset_ - start_offset - quoted_string_begin_or_end_length()}};
 	}
@@ -108,10 +101,6 @@ namespace gal::ast
 	lexeme_point lexer::read_comment()
 	{
 		const auto begin = current_position();
-
-		gal_assert(is_comment_begin(), "Can only read comments!");
-
-		consume_comment_begin();
 
 		const auto start_offset = offset_;
 
@@ -212,206 +201,53 @@ namespace gal::ast
 		const auto begin = current_position();
 		auto make_location = [begin](const utils::point::size_type length) { return make_horizontal_line(begin, length); };
 
-		switch (const auto c = peek_char())
+		const auto [token, length] = lexeme_point::get_compound_symbol(
+				[this]() constexpr noexcept { return peek_char(); },
+				[this]() constexpr noexcept { consume(); },
+				[](const char c) constexpr noexcept
+				{
+					return c == lexeme_point::get_dot_symbol() ||
+					       c == lexeme_point::get_single_quotation_symbol() ||
+					       c == lexeme_point::get_double_quotation_symbol() ||
+					       c == lexeme_point::get_underscore_symbol() ||
+					       utils::is_digit(c) ||
+					       utils::is_alpha(c);
+				}
+				);
+
+		if (token == lexeme_point::token_type::comment) { return read_comment(); }
+
+		const auto scalar = lexeme_point::token_to_scalar(token);
+		if (scalar == multi_line_string_begin())
 		{
-			case 0: { return lexeme_point::bad_lexeme_point(make_location(0)); }
-			case comment_begin():
-			{
-				if (is_comment_begin()) { return read_comment(); }
+			const auto level = read_multi_line_string_level();
 
-				// todo: Other possibilities?
-				UNREACHABLE();
-			}
-			case multi_line_string_begin():
-			{
-				if (is_multi_line_string_begin())
-				{
-					const auto level = read_multi_line_string_level();
-
-					if (level.second == multi_line_string_error_format) { return {lexeme_point::token_type::broken_string, make_location(0)}; }
-					if (level.second == multi_line_string_its_not) { return {c, make_location(0)}; }
-					return read_multi_line_string(begin, level, lexeme_point::token_type::raw_string, lexeme_point::token_type::broken_string);
-				}
-
-				// note: currently overlaps with '<'
-				if (peek_char(1) == '=') { return {lexeme_point::token_type::less_equal, make_location(2)}; }
-
-				return {lexeme_point::token_type::less_than, make_location(1)};
-			}
-			case quoted_string_begin1():
-			case quoted_string_begin2():
-			{
-				if (is_quoted_string_begin().first) { return read_quoted_string(); }
-
-				// todo: Other possibilities?
-				UNREACHABLE();
-			}
-			case '=':
-			{
-				consume();
-				if (peek_char() == '=')
-				{
-					consume();
-					return {lexeme_point::token_type::equal, make_location(2)};
-				}
-				return {lexeme_point::token_type::assignment, make_location(1)};
-			}
-			case '!':
-			{
-				consume();
-				if (peek_char() == '=')
-				{
-					consume();
-					return {lexeme_point::token_type::not_equal, make_location(2)};
-				}
-
-				// todo: Other possibilities?
-				UNREACHABLE();
-			}
-			case '>':
-			{
-				consume();
-				if (peek_char() == '=')
-				{
-					consume();
-					return {lexeme_point::token_type::greater_equal, make_location(2)};
-				}
-				return {lexeme_point::token_type::greater_than, make_location(1)};
-			}
-			case '+':
-			{
-				consume();
-				if (peek_char() == '=')
-				{
-					consume();
-					return {lexeme_point::token_type::plus_assign, make_location(2)};
-				}
-				return {lexeme_point::token_type::plus, make_location(1)};
-			}
-			case '-':
-			{
-				consume();
-				if (const auto next_c = peek_char(); next_c == '>')
-				{
-					// '->'
-					consume();
-					return {lexeme_point::token_type::right_arrow, make_location(2)};
-				}
-				else if (next_c == '=')
-				{
-					// -=
-					consume();
-					return {lexeme_point::token_type::minus_assign, make_location(2)};
-				}
-				return {lexeme_point::token_type::minus, make_location(1)};
-			}
-			case '*':
-			{
-				consume();
-				if (const auto next_c = peek_char(); next_c == '*')
-				{
-					consume();
-					if (const auto next_next_c = peek_char(); next_next_c == '=')
-					{
-						consume();
-						return {lexeme_point::token_type::pow_assign, make_location(3)};
-					}
-					return {lexeme_point::token_type::pow, make_location(2)};
-				}
-				else if (next_c == '=')
-				{
-					consume();
-					return {lexeme_point::token_type::multiply_assign, make_location(2)};
-				}
-				return {lexeme_point::token_type::multiply, make_location(1)};
-			}
-			case '/':
-			{
-				consume();
-				if (const auto next_c = peek_char(); next_c == '=')
-				{
-					consume();
-					return {lexeme_point::token_type::divide_assign, make_location(2)};
-				}
-				return {lexeme_point::token_type::divide, make_location(1)};
-			}
-			case '%':
-			{
-				consume();
-				if (const auto next_c = peek_char(); next_c == '=')
-				{
-					consume();
-					return {lexeme_point::token_type::modulus_assign, make_location(2)};
-				}
-				return {lexeme_point::token_type::modulus, make_location(1)};
-			}
-			case ':':
-			{
-				consume();
-				if (const auto next_c = peek_char(); next_c == ':')
-				{
-					consume();
-					return {lexeme_point::token_type::double_colon, make_location(2)};
-				}
-				return {lexeme_point::token_type::colon, make_location(1)};
-			}
-			case '(':
-			{
-				consume();
-				return {lexeme_point::token_type::parentheses_bracket_open, make_location(1)};
-			}
-			case ')':
-			{
-				consume();
-				return {lexeme_point::token_type::parentheses_bracket_close, make_location(1)};
-			}
-			case '[':
-			{
-				consume();
-				return {lexeme_point::token_type::square_bracket_open, make_location(1)};
-			}
-			case ']':
-			{
-				consume();
-				return {lexeme_point::token_type::square_bracket_close, make_location(1)};
-			}
-			case '{':
-			{
-				consume();
-				return {lexeme_point::token_type::curly_bracket_open, make_location(1)};
-			}
-			case '}':
-			{
-				consume();
-				return {lexeme_point::token_type::curly_bracket_close, make_location(1)};
-			}
-			case ',':
-			{
-				consume();
-				return {lexeme_point::token_type::comma, make_location(1)};
-			}
-			case ';':
-			{
-				consume();
-				return {lexeme_point::token_type::semicolon, make_location(1)};
-			}
-			default:
-			{
-				if (utils::is_digit(c)) { return read_number(begin, offset_); }
-				if (utils::is_alpha(c) || c == '_')
-				{
-					const auto [name, type] = read_name();
-
-					return {type, make_location(0), name};
-				}
-				if (c & 0x80) { return read_utf8_error(); }
-				consume();
-				return {c, make_location(1)};
-			}
+			if (level.second == multi_line_string_error_format) { return {lexeme_point::token_type::broken_string, make_location(0)}; }
+			if (level.second == multi_line_string_its_not) { return {token, make_location(0)}; }
+			return read_multi_line_string(begin, level, lexeme_point::token_type::raw_string, lexeme_point::token_type::broken_string);
 		}
+		if (scalar == lexeme_point::get_dot_symbol())
+		{
+			if (peek_char(1) == lexeme_point::get_dot_symbol() && peek_char(2) == lexeme_point::get_dot_symbol()) { return {lexeme_point::token_type::ellipsis, make_location(3)}; }
+			if (utils::is_digit(peek_char(1))) { return read_number(begin, offset_); }
+		}
+		if (scalar == lexeme_point::get_single_quotation_symbol() || scalar == lexeme_point::get_double_quotation_symbol()) { return read_quoted_string(static_cast<char>(scalar), length); }
+		if (utils::is_digit(static_cast<char>(scalar))) { return read_number(begin, offset_); }
+		if (utils::is_alpha(static_cast<char>(scalar)) || scalar == lexeme_point::get_underscore_symbol())
+		{
+			const auto [name, type] = read_name();
+
+			return {type, make_location(0), name};
+		}
+		if (scalar & 0x80) { return read_utf8_error(); }
+
+		// length == 0 and we didn't handle it
+		if (length == 0) { return lexeme_point::bad_lexeme_point(make_location(0)); }
+
+		return {token, make_location(length)};
 	}
 
-	bool lexer::write_quoted_string(ast_name data)
+	bool lexer::write_quoted_string(ast_name_owned data)
 	{
 		if (data.empty() || data.find('\\') == decltype(data)::npos) { return true; }
 
@@ -525,7 +361,7 @@ namespace gal::ast
 		return true;
 	}
 
-	void lexer::write_multi_line_string(ast_name data)
+	void lexer::write_multi_line_string(ast_name_owned data)
 	{
 		if (data.empty()) { return; }
 

@@ -8,6 +8,7 @@ set(
 
 		src/ast.cpp
 		src/lexer.cpp
+		src/parser.cpp
 )
 
 add_library(

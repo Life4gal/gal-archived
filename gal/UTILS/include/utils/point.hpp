@@ -47,15 +47,11 @@ namespace gal::utils
 		[[nodiscard]] std::string to_string() const;
 	};
 
-	constexpr line make_horizontal_line(const point begin, const point::size_type length)
-	{
-		return {begin, {begin.line, begin.column + length}};
-	}
+	constexpr line make_horizontal_line(const point begin, const point::size_type length) { return {begin, {begin.line, begin.column + length}}; }
 
-	constexpr line make_vertical_line(const point begin, const point::size_type length)
-	{
-		return {begin, {begin.line + length, begin.column}};
-	}
+	constexpr line make_vertical_line(const point begin, const point::size_type length) { return {begin, {begin.line + length, begin.column}}; }
+
+	constexpr line make_longest_line(const line begin, const line end) { return {begin.begin, end.end}; }
 
 	using location = line;
 }

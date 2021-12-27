@@ -5,11 +5,11 @@
 
 #include <string>
 #include <string_view>
-#include <vector>
 #include <functional>
 #include <optional>
 #include <variant>
 #include <memory>
+#include <span>
 
 #include <utils/point.hpp>
 #include <utils/concept.hpp>
@@ -21,8 +21,11 @@ namespace gal::ast
 	using gal_number_type = double;
 	using gal_string_type = std::string;
 
-	using ast_name = std::string;
-	using ast_name_view = std::string_view;
+	/**
+	 * @note ast_name does not `own` the target memory.
+	 */
+	using ast_name = std::string_view;
+	using ast_name_owned = std::basic_string<ast_name::value_type, ast_name::traits_type>;
 
 	class ast_visitor;
 
@@ -51,8 +54,11 @@ namespace gal::ast
 		[[nodiscard]] const ast_name& get_name() const noexcept { return name; }
 	};
 
+	/**
+	 * @note ast_array does not own actual memory, it is just a view of existing objects.
+	 */
 	template<typename T>
-	using ast_array = std::vector<T>;
+	using ast_array = std::span<T>;
 
 	struct ast_type_list
 	{
@@ -145,6 +151,10 @@ namespace gal::ast
 
 		template<has_rtti_index T>
 		[[nodiscard]] constexpr const T* as() const noexcept { return class_index_ == T::get_rtti_index() ? static_cast<const T*>(this) : nullptr; }
+
+		[[nodiscard]] constexpr utils::location get_location() const noexcept { return loc_; }
+
+		constexpr void reset_location_begin(const utils::position new_begin) noexcept { loc_.begin = new_begin; }
 	};
 
 	class ast_expression : public ast_node
@@ -169,9 +179,9 @@ namespace gal::ast
 	public:
 		GAL_SET_RTTI(ast_expression_error)
 
-		ast_expression_error(const utils::location loc, error_expressions_type expressions, unsigned message_index)
+		ast_expression_error(const utils::location loc, error_expressions_type expressions, const unsigned message_index)
 			: ast_expression{get_rtti_index(), loc},
-			  expressions_{std::move(expressions)},
+			  expressions_{expressions},
 			  message_index_{message_index} {}
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { for (const auto& expression: expressions_) { expression->visit(visitor); } } }
@@ -192,6 +202,8 @@ namespace gal::ast
 		[[nodiscard]] constexpr bool has_semicolon() const noexcept { return has_semicolon_; }
 
 		constexpr void set_semicolon(const bool has) noexcept { has_semicolon_ = has; }
+
+		[[nodiscard]] constexpr bool has_statement_follow() const noexcept;
 	};
 
 	class ast_statement_block final : public ast_statement
@@ -207,7 +219,7 @@ namespace gal::ast
 
 		ast_statement_block(const utils::location loc, block_body_type body)
 			: ast_statement{get_rtti_index(), loc},
-			  body_{std::move(body)} {}
+			  body_{body} {}
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { for (const auto& statement: body_) { statement->visit(visitor); } } }
 	};
@@ -877,6 +889,10 @@ namespace gal::ast
 	class ast_expression_unary final : public ast_expression
 	{
 	public:
+		/**
+		 * @note
+		 *		lexeme_point::to_unary_operand
+		 */
 		enum class operand_type
 		{
 			// +
@@ -885,6 +901,8 @@ namespace gal::ast
 			unary_minus,
 			// !
 			unary_not,
+			// ~
+			unary_bitwise_not,
 			// todo: more unary operand ?
 		};
 
@@ -920,43 +938,95 @@ namespace gal::ast
 	class ast_expression_binary final : public ast_expression
 	{
 	public:
+		/**
+		 * @note
+		 *		lexeme_point::to_binary_operand
+		 */
 		enum class operand_type
 		{
 			// +
-			plus,
+			binary_plus,
 			// -
-			minus,
+			binary_minus,
 			// *
-			multiply,
+			binary_multiply,
 			// /
-			divide,
+			binary_divide,
 			// %
-			modulus,
+			binary_modulus,
 			// **
-			pow,
+			binary_pow,
 			// &
-			bitwise_and,
+			binary_bitwise_and,
 			// |
-			bitwise_or,
+			binary_bitwise_or,
 			// ^
-			bitwise_xor,
+			binary_bitwise_xor,
+			// <<
+			binary_bitwise_left_shift,
+			// >>
+			binary_bitwise_right_shift,
 			// and
-			logical_and,
+			binary_logical_and,
 			// or
-			logical_or,
+			binary_logical_or,
 			// ==
-			equal,
+			binary_equal,
 			// !=
-			not_equal,
+			binary_not_equal,
 			// <
-			less_than,
+			binary_less_than,
 			// <=
-			less_equal,
+			binary_less_equal,
 			// >
-			greater_than,
+			binary_greater_than,
 			// >=
-			greater_equal,
+			binary_greater_equal,
 			// todo: more unary operand ?
+		};
+
+		using operand_priority_type = unsigned;
+
+		struct operand_priority
+		{
+			operand_priority_type left;
+			operand_priority_type right;
+		};
+
+		struct operand_priority_with_type
+		{
+			operand_type type;
+			operand_priority priority;
+		};
+
+		struct operand_priority_manager
+		{
+		private:
+			using enum operand_type;
+
+		public:
+			constexpr static operand_priority_with_type operands[] =
+			{
+					{binary_plus, {9, 9}},
+					{binary_minus, {9, 9}},
+					{binary_multiply, {10, 10}},
+					{binary_divide, {10, 10}},
+					{binary_modulus, {10, 10}},
+					{binary_pow, {12, 11}},
+					{binary_bitwise_and, {5, 5}},
+					{binary_bitwise_or, {3, 3}},
+					{binary_bitwise_xor, {4, 4}},
+					{binary_bitwise_left_shift, {8, 8}},
+					{binary_bitwise_right_shift, {8, 8}},
+					{binary_logical_and, {2, 2}}, // second lowest
+					{binary_logical_or, {1, 1}},  // lowest
+					{binary_equal, {6, 6}},       // equality
+					{binary_not_equal, {6, 6}},   // inequality
+					{binary_less_than, {7, 7}},   // order
+					{binary_less_equal, {7, 7}},  // order
+					{binary_greater_than, {7, 7}},// order
+					{binary_greater_equal, {7, 7}}// order
+			};
 		};
 
 	private:
@@ -986,23 +1056,23 @@ namespace gal::ast
 		{
 			switch (operand_)
 			{
-				case operand_type::plus: { return "+"; }
-				case operand_type::minus: { return "-"; }
-				case operand_type::multiply: { return "*"; }
-				case operand_type::divide: { return "/"; }
-				case operand_type::modulus: { return "%"; }
-				case operand_type::pow: { return "**"; }
-				case operand_type::bitwise_and: { return "&"; }
-				case operand_type::bitwise_or: { return "|"; }
-				case operand_type::bitwise_xor: { return "^"; }
-				case operand_type::logical_and: { return "and"; }
-				case operand_type::logical_or: { return "or"; }
-				case operand_type::equal: { return "=="; }
-				case operand_type::not_equal: { return "!="; }
-				case operand_type::less_than: { return "<"; }
-				case operand_type::less_equal: { return "<="; }
-				case operand_type::greater_than: { return ">"; }
-				case operand_type::greater_equal: { return ">="; }
+				case operand_type::binary_plus: { return "+"; }
+				case operand_type::binary_minus: { return "-"; }
+				case operand_type::binary_multiply: { return "*"; }
+				case operand_type::binary_divide: { return "/"; }
+				case operand_type::binary_modulus: { return "%"; }
+				case operand_type::binary_pow: { return "**"; }
+				case operand_type::binary_bitwise_and: { return "&"; }
+				case operand_type::binary_bitwise_or: { return "|"; }
+				case operand_type::binary_bitwise_xor: { return "^"; }
+				case operand_type::binary_logical_and: { return "and"; }
+				case operand_type::binary_logical_or: { return "or"; }
+				case operand_type::binary_equal: { return "=="; }
+				case operand_type::binary_not_equal: { return "!="; }
+				case operand_type::binary_less_than: { return "<"; }
+				case operand_type::binary_less_equal: { return "<="; }
+				case operand_type::binary_greater_than: { return ">"; }
+				case operand_type::binary_greater_equal: { return ">="; }
 			}
 
 			UNREACHABLE();
@@ -1119,6 +1189,8 @@ namespace gal::ast
 				if (else_body_) { else_body_->visit(visitor); }
 			}
 		}
+
+		[[nodiscard]] constexpr bool has_end() const noexcept { return has_end_; }
 
 		// todo: interface
 	};
@@ -1265,8 +1337,8 @@ namespace gal::ast
 		                     std::optional<utils::location> do_loc,
 		                     const bool has_end)
 			: ast_statement{get_rtti_index(), loc},
-			  vars_{std::move(vars)},
-			  values_{std::move(values)},
+			  vars_{vars},
+			  values_{values},
 			  body_{body},
 			  in_loc_{in_loc},
 			  do_loc_{do_loc},
@@ -1620,6 +1692,8 @@ namespace gal::ast
 
 		// todo: interface
 	};
+
+	constexpr bool ast_statement::has_statement_follow() const noexcept { return not this->is<ast_statement_break>() && not this->is<ast_statement_continue>() && not this->is<ast_statement_return>(); }
 }
 
 #endif // GAL_LANG_AST_AST_HPP
