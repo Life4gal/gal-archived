@@ -14,7 +14,7 @@
 inline auto& gal_allocator_log_stream = std::clog;
 #endif
 
-namespace gal
+namespace gal::utils
 {
 	template<typename T>
 	struct default_allocator
@@ -186,10 +186,10 @@ namespace gal
 }
 
 template<typename ValueType>
-struct std::allocator_traits<::gal::default_allocator<ValueType>>
+struct std::allocator_traits<::gal::utils::default_allocator<ValueType>>
 {
-	using allocator_type = ::gal::default_allocator<ValueType>;
-	using internal_allocator_traits = typename ::gal::default_allocator<ValueType>::allocator_traits;
+	using allocator_type = ::gal::utils::default_allocator<ValueType>;
+	using internal_allocator_traits = typename ::gal::utils::default_allocator<ValueType>::allocator_traits;
 
 	using value_type = typename internal_allocator_traits::value_type;
 	using pointer = typename internal_allocator_traits::pointer;
@@ -205,7 +205,7 @@ struct std::allocator_traits<::gal::default_allocator<ValueType>>
 	using is_always_equal = typename internal_allocator_traits::is_always_equal;
 
 	template<typename T>
-	using rebind_alloc = ::gal::default_allocator<T>;
+	using rebind_alloc = ::gal::utils::default_allocator<T>;
 	template<typename T>
 	using rebind_traits = allocator_traits<rebind_alloc<T>>;
 

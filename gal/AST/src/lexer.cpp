@@ -1,7 +1,7 @@
 #include <ast/lexer.hpp>
 #include <charconv>
 
-namespace gal
+namespace gal::ast
 {
 	lexer::multi_line_string_level_type lexer::read_multi_line_string_level()
 	{
@@ -27,7 +27,7 @@ namespace gal
 		return std::make_pair(number, offset);
 	}
 
-	lexeme_point lexer::read_multi_line_string(const position begin, multi_line_string_level_type level, lexeme_point::token_type ok, lexeme_point::token_type broken)
+	lexeme_point lexer::read_multi_line_string(const utils::position begin, const multi_line_string_level_type level, lexeme_point::token_type ok, lexeme_point::token_type broken)
 	{
 		gal_assert(is_multi_line_string_begin(), "Wrong multi line string format!");
 
@@ -82,14 +82,14 @@ namespace gal
 					{
 						case '\r':
 						{
-							consume_until(is_new_line);
+							consume_until(utils::is_new_line);
 							break;
 						}
 						case 0: { break; }
 						case 'z':
 						{
 							consume();
-							consume_until(is_whitespace);
+							consume_until(utils::is_whitespace);
 							break;
 						}
 						default: { consume(); }
@@ -122,29 +122,29 @@ namespace gal
 		}
 
 		// fall back to single-line comment
-		for (const auto c = peek_char(); c && not is_new_line(c); consume()) {}
+		for (const auto c = peek_char(); c && not utils::is_new_line(c); consume()) {}
 
 		return {lexeme_point::token_type::comment, {begin, {0, 0}}, {buffer_.data() + start_offset, offset_ - start_offset}};
 	}
 
 	std::pair<ast_name_table::name_type, lexeme_point::token_type> lexer::read_name()
 	{
-		gal_assert(is_alpha(peek_char()) || peek_char() == '_', "Wrong identifier!");
+		gal_assert(utils::is_alpha(peek_char()) || peek_char() == '_', "Wrong identifier!");
 
 		const auto start_offset = offset_;
 
 		consume();
-		consume_until([](const char c) { return is_alpha(c) || is_digit(c) || c == '_'; });
+		consume_until([](const char c) { return utils::is_alpha(c) || utils::is_digit(c) || c == '_'; });
 
 		return read_name_ ? name_table_.insert_if_not_exist({buffer_.data() + start_offset, offset_ - start_offset}) : name_table_.get({buffer_.data() + start_offset, offset_ - start_offset});
 	}
 
-	lexeme_point lexer::read_number(const position begin, const offset_type start_offset)
+	lexeme_point lexer::read_number(const utils::position begin, const offset_type start_offset)
 	{
-		gal_assert(is_digit(peek_char()), "Wrong number format!");
+		gal_assert(utils::is_digit(peek_char()), "Wrong number format!");
 
 		consume();
-		consume_until([](const char c) { return is_digit(c) || c == '.' || c == '_'; });
+		consume_until([](const char c) { return utils::is_digit(c) || c == '.' || c == '_'; });
 
 		if (const auto e = peek_char(); e == 'e' || e == 'E')
 		{
@@ -153,7 +153,7 @@ namespace gal
 			if (const auto sign = peek_char(); sign == '+' || sign == '-') { consume(); }
 		}
 
-		consume_until([](const char c) { return is_alpha(c) || is_digit(c) || c == '_'; });
+		consume_until([](const char c) { return utils::is_alpha(c) || utils::is_digit(c) || c == '_'; });
 
 		return {lexeme_point::token_type::number, {begin, {0, 0}}, {buffer_.data() + start_offset, offset_ - start_offset}};
 	}
@@ -210,7 +210,7 @@ namespace gal
 	lexeme_point lexer::read_next()
 	{
 		const auto begin = current_position();
-		auto make_location = [begin](const point::size_type length) { return make_horizontal_line(begin, length); };
+		auto make_location = [begin](const utils::point::size_type length) { return make_horizontal_line(begin, length); };
 
 		switch (const auto c = peek_char())
 		{
@@ -397,8 +397,8 @@ namespace gal
 			}
 			default:
 			{
-				if (is_digit(c)) { return read_number(begin, offset_); }
-				if (is_alpha(c) || c == '_')
+				if (utils::is_digit(c)) { return read_number(begin, offset_); }
+				if (utils::is_alpha(c) || c == '_')
 				{
 					const auto [name, type] = read_name();
 
@@ -455,9 +455,9 @@ namespace gal
 					for (int j = 0; j < 2; ++j)
 					{
 						const auto c = data[i + j];
-						if (not is_hex_digit(c)) { return false; }
+						if (not utils::is_hex_digit(c)) { return false; }
 
-						code = 16 * code + (is_digit(c) ? to_digit(c) : to_alpha(c));
+						code = 16 * code + (utils::is_digit(c) ? utils::to_digit(c) : utils::to_alpha(c));
 					}
 
 					data[write++] = static_cast<decltype(data)::value_type>(code);
@@ -466,7 +466,7 @@ namespace gal
 				}
 				case 'z':
 				{
-					while (i < size && is_whitespace(data[i])) { ++i; }
+					while (i < size && utils::is_whitespace(data[i])) { ++i; }
 					break;
 				}
 				case 'u':
@@ -486,29 +486,29 @@ namespace gal
 						const auto c = data[i];
 
 						if (c == '}') { break; }
-						if (not is_hex_digit(c)) { return false; }
+						if (not utils::is_hex_digit(c)) { return false; }
 
-						code = 16 * code + (is_digit(c) ? to_digit(c) : to_alpha(c));
+						code = 16 * code + (utils::is_digit(c) ? utils::to_digit(c) : utils::to_alpha(c));
 					}
 
 					if (i == size || data[i] != '}') { return false; }
 					++i;
 
-					if (const auto utf8 = to_utf8(data.data() + write, code); utf8 == 0) { return false; }
+					if (const auto utf8 = utils::to_utf8(data.data() + write, code); utf8 == 0) { return false; }
 					else { write += utf8; }
 					break;
 				}
 				default:
 				{
-					if (is_digit(escape))
+					if (utils::is_digit(escape))
 					{
-						auto code = to_digit(escape);
+						auto code = utils::to_digit(escape);
 
 						for (int j = 0; j < 2; ++j, ++i)
 						{
-							if (i == size || not is_digit(data[i])) { break; }
+							if (i == size || not utils::is_digit(data[i])) { break; }
 
-							code = 10 * code + to_digit(data[i]);
+							code = 10 * code + utils::to_digit(data[i]);
 						}
 
 						if (code > std::numeric_limits<unsigned char>::max()) { return false; }

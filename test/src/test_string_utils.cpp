@@ -2,7 +2,7 @@
 
 #include<utils/string_utils.hpp>
 
-using namespace gal;
+using namespace gal::utils;
 using namespace std::literals;
 
 TEST(TestStringUtils, TestJoin)

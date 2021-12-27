@@ -5,7 +5,7 @@
 
 #include <string>
 
-namespace gal
+namespace gal::utils
 {
 	struct point
 	{

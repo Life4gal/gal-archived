@@ -8,7 +8,7 @@
 #include <utils/assert.hpp>
 #include <vector>
 
-namespace gal
+namespace gal::utils
 {
 	template<typename CharType, bool IsNullTerminate = true, typename CharTrait = std::char_traits<CharType>>
 	class string_block

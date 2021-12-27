@@ -9,7 +9,7 @@
 
 #include<utils/concept.hpp>
 
-namespace gal
+namespace gal::utils
 {
 	template<typename String, template<typename> typename Container>
 		requires is_any_type_of_v<String, std::basic_string<typename String::value_type, typename String::traits_type>, std::basic_string_view<typename String::value_type, typename String::traits_type>>

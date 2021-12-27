@@ -1,6 +1,6 @@
 #include <ast/ast.hpp>
 
-namespace gal
+namespace gal::ast
 {
 	void ast_local::visit(ast_visitor& visitor) const { if (annotation) { annotation->visit(visitor); } }
 

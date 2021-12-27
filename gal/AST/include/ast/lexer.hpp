@@ -16,7 +16,7 @@
 
 #include <ast/ast.hpp>
 
-namespace gal
+namespace gal::ast
 {
 	class lexeme_point
 	{
@@ -182,7 +182,7 @@ namespace gal
 
 	private:
 		token_type type_;
-		location loc_;
+		utils::location loc_;
 
 		/*
 		 * data -> string/number/comment
@@ -192,36 +192,36 @@ namespace gal
 		data_type data_;
 
 	public:
-		lexeme_point(const token_type type, const location loc)
+		lexeme_point(const token_type type, const utils::location loc)
 			: type_{type},
 			  loc_{loc},
 			  data_{""} { }
 
-		lexeme_point(const token_underlying_type type, const location loc)
+		lexeme_point(const token_underlying_type type, const utils::location loc)
 			: lexeme_point(static_cast<token_type>(type), loc) {}
 
-		lexeme_point(const token_type type, const location loc, string_type data_or_name)
+		lexeme_point(const token_type type, const utils::location loc, string_type data_or_name)
 			: type_{type},
 			  loc_{loc},
 			  data_{data_or_name}
 		{
 			gal_assert(
-					is_any_enum_of(type, token_type::raw_string, token_type::quoted_string, token_type::number, token_type::comment, token_type::block_comment, token_type::name) ||
-					is_enum_between_of<false, false>(type_, token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end),
+					utils::is_any_enum_of(type, token_type::raw_string, token_type::quoted_string, token_type::number, token_type::comment, token_type::block_comment, token_type::name) ||
+					utils::is_enum_between_of<false, false>(type_, token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end),
 					"Mismatch type! Type should be string/number/comment/name/keyword."
 					);
 		}
 
-		lexeme_point(const location loc, codepoint_type codepoint)
+		lexeme_point(const utils::location loc, codepoint_type codepoint)
 			: type_{token_type::broken_unicode},
 			  loc_{loc},
 			  data_{codepoint} { }
 
-		[[nodiscard]] static lexeme_point bad_lexeme_point(const location loc) { return {token_type::eof, loc}; }
+		[[nodiscard]] static lexeme_point bad_lexeme_point(const utils::location loc) { return {token_type::eof, loc}; }
 
-		[[nodiscard]] constexpr bool is_comment() const noexcept { return is_any_enum_of(type_, token_type::comment, token_type::block_comment); }
+		[[nodiscard]] constexpr bool is_comment() const noexcept { return utils::is_any_enum_of(type_, token_type::comment, token_type::block_comment); }
 
-		[[nodiscard]] constexpr location get_location() const noexcept { return loc_; }
+		[[nodiscard]] constexpr utils::location get_location() const noexcept { return loc_; }
 
 		[[nodiscard]] std::string to_string() const noexcept
 		{
@@ -267,13 +267,13 @@ namespace gal
 				{
 					gal_assert(std::holds_alternative<codepoint_type>(data_), "We should be holding a codepoint, but in fact we don't.");
 					const auto codepoint = std::get<codepoint_type>(data_);
-					if (const auto* confusable = find_confusable(codepoint); confusable) { return std_format::format("Unicode character U+{:#0x} (did you mean '{}'?)", codepoint, confusable); }
+					if (const auto* confusable = utils::find_confusable(codepoint); confusable) { return std_format::format("Unicode character U+{:#0x} (did you mean '{}'?)", codepoint, confusable); }
 					return std_format::format("Unicode character U+{:#0x}", codepoint);
 				}
 				default:
 				{
-					if (is_enum_between_of<false, false>(type_, token_type::char_sentinel_begin, token_type::char_sentinel_end)) { return std_format::format("{}", static_cast<char>(type_)); }
-					if (is_enum_between_of<false, false>(type_, token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end)) { return std_format::format("{}", keywords[static_cast<token_underlying_type>(type_) - static_cast<token_underlying_type>(token_type::keyword_sentinel_begin) - 1]); }
+					if (utils::is_enum_between_of<false, false>(type_, token_type::char_sentinel_begin, token_type::char_sentinel_end)) { return std_format::format("{}", static_cast<char>(type_)); }
+					if (utils::is_enum_between_of<false, false>(type_, token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end)) { return std_format::format("{}", keywords[static_cast<token_underlying_type>(type_) - static_cast<token_underlying_type>(token_type::keyword_sentinel_begin) - 1]); }
 					return "<unknown>";
 				}
 			}
@@ -284,7 +284,7 @@ namespace gal
 	{
 	public:
 		using name_type = ast_name_view;
-		using name_pool_type = string_pool<name_type::value_type, false, name_type::traits_type>;
+		using name_pool_type = utils::string_pool<name_type::value_type, false, name_type::traits_type>;
 
 	private:
 		struct table_entry_view
@@ -337,7 +337,7 @@ namespace gal
 			[[nodiscard]] constexpr bool operator()(const table_entry& entry1, const table_entry& entry2) const noexcept { return entry1 == entry2; }
 		};
 
-		hash_set<table_entry, entry_hasher, entry_equal> data_;
+		utils::hash_set<table_entry, entry_hasher, entry_equal> data_;
 		name_pool_type& pool_;
 	public:
 		explicit ast_name_table(name_pool_type& pool)
@@ -401,7 +401,7 @@ namespace gal
 
 		lexeme_point point_;
 
-		location previous_loc_;
+		utils::location previous_loc_;
 
 		bool skip_comment_;
 		bool read_name_;
@@ -422,7 +422,7 @@ namespace gal
 
 		void set_read_name(const bool read) noexcept { read_name_ = read; }
 
-		[[nodiscard]] location previous_location() const noexcept { return previous_loc_; }
+		[[nodiscard]] utils::location previous_location() const noexcept { return previous_loc_; }
 
 		const lexeme_point& next() { return next(skip_comment_); }
 
@@ -430,7 +430,7 @@ namespace gal
 		{
 			do
 			{
-				consume_until(is_whitespace);
+				consume_until(utils::is_whitespace);
 
 				previous_loc_ = point_.get_location();
 
@@ -442,7 +442,7 @@ namespace gal
 
 		void next_line()
 		{
-			consume_until([](const auto c) { return c && not is_new_line(c); });
+			consume_until([](const auto c) { return c && not utils::is_new_line(c); });
 
 			next();
 		}
@@ -485,11 +485,11 @@ namespace gal
 
 		[[nodiscard]] constexpr char peek_char(const offset_type offset) const noexcept { return offset_ + offset < buffer_.size() ? buffer_[offset_ + offset] : static_cast<char>(0); }
 
-		[[nodiscard]] constexpr position current_position() const noexcept { return {line_, offset_ - line_offset_}; }
+		[[nodiscard]] constexpr utils::position current_position() const noexcept { return {line_, offset_ - line_offset_}; }
 
 		constexpr void consume() noexcept
 		{
-			if (is_new_line(peek_char_directly()))
+			if (utils::is_new_line(peek_char_directly()))
 			{
 				++line_;
 				line_offset_ = offset_ + 1;
@@ -539,7 +539,7 @@ namespace gal
 		 */
 		[[nodiscard]] multi_line_string_level_type read_multi_line_string_level();
 
-		[[nodiscard]] lexeme_point read_multi_line_string(position begin, multi_line_string_level_type level, lexeme_point::token_type ok, lexeme_point::token_type broken);
+		[[nodiscard]] lexeme_point read_multi_line_string(utils::position begin, multi_line_string_level_type level, lexeme_point::token_type ok, lexeme_point::token_type broken);
 
 		[[nodiscard]] constexpr static char quoted_string_begin1() noexcept { return '\''; }
 
@@ -567,7 +567,7 @@ namespace gal
 
 		[[nodiscard]] std::pair<ast_name_table::name_type, lexeme_point::token_type> read_name();
 
-		[[nodiscard]] lexeme_point read_number(position begin, offset_type start_offset);
+		[[nodiscard]] lexeme_point read_number(utils::position begin, offset_type start_offset);
 
 		[[nodiscard]] lexeme_point read_utf8_error();
 

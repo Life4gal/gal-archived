@@ -2,7 +2,7 @@
 
 #include <utils/format.hpp>
 
-namespace gal
+namespace gal::utils
 {
 	std::string point::to_string() const
 	{

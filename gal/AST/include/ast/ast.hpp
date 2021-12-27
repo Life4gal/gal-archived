@@ -15,7 +15,7 @@
 #include <utils/concept.hpp>
 #include <utils/macro.hpp>
 
-namespace gal
+namespace gal::ast
 {
 	using gal_boolean_type = bool;
 	using gal_number_type = double;
@@ -38,7 +38,7 @@ namespace gal
 	struct ast_local
 	{
 		ast_name name;
-		location loc;
+		utils::location loc;
 
 		ast_local* shadow;
 		std::size_t function_depth;
@@ -66,7 +66,7 @@ namespace gal
 	struct ast_argument_name
 	{
 		ast_name name;
-		location loc;
+		utils::location loc;
 	};
 
 	class ast_visitor
@@ -116,10 +116,10 @@ namespace gal
 	{
 	protected:
 		ast_rtti_index_type class_index_;
-		location loc_;
+		utils::location loc_;
 
 	public:
-		constexpr ast_node(const ast_rtti_index_type class_index, location loc)
+		constexpr ast_node(const ast_rtti_index_type class_index, utils::location loc)
 			: class_index_{class_index},
 			  loc_{loc} {}
 
@@ -154,7 +154,7 @@ namespace gal
 
 		ast_expression* as_expression() override { return this; }
 
-		[[nodiscard]] ast_name		get_identifier() const noexcept;
+		[[nodiscard]] ast_name get_identifier() const noexcept;
 	};
 
 	class ast_expression_error final : public ast_expression
@@ -169,7 +169,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_error)
 
-		ast_expression_error(const location loc, error_expressions_type expressions, unsigned message_index)
+		ast_expression_error(const utils::location loc, error_expressions_type expressions, unsigned message_index)
 			: ast_expression{get_rtti_index(), loc},
 			  expressions_{std::move(expressions)},
 			  message_index_{message_index} {}
@@ -205,7 +205,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_block)
 
-		ast_statement_block(const location loc, block_body_type body)
+		ast_statement_block(const utils::location loc, block_body_type body)
 			: ast_statement{get_rtti_index(), loc},
 			  body_{std::move(body)} {}
 
@@ -226,7 +226,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_error)
 
-		ast_statement_error(const location loc, error_expressions_type expressions, error_statements_type statements, const unsigned message_index)
+		ast_statement_error(const utils::location loc, error_expressions_type expressions, error_statements_type statements, const unsigned message_index)
 			: ast_statement{get_rtti_index(), loc},
 			  expressions_{std::move(expressions)},
 			  statements_{std::move(statements)},
@@ -272,7 +272,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_type_error)
 
-		ast_type_error(const location loc, error_types_type types, bool is_missing, unsigned message_index)
+		ast_type_error(const utils::location loc, error_types_type types, bool is_missing, unsigned message_index)
 			: ast_type{get_rtti_index(), loc},
 			  types_{std::move(types)},
 			  is_missing_{is_missing},
@@ -291,7 +291,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_type_pack_explicit)
 
-		ast_type_pack_explicit(const location loc, ast_type_list types)
+		ast_type_pack_explicit(const utils::location loc, ast_type_list types)
 			: ast_type_pack{get_rtti_index(), loc},
 			  types_{std::move(types)} {}
 
@@ -308,7 +308,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_type_pack_variadic)
 
-		constexpr ast_type_pack_variadic(const location loc, ast_type* variadic_type)
+		constexpr ast_type_pack_variadic(const utils::location loc, ast_type* variadic_type)
 			: ast_type_pack{get_rtti_index(), loc},
 			  variadic_type_{variadic_type} {}
 
@@ -325,7 +325,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_type_pack_generic)
 
-		ast_type_pack_generic(const location loc, ast_name generic_name)
+		ast_type_pack_generic(const utils::location loc, ast_name generic_name)
 			: ast_type_pack{get_rtti_index(), loc},
 			  generic_name_{std::move(generic_name)} {}
 
@@ -340,7 +340,7 @@ namespace gal
 
 	public:
 		template<typename T>
-			requires is_any_type_of_v<T, ast_type, ast_type_pack>
+			requires utils::is_any_type_of_v<T, ast_type, ast_type_pack>
 		[[nodiscard]] constexpr bool holding() const noexcept { return std::holds_alternative<T*>(value_); }
 
 		template<typename Callable>
@@ -364,7 +364,7 @@ namespace gal
 		GAL_SET_RTTI(ast_type_reference)
 
 		ast_type_reference(
-				const location loc,
+				const utils::location loc,
 				ast_name name,
 				std::optional<ast_name> prefix,
 				std::optional<parameter_types_type> parameters = std::nullopt
@@ -385,7 +385,7 @@ namespace gal
 		struct ast_table_property
 		{
 			ast_name name;
-			location loc;
+			utils::location loc;
 			ast_type* type;
 
 			void visit(ast_visitor& visitor) const { type->visit(visitor); }
@@ -395,7 +395,7 @@ namespace gal
 		{
 			ast_type* index_type;
 			ast_type* result_type;
-			location loc;
+			utils::location loc;
 
 			void visit(ast_visitor& visitor) const
 			{
@@ -413,7 +413,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_type_table)
 
-		ast_type_table(const location loc, table_properties_type properties, ast_table_indexer* indexer = nullptr)
+		ast_type_table(const utils::location loc, table_properties_type properties, ast_table_indexer* indexer = nullptr)
 			: ast_type{get_rtti_index(), loc},
 			  properties_{std::move(properties)},
 			  indexer_{indexer} {}
@@ -448,7 +448,7 @@ namespace gal
 		GAL_SET_RTTI(ast_type_function)
 
 		ast_type_function(
-				const location loc,
+				const utils::location loc,
 				generic_names_type generics,
 				generic_names_type generic_packs,
 				ast_type_list arg_types,
@@ -482,7 +482,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_type_typeof)
 
-		constexpr ast_type_typeof(const location loc, ast_expression* expression)
+		constexpr ast_type_typeof(const utils::location loc, ast_expression* expression)
 			: ast_type{get_rtti_index(), loc},
 			  expression_{expression} {}
 
@@ -502,7 +502,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_type_union)
 
-		ast_type_union(const location loc, union_types_type types)
+		ast_type_union(const utils::location loc, union_types_type types)
 			: ast_type{get_rtti_index(), loc},
 			  types_{std::move(types)} {}
 
@@ -522,7 +522,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_type_intersection)
 
-		ast_type_intersection(const location loc, intersection_types_type types)
+		ast_type_intersection(const utils::location loc, intersection_types_type types)
 			: ast_type{get_rtti_index(), loc},
 			  types_{std::move(types)} {}
 
@@ -539,7 +539,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_type_singleton_boolean)
 
-		constexpr ast_type_singleton_boolean(const location loc, gal_boolean_type value)
+		constexpr ast_type_singleton_boolean(const utils::location loc, gal_boolean_type value)
 			: ast_type{get_rtti_index(), loc},
 			  value_{value} {}
 
@@ -556,7 +556,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_type_singleton_string)
 
-		ast_type_singleton_string(const location loc, gal_string_type value)
+		ast_type_singleton_string(const utils::location loc, gal_string_type value)
 			: ast_type{get_rtti_index(), loc},
 			  value_{std::move(value)} {}
 
@@ -573,7 +573,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_group)
 
-		constexpr ast_expression_group(const location loc, ast_expression* expression)
+		constexpr ast_expression_group(const utils::location loc, ast_expression* expression)
 			: ast_expression{get_rtti_index(), loc},
 			  expression_{expression} {}
 
@@ -585,7 +585,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_constant_null)
 
-		constexpr explicit ast_expression_constant_null(const location loc)
+		constexpr explicit ast_expression_constant_null(const utils::location loc)
 			: ast_expression{get_rtti_index(), loc} {}
 
 		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
@@ -599,7 +599,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_constant_boolean)
 
-		constexpr ast_expression_constant_boolean(const location loc, const gal_boolean_type value)
+		constexpr ast_expression_constant_boolean(const utils::location loc, const gal_boolean_type value)
 			: ast_expression{get_rtti_index(), loc},
 			  value_{value} {}
 
@@ -616,7 +616,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_constant_number)
 
-		constexpr ast_expression_constant_number(const location loc, const gal_number_type value)
+		constexpr ast_expression_constant_number(const utils::location loc, const gal_number_type value)
 			: ast_expression{get_rtti_index(), loc},
 			  value_{value} {}
 
@@ -633,7 +633,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_constant_string)
 
-		ast_expression_constant_string(const location loc, gal_string_type value)
+		ast_expression_constant_string(const utils::location loc, gal_string_type value)
 			: ast_expression{get_rtti_index(), loc},
 			  value_{std::move(value)} {}
 
@@ -649,7 +649,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_local)
 
-		constexpr ast_expression_local(const location loc, ast_local* local, const bool is_upvalue)
+		constexpr ast_expression_local(const utils::location loc, ast_local* local, const bool is_upvalue)
 			: ast_expression{get_rtti_index(), loc},
 			  local_{local},
 			  is_upvalue_{is_upvalue} {}
@@ -671,7 +671,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_global)
 
-		ast_expression_global(const location loc, ast_name name)
+		ast_expression_global(const utils::location loc, ast_name name)
 			: ast_expression{get_rtti_index(), loc},
 			  name_{std::move(name)} {}
 
@@ -685,7 +685,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_varargs)
 
-		constexpr explicit ast_expression_varargs(const location loc)
+		constexpr explicit ast_expression_varargs(const utils::location loc)
 			: ast_expression{get_rtti_index(), loc} {}
 
 		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
@@ -700,12 +700,12 @@ namespace gal
 		ast_expression* function_;
 		call_args_type args_;
 		bool is_self_;
-		location arg_loc_;
+		utils::location arg_loc_;
 
 	public:
 		GAL_SET_RTTI(ast_expression_call)
 
-		ast_expression_call(const location loc, ast_expression* function, call_args_type args, const bool is_self, const location arg_loc)
+		ast_expression_call(const utils::location loc, ast_expression* function, call_args_type args, const bool is_self, const utils::location arg_loc)
 			: ast_expression{get_rtti_index(), loc},
 			  function_{function},
 			  args_{std::move(args)},
@@ -730,14 +730,14 @@ namespace gal
 	private:
 		ast_expression* expression_;
 		ast_name index_;
-		location index_loc_;
-		position operand_pos_;
+		utils::location index_loc_;
+		utils::position operand_pos_;
 		char operand_;
 
 	public:
 		GAL_SET_RTTI(ast_expression_index_name)
 
-		ast_expression_index_name(const location loc, ast_expression* expression, ast_name index, const location index_loc, const position operand_pos, const char operand)
+		ast_expression_index_name(const utils::location loc, ast_expression* expression, ast_name index, const utils::location index_loc, const utils::position operand_pos, const char operand)
 			: ast_expression{get_rtti_index(), loc},
 			  expression_{expression},
 			  index_{std::move(index)},
@@ -762,7 +762,7 @@ namespace gal
 		ast_local* self_;
 		args_locals_type args_;
 
-		std::optional<location> vararg_loc_;
+		std::optional<utils::location> vararg_loc_;
 		ast_type_pack* vararg_annotation_;
 
 		ast_statement_block* body_;
@@ -775,32 +775,32 @@ namespace gal
 
 		bool has_end_;
 
-		std::optional<location> arg_location_;
+		std::optional<utils::location> arg_location_;
 
 	public:
 		GAL_SET_RTTI(ast_expression_function)
 
 		ast_expression_function(
-				const location loc,
+				const utils::location loc,
 				generics_args_type generics,
 				generics_args_type generic_packs,
 				ast_local* self,
 				args_locals_type args,
-				std::optional<location> vararg_loc,
+				std::optional<utils::location> vararg_loc,
 				ast_statement_block* body,
 				const std::size_t function_depth,
 				ast_name debug_name,
 				std::optional<ast_type_list> return_annotation = std::nullopt,
 				ast_type_pack* vararg_annotation = nullptr,
 				const bool has_end = false,
-				std::optional<location> arg_location = std::nullopt
+				std::optional<utils::location> arg_location = std::nullopt
 				)
 			: ast_expression{get_rtti_index(), loc},
 			  generics_{std::move(generics)},
 			  generic_packs_{std::move(generic_packs)},
 			  self_{self},
 			  args_{std::move(args)},
-			  vararg_loc_{vararg_loc.value_or(location{})},
+			  vararg_loc_{vararg_loc.value_or(utils::location{})},
 			  vararg_annotation_{vararg_annotation},
 			  body_{body},
 			  function_depth_{function_depth},
@@ -854,7 +854,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_table)
 
-		ast_expression_table(const location loc, items_type items)
+		ast_expression_table(const utils::location loc, items_type items)
 			: ast_expression{get_rtti_index(), loc},
 			  items_{std::move(items)} {}
 
@@ -895,7 +895,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_unary)
 
-		constexpr ast_expression_unary(const location loc, const operand_type operand, ast_expression* expression)
+		constexpr ast_expression_unary(const utils::location loc, const operand_type operand, ast_expression* expression)
 			: ast_expression{get_rtti_index(), loc},
 			  operand_{operand},
 			  expression_{expression} {}
@@ -967,7 +967,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_binary)
 
-		constexpr ast_expression_binary(const location loc, const operand_type operand, ast_expression* lhs, ast_expression* rhs)
+		constexpr ast_expression_binary(const utils::location loc, const operand_type operand, ast_expression* lhs, ast_expression* rhs)
 			: ast_expression{get_rtti_index(), loc},
 			  operand_{operand},
 			  lhs_{lhs},
@@ -1020,7 +1020,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_expression_type_assertion)
 
-		constexpr ast_expression_type_assertion(const location loc, ast_expression* expression, ast_type* annotation)
+		constexpr ast_expression_type_assertion(const utils::location loc, ast_expression* expression, ast_type* annotation)
 			: ast_expression{get_rtti_index(), loc},
 			  expression_{expression},
 			  annotation_{annotation} {}
@@ -1051,7 +1051,7 @@ namespace gal
 		GAL_SET_RTTI(ast_expression_if_else)
 
 		constexpr ast_expression_if_else(
-				const location loc,
+				const utils::location loc,
 				const bool has_then,
 				const bool has_else,
 				ast_expression* condition,
@@ -1084,9 +1084,9 @@ namespace gal
 		ast_statement_block* then_body_;
 		ast_statement* else_body_;
 
-		std::optional<location> then_loc_;
+		std::optional<utils::location> then_loc_;
 
-		std::optional<location> else_loc_;
+		std::optional<utils::location> else_loc_;
 
 		bool has_end_;
 
@@ -1094,12 +1094,12 @@ namespace gal
 		GAL_SET_RTTI(ast_statement_if)
 
 		constexpr ast_statement_if(
-				const location loc,
+				const utils::location loc,
 				ast_expression* condition,
 				ast_statement_block* then_body,
 				ast_statement* else_body,
-				const std::optional<location> then_loc,
-				const std::optional<location> else_loc,
+				const std::optional<utils::location> then_loc,
+				const std::optional<utils::location> else_loc,
 				const bool has_end
 				)
 			: ast_statement{get_rtti_index(), loc},
@@ -1129,17 +1129,17 @@ namespace gal
 		ast_expression* condition_;
 		ast_statement_block* body_;
 
-		std::optional<location> do_loc_;
+		std::optional<utils::location> do_loc_;
 
 		bool has_end_;
 
 	public:
 		GAL_SET_RTTI(ast_statement_while)
 
-		constexpr ast_statement_while(const location loc,
+		constexpr ast_statement_while(const utils::location loc,
 		                              ast_expression* condition,
 		                              ast_statement_block* body,
-		                              std::optional<location> do_loc,
+		                              std::optional<utils::location> do_loc,
 		                              const bool has_end)
 			: ast_statement{get_rtti_index(), loc},
 			  condition_{condition},
@@ -1170,7 +1170,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_repeat)
 
-		constexpr ast_statement_repeat(const location loc, ast_expression* condition, ast_statement_block* body, bool has_until)
+		constexpr ast_statement_repeat(const utils::location loc, ast_expression* condition, ast_statement_block* body, bool has_until)
 			: ast_statement{get_rtti_index(), loc},
 			  condition_{condition},
 			  body_{body},
@@ -1199,7 +1199,7 @@ namespace gal
 
 		ast_statement_block* body_;
 
-		std::optional<location> do_loc_;
+		std::optional<utils::location> do_loc_;
 
 		bool has_end_;
 
@@ -1207,12 +1207,12 @@ namespace gal
 		GAL_SET_RTTI(ast_statement_for)
 
 		constexpr ast_statement_for(
-				const location loc,
+				const utils::location loc,
 				ast_expression* begin,
 				ast_expression* end,
 				ast_expression* step,
 				ast_statement_block* body,
-				std::optional<location> do_loc,
+				std::optional<utils::location> do_loc,
 				const bool has_end)
 			: ast_statement{get_rtti_index(), loc},
 			  begin_{begin},
@@ -1248,21 +1248,21 @@ namespace gal
 		value_expressions_type values_;
 		ast_statement_block* body_;
 
-		std::optional<location> in_loc_;
+		std::optional<utils::location> in_loc_;
 
-		std::optional<location> do_loc_;
+		std::optional<utils::location> do_loc_;
 
 		bool has_end_;
 
 	public:
 		GAL_SET_RTTI(ast_statement_for_in)
 
-		ast_statement_for_in(const location loc,
+		ast_statement_for_in(const utils::location loc,
 		                     var_locals_type vars,
 		                     value_expressions_type values,
 		                     ast_statement_block* body,
-		                     std::optional<location> in_loc,
-		                     std::optional<location> do_loc,
+		                     std::optional<utils::location> in_loc,
+		                     std::optional<utils::location> do_loc,
 		                     const bool has_end)
 			: ast_statement{get_rtti_index(), loc},
 			  vars_{std::move(vars)},
@@ -1292,7 +1292,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_break)
 
-		constexpr explicit ast_statement_break(const location loc)
+		constexpr explicit ast_statement_break(const utils::location loc)
 			: ast_statement{get_rtti_index(), loc} {}
 
 		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
@@ -1303,7 +1303,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_continue)
 
-		constexpr explicit ast_statement_continue(const location loc)
+		constexpr explicit ast_statement_continue(const utils::location loc)
 			: ast_statement{get_rtti_index(), loc} {}
 
 		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
@@ -1322,7 +1322,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_return)
 
-		ast_statement_return(const location loc, expression_list_type list)
+		ast_statement_return(const utils::location loc, expression_list_type list)
 			: ast_statement{get_rtti_index(), loc},
 			  list_{std::move(list)} {}
 
@@ -1339,7 +1339,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_expression)
 
-		constexpr ast_statement_expression(const location loc, ast_expression* expression)
+		constexpr ast_statement_expression(const utils::location loc, ast_expression* expression)
 			: ast_statement{get_rtti_index(), loc},
 			  expression_{expression} {}
 
@@ -1358,19 +1358,19 @@ namespace gal
 		var_locals_type vars_;
 		value_expressions_type values_;
 
-		std::optional<location> assignment_loc_;
+		std::optional<utils::location> assignment_loc_;
 
 	public:
 		GAL_SET_RTTI(ast_statement_local)
 
-		ast_statement_local(const location loc,
+		ast_statement_local(const utils::location loc,
 		                    var_locals_type vars,
 		                    value_expressions_type values,
-		                    const std::optional<location> assignment_loc)
+		                    const std::optional<utils::location> assignment_loc)
 			: ast_statement{get_rtti_index(), loc},
 			  vars_{std::move(vars)},
 			  values_{std::move(values)},
-			  assignment_loc_{assignment_loc.value_or(location{})} {}
+			  assignment_loc_{assignment_loc.value_or(utils::location{})} {}
 
 		void visit(ast_visitor& visitor) override
 		{
@@ -1398,7 +1398,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_assign)
 
-		ast_statement_assign(const location loc, var_expressions_type vars, value_expressions_type values)
+		ast_statement_assign(const utils::location loc, var_expressions_type vars, value_expressions_type values)
 			: ast_statement{get_rtti_index(), loc},
 			  vars_{std::move(vars)},
 			  values_{std::move(values)} {}
@@ -1429,7 +1429,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_compound_assign)
 
-		constexpr ast_statement_compound_assign(const location loc, const operand_type operand, ast_expression* var, ast_expression* value)
+		constexpr ast_statement_compound_assign(const utils::location loc, const operand_type operand, ast_expression* var, ast_expression* value)
 			: ast_statement{get_rtti_index(), loc},
 			  operand_{operand},
 			  var_{var},
@@ -1456,7 +1456,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_function)
 
-		constexpr ast_statement_function(const location loc, ast_expression* name, ast_expression_function* function)
+		constexpr ast_statement_function(const utils::location loc, ast_expression* name, ast_expression_function* function)
 			: ast_statement{get_rtti_index(), loc},
 			  name_{name},
 			  function_{function} {}
@@ -1500,7 +1500,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_type_alias)
 
-		ast_statement_type_alias(const location loc,
+		ast_statement_type_alias(const utils::location loc,
 		                         ast_name name,
 		                         generic_names_type generics,
 		                         generic_names_type generic_packs,
@@ -1527,7 +1527,7 @@ namespace gal
 	public:
 		GAL_SET_RTTI(ast_statement_declare_global)
 
-		ast_statement_declare_global(const location loc, ast_name name, ast_type* type)
+		ast_statement_declare_global(const utils::location loc, ast_name name, ast_type* type)
 			: ast_statement{get_rtti_index(), loc},
 			  name_{std::move(name)},
 			  type_{type} {}
@@ -1555,7 +1555,7 @@ namespace gal
 		GAL_SET_RTTI(ast_statement_declare_function)
 
 		ast_statement_declare_function(
-				const location loc,
+				const utils::location loc,
 				ast_name name,
 				generic_names_type generics,
 				generic_names_type generic_packs,
@@ -1606,7 +1606,7 @@ namespace gal
 		GAL_SET_RTTI(ast_statement_declare_class)
 
 		ast_statement_declare_class(
-				const location loc,
+				const utils::location loc,
 				ast_name name,
 				std::optional<ast_name> super_name,
 				class_properties_type properties

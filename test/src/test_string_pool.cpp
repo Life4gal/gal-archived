@@ -3,7 +3,7 @@
 #include <utils/string_pool.hpp>
 #include <vector>
 
-using namespace gal;
+using namespace gal::utils;
 
 TEST(TestStringPool, TestNotNullTerminatedStrings)
 {

@@ -5,7 +5,7 @@
 
 #include <type_traits>
 
-namespace gal
+namespace gal::utils
 {
 	template<typename T, template<typename, typename> typename Requirement, typename... Ts>
 	struct is_any_requires_of : std::disjunction<Requirement<T, Ts>...> { };

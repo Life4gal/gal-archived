@@ -8,7 +8,7 @@ set(
 
 		src/assert.cpp
 		src/point.cpp
-		src/string_utils.cpp
+		
 		src/confusable.cpp
 )
 

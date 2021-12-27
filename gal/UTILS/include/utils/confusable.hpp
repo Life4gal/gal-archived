@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-namespace gal
+namespace gal::utils
 {
 	constexpr const char* find_confusable(std::uint32_t codepoint);
 }

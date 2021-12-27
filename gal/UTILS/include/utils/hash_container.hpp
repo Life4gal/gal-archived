@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace gal
+namespace gal::utils
 {
 	template<typename Key, typename Hasher = std::hash<Key>, typename KeyEqual = std::equal_to<>>
 	using hash_set = std::unordered_set<Key, Hasher, KeyEqual>;

@@ -1815,7 +1815,7 @@ namespace
 	};
 }
 
-namespace gal
+namespace gal::utils
 {
 	constexpr const char* find_confusable(const std::uint32_t codepoint)
 	{

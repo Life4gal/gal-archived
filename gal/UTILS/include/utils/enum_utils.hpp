@@ -3,7 +3,7 @@
 #ifndef GAL_LANG_UTILS_ENUM_UTILS_HPP
 #define GAL_LANG_UTILS_ENUM_UTILS_HPP
 
-namespace gal
+namespace gal::utils
 {
 	template<typename T, typename... Args>
 		requires std::is_enum_v<T> && (std::is_convertible_v<Args, T> && ...)

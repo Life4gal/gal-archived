@@ -2,7 +2,7 @@
 
 #include <utils/point.hpp>
 
-using namespace gal;
+using namespace gal::utils;
 
 TEST(TestPoint, TestPoint)
 {
