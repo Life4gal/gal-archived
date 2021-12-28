@@ -5,7 +5,7 @@
 namespace gal::ast
 {
 	template<typename R, typename T>
-	R parser::put_object_to_allocator(const ast_stack<T>& data)
+	R parser::put_object_to_allocator(const temporary_stack<T>& data)
 	{
 		// todo
 		// auto result = R{static_cast<T>(allocator_.allocate(sizeof(T) * data.size())), data.size()};
@@ -39,7 +39,7 @@ namespace gal::ast
 		  end_mismatch_suspect_{lexeme_point::bad_lexeme_point(utils::location{})},
 		  match_recovery_stop_on_token_(static_cast<decltype(match_recovery_stop_on_token_)::size_type>(lexeme_point::token_type::keyword_sentinel_end), 0)
 	{
-		function_stack_.emplace(true, 0);
+		function_stack_.emplace_back(true, 0);
 
 		match_recovery_stop_on_token_[lexeme_point::token_to_scalar(lexeme_point::token_type::eof)] = 1;
 
@@ -69,7 +69,7 @@ namespace gal::ast
 
 	ast_statement_block* parser::parse_block_no_scope()
 	{
-		auto body{scratch_statements_};
+		temporary_stack body{scratch_statements_};
 
 		const auto previous_position = lexer_.previous_location().end;
 
@@ -207,11 +207,11 @@ namespace gal::ast
 		const auto match_do = lexer_.current();
 		const bool has_do = expect_and_consume(lexeme_point::token_type::keyword_do, "while loop");
 
-		++function_stack_.top().loop_depth;
+		++function_stack_.back().loop_depth;
 
 		auto* body = parse_block();
 
-		--function_stack_.top().loop_depth;
+		--function_stack_.back().loop_depth;
 
 		const auto end = lexer_.current().get_location();
 
@@ -229,11 +229,11 @@ namespace gal::ast
 
 		const auto locals_begin = save_locals();
 
-		++function_stack_.top().loop_depth;
+		++function_stack_.back().loop_depth;
 
 		auto* body = parse_block_no_scope();
 
-		--function_stack_.top().loop_depth;
+		--function_stack_.back().loop_depth;
 
 		const auto has_until = expect_match_end_and_consume(lexeme_point::token_type::keyword_until, match_repeat);
 
@@ -268,7 +268,7 @@ namespace gal::ast
 
 		auto* ret = allocator_.new_object<ast_statement_continue>(begin);
 
-		if (function_stack_.top().is_root()) { return report_statement_error(begin, {}, put_object_to_allocator<ast_statement_error::error_statements_type>(ret), "break statement must be inside a loop."); }
+		if (function_stack_.back().is_root()) { return report_statement_error(begin, {}, put_object_to_allocator<ast_statement_error::error_statements_type>(ret), "break statement must be inside a loop."); }
 
 		return ret;
 	}
@@ -277,8 +277,461 @@ namespace gal::ast
 	{
 		auto* ret = allocator_.new_object<ast_statement_continue>(begin);
 
-		if (function_stack_.top().is_root()) { return report_statement_error(begin, {}, put_object_to_allocator<ast_statement_error::error_statements_type>(ret), "continue statement must be inside a loop."); }
+		if (function_stack_.back().is_root()) { return report_statement_error(begin, {}, put_object_to_allocator<ast_statement_error::error_statements_type>(ret), "continue statement must be inside a loop."); }
 
 		return ret;
+	}
+
+	ast_statement* parser::parse_for()
+	{
+		const auto begin = lexer_.current().get_location();
+
+		next_lexeme_point();// for
+
+		const auto var_name = parse_binding();
+
+		if (lexer_.current().is_any_type_of(lexeme_point::get_assignment_symbol()))
+		{
+			next_lexeme_point();// =
+
+			auto* from = parse_expression();
+
+			expect_and_consume(lexeme_point::get_comma_symbol(), "index range");
+
+			auto* to = parse_expression();
+
+			decltype(to) step = nullptr;
+
+			if (lexer_.current().is_any_type_of(lexeme_point::get_comma_symbol()))
+			{
+				next_lexeme_point();// ,
+				step = parse_expression();
+			}
+
+			const auto match_do = lexer_.current();
+			const bool has_do = expect_and_consume(lexeme_point::token_type::keyword_do, "for loop");
+
+			const auto locals_begin = save_locals();
+
+			++function_stack_.back().loop_depth;
+
+			auto* var = push_local(var_name);
+
+			auto* body = parse_block();
+
+			--function_stack_.back().loop_depth;
+
+			restore_locals(locals_begin);
+
+			const auto end = lexer_.current().get_location();
+			bool has_end = expect_match_end_and_consume(lexeme_point::token_type::keyword_end, match_do);
+
+			return allocator_.new_object<ast_statement_for>(
+				make_longest_line(begin, end), 
+				var, 
+				from, 
+				to, 
+				step, 
+				body, 
+				has_do ? std::make_optional(match_do.get_location()) : std::nullopt, 
+				has_end
+				);
+		}
+
+		temporary_stack names{scratch_bindings_};
+		names.push(var_name);
+
+		if (lexer_.current().is_any_type_of(lexeme_point::get_comma_symbol()))
+		{
+			next_lexeme_point();// ,
+
+			parse_binding_list(names);
+		}
+
+		const auto in_loc = lexer_.current().get_location();
+		const bool has_in = expect_and_consume(lexeme_point::token_type::keyword_in, "for loop");
+
+		temporary_stack values{scratch_expressions_};
+		parse_expression_list(values);
+
+		const auto match_do = lexer_.current();
+		const bool has_do = expect_and_consume(lexeme_point::token_type::keyword_do, "for loop");
+
+		const auto locals_begin = save_locals();
+
+		++function_stack_.back().loop_depth;
+
+		temporary_stack vars{scratch_locals_};
+		vars.insert(names, [this](auto&& top) -> decltype(auto) { return push_local(top); });
+
+		auto* body = parse_block();
+
+		--function_stack_.back().loop_depth;
+
+		restore_locals(locals_begin);
+
+		const auto end = lexer_.current().get_location();
+		bool has_end = expect_match_end_and_consume(lexeme_point::token_type::keyword_end, match_do);
+
+		return allocator_.new_object<ast_statement_for_in>(
+				make_longest_line(begin, end),
+				put_object_to_allocator<ast_statement_for_in::var_locals_type>(vars),
+				put_object_to_allocator<ast_statement_for_in::value_expressions_type>(values),
+				body,
+				has_in ? std::make_optional(in_loc) : std::nullopt,
+				has_do ? std::make_optional(match_do.get_location()) : std::nullopt,
+				has_end);
+	}
+
+	ast_statement* parser::parse_function_statement()
+	{
+		const auto begin = lexer_.current().get_location();
+
+		const auto match_function = lexer_.current();
+
+		next_lexeme_point();// function
+
+		auto debug_name = lexer_.current().is_any_type_of(lexeme_point::token_type::name) ? lexer_.current().get_data_or_name() : decltype(lexer_.current().get_data_or_name()){};
+
+		// parse function_name into a chain of indexing operators
+		auto* expression = parse_name_expression("function name");
+
+		const auto previous_recursion_counter = recursion_counter_;
+
+		while (lexer_.current().is_any_type_of(lexeme_point::get_dot_symbol()))
+		{
+			const auto operand_pos = lexer_.current().get_location().begin;
+			next_lexeme_point();// .
+
+			auto [name, loc] = parse_name("field name");
+
+			// while we could concatenate the name chain, for now let's just write the short name
+			debug_name = name;
+
+			expression = allocator_.new_object<ast_expression_index_name>(
+					make_longest_line(begin, loc),
+					expression,
+					name,
+					loc,
+					operand_pos,
+					lexeme_point::get_dot_symbol());
+
+			// note: while the parser isn't recursive here, we're generating recursive structures of unbounded depth
+			increase_recursion_counter("function name");
+		}
+
+		recursion_counter_ = previous_recursion_counter;
+
+		// finish with @
+		// function x.y.z@foo(parameter_list) body end ==> x.y.z.foo = function(self, parameter_list) body end
+		bool has_self = false;
+		if (lexer_.current().is_any_type_of(lexeme_point::get_at_symbol()))
+		{
+			const auto operand_pos = lexer_.current().get_location().begin;
+
+			next_lexeme_point();// @
+
+			auto [name, loc] = parse_name("method name");
+
+			// while we could concatenate the name chain, for now let's just write the short name
+			debug_name = name;
+
+			expression = allocator_.new_object<ast_expression_index_name>(
+					make_longest_line(begin, loc),
+					expression,
+					name,
+					loc,
+					operand_pos,
+					lexeme_point::get_at_symbol());
+
+			has_self = true;
+		}
+
+		count_match_recovery_stop_on_token<true>(lexeme_point::token_type::keyword_end);
+
+		auto* body = parse_function_body(has_self, match_function, debug_name, std::nullopt).first;
+
+		count_match_recovery_stop_on_token<false>(lexeme_point::token_type::keyword_end);
+
+		return allocator_.new_object<ast_statement_function>(
+				make_longest_line(begin, body->get_location()),
+				expression,
+				body);
+	}
+
+	ast_statement* parser::parse_local()
+	{
+		const auto begin = lexer_.current().get_location();
+
+		next_lexeme_point();// local
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::keyword_function))
+		{
+			auto match_function = lexer_.current();
+
+			next_lexeme_point();// function
+
+			// match_function is only used for diagnostics; to make it suitable for detecting missed indentation between
+			// `local function` and `end`, we patch the token to begin at the column where `local` starts
+			if (const auto [func_begin, func_end] = match_function.get_location(); func_begin.line == begin.begin.line) { match_function.reset_location({{func_begin.line, begin.begin.column}, func_end}); }
+
+			auto name = parse_name("variable name");
+
+			count_match_recovery_stop_on_token<true>(lexeme_point::token_type::keyword_end);
+
+			auto [body, var] = parse_function_body(false, match_function, name.name, name);
+
+			count_match_recovery_stop_on_token<false>(lexeme_point::token_type::keyword_end);
+
+			return allocator_.new_object<ast_statement_function_local>(
+					utils::location{begin.begin, body->get_location().end},
+					var,
+					body);
+		}
+
+		count_match_recovery_stop_on_token<true>(lexeme_point::get_assignment_symbol());
+
+		temporary_stack names{scratch_bindings_};
+		parse_binding_list(names);
+
+		count_match_recovery_stop_on_token<false>(lexeme_point::get_assignment_symbol());
+
+		temporary_stack vars{scratch_locals_};
+
+		temporary_stack values{scratch_expressions_};
+
+		std::optional<utils::location> assignment_loc;
+
+		if (lexer_.current().is_any_type_of(lexeme_point::get_assignment_symbol()))
+		{
+			assignment_loc = lexer_.current().get_location();
+
+			next_lexeme_point();// =
+
+			parse_expression_list(values);
+		}
+
+		vars.insert(names, [this](auto&& top) -> decltype(auto) { return push_local(top); });
+
+		const auto end = values.empty() ? lexer_.previous_location() : values.top()->get_location();
+
+		return allocator_.new_object<ast_statement_local>(
+				make_longest_line(begin, end),
+				put_object_to_allocator<ast_statement_local::var_locals_type>(vars),
+				put_object_to_allocator<ast_statement_local::value_expressions_type>(values),
+				assignment_loc);
+	}
+
+	ast_statement* parser::parse_return()
+	{
+		const auto begin = lexer_.current().get_location();
+
+		next_lexeme_point();// return
+
+		temporary_stack list{scratch_expressions_};
+
+		if (not lexer_.current().has_follower() && not lexer_.current().is_any_type_of(lexeme_point::get_semicolon_symbol())) { parse_expression_list(list); }
+
+		const auto end = list.empty() ? begin : list.top()->get_location();
+
+		return allocator_.new_object<ast_statement_return>(
+				make_longest_line(begin, end),
+				put_object_to_allocator<ast_statement_return::expression_list_type>(list));
+	}
+
+	ast_statement* parser::parse_type_alias(utils::location begin, bool exported)
+	{
+		// note: `using` token is already parsed for us, so we just need to parse the rest
+
+		auto name = parse_name_optional("using name");
+
+		// Use error name if the name is missing
+		if (not name.has_value()) { name = {name_error_, lexer_.current().get_location()}; }
+
+		auto [generics, generic_packs] = parse_generic_type_list();
+
+		expect_and_consume(lexeme_point::get_assignment_symbol(), "type alias");
+
+		auto* type = parse_type_annotation();
+
+		return allocator_.new_object<ast_statement_type_alias>(
+				make_longest_line(begin, type->get_location()),
+				name->name,
+				generics,
+				generic_packs,
+				type,
+				exported);
+	}
+
+	ast_statement_declare_class::ast_declared_class_property parser::parse_declared_class_method()
+	{
+		next_lexeme_point();
+
+		const auto begin = lexer_.current().get_location();
+
+		const auto function_name = parse_name("function name");
+
+		generic_names_type generics;
+		generic_names_type generic_packs;
+
+		const auto match_paren = lexer_.current();
+		expect_and_consume(lexeme_point::get_parentheses_bracket_open_symbol(), "function parameter list begin");
+
+		temporary_stack args{scratch_bindings_};
+
+		std::optional<utils::location> vararg;
+		ast_type_pack* vararg_annotation = nullptr;
+
+		if (not lexer_.current().is_any_type_of(lexeme_point::get_parentheses_bracket_close_symbol())) { std::tie(vararg, vararg_annotation) = parse_binding_list(args, true); }
+
+		expect_match_and_consume(lexeme_point::get_parentheses_bracket_close_symbol(), match_paren);
+
+		auto return_type = parse_optional_return_type_annotation().value_or(ast_type_list{});
+
+		const auto end = lexer_.current().get_location();
+
+		temporary_stack vars{scratch_annotations_};
+		temporary_stack var_names{scratch_optional_argument_names_};
+
+		if (args.empty() ||
+		    args.bottom().name.name != lexeme_point::get_self_keyword() ||
+		    args.bottom().annotation
+		)
+		{
+			return {
+					function_name.name,
+					report_type_annotation_error(make_longest_line(begin, end), {}, false, std_format::format("'{}' must be present as the unannotated first parameter", lexeme_point::get_self_keyword())),
+					true};
+		}
+
+		// Skip the first index.
+		for (decltype(args.size()) i = 1; i < args.size(); ++i)
+		{
+			const auto& [name, annotation] = args[i];
+
+			var_names.emplace(ast_argument_name{name.name, name.loc});
+
+			if (annotation) { vars.push(annotation); }
+			else { vars.push(report_type_annotation_error(make_longest_line(begin, end), {}, false, std_format::format("No.{} declaration parameters aside from '{}' should but no be annotated", i, lexeme_point::get_self_keyword()))); }
+		}
+
+		if (vararg.has_value() && not vararg_annotation) { report(begin, std_format::format("All declaration parameters aside from '{}' must be annotated", lexeme_point::get_self_keyword())); }
+
+		auto* function_type = allocator_.new_object<ast_type_function>(
+				make_longest_line(begin, end),
+				generics,
+				generic_packs,
+				ast_type_list{put_object_to_allocator<ast_array<ast_type*>>(vars), vararg_annotation},
+				put_object_to_allocator<ast_type_function::argument_names_type>(var_names),
+				return_type);
+
+		return {function_name.name, function_type, true};
+	}
+
+	ast_statement* parser::parse_declaration(utils::location begin)
+	{
+		// `declare` token is already parsed at this point
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::keyword_function))
+		{
+			next_lexeme_point();// function
+
+			const auto global_name = parse_name("global function name");
+
+			auto [generics, generic_packs] = parse_generic_type_list();
+
+			const auto match_paren = lexer_.current();
+
+			expect_and_consume(lexeme_point::get_parentheses_bracket_open_symbol(), "global function declaration");
+
+			temporary_stack args{scratch_bindings_};
+
+			std::optional<utils::location> vararg;
+			ast_type_pack* vararg_annotation = nullptr;
+
+			if (not lexer_.current().is_any_type_of(lexeme_point::get_parentheses_bracket_close_symbol())) { std::tie(vararg, vararg_annotation) = parse_binding_list(args, true); }
+
+			expect_match_and_consume(lexeme_point::get_parentheses_bracket_close_symbol(), match_paren);
+
+			auto return_types = parse_optional_return_type_annotation().value_or(ast_type_list{});
+
+			const auto end = lexer_.current().get_location();
+
+			temporary_stack vars{scratch_annotations_};
+			temporary_stack var_names{scratch_argument_names_};
+
+			for (decltype(args.size()) i = 0; i < args.size(); ++i)
+			{
+				const auto& [name, annotation] = args[i];
+
+				if (not annotation) { return report_statement_error(make_longest_line(begin, end), {}, {}, std_format::format("No.{} declaration parameters should but not be annotated", i)); }
+
+				vars.push(annotation);
+				var_names.emplace(name.name, name.loc);
+			}
+
+			if (vararg.has_value() && not vararg_annotation) { return report_statement_error(make_longest_line(begin, end), {}, {}, "All declaration parameters must be annotated"); }
+
+			return allocator_.new_object<ast_statement_declare_function>(
+					make_longest_line(begin, end),
+					global_name.name,
+					generics,
+					generic_packs,
+					ast_type_list{put_object_to_allocator<ast_array<ast_type*>>(vars), vararg_annotation},
+					put_object_to_allocator<ast_statement_declare_function::arguments_type>(var_names),
+					return_types);
+		}
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::name) && lexer_.current().get_data_or_name() == lexeme_point::get_class_keyword())
+		{
+			next_lexeme_point();// class
+
+			const auto class_begin = lexer_.current().get_location();
+
+			const auto class_name = parse_name("class name");
+
+			std::optional<ast_name> super_name;
+
+			if (lexer_.current().is_any_type_of(lexeme_point::token_type::name) && lexer_.current().get_data_or_name() == lexeme_point::get_extend_keyword())
+			{
+				next_lexeme_point();// extends
+
+				super_name = parse_name("superclass name").name;
+			}
+
+			temporary_stack properties{scratch_declared_class_properties_};
+
+			// There are two possibilities: Either it's a property or a function.
+			while (not lexer_.current().is_any_type_of(lexeme_point::token_type::keyword_end))
+			{
+				if (lexer_.current().is_any_type_of(lexeme_point::token_type::keyword_function)) { properties.push(parse_declared_class_method()); }
+				else
+				{
+					const auto property_name = parse_name("property name");
+					expect_and_consume(lexeme_point::get_colon_symbol(), "property type annotation");
+					auto* property_type = parse_type_annotation();
+					properties.emplace(property_name.name, property_type, false);
+				}
+			}
+
+			const auto class_end = lexer_.current().get_location();
+
+			next_lexeme_point();// end
+
+			return allocator_.new_object<ast_statement_declare_class>(
+					make_longest_line(class_begin, class_end),
+					class_name.name,
+					super_name,
+					put_object_to_allocator<ast_statement_declare_class::class_properties_type>(properties));
+		}
+		if (const auto global_name = parse_name_optional("global variable name"); global_name.has_value())
+		{
+			expect_and_consume(lexeme_point::get_colon_symbol(), "global variable declaration");
+
+			auto* type = parse_type_annotation();
+			return allocator_.new_object<ast_statement_declare_global>(
+					make_longest_line(begin, type->get_location()),
+					global_name->name,
+					type);
+		}
+		return report_statement_error(begin, {}, {}, std_format::format("declare must be followed by an identifier, 'function', or '{}'", lexeme_point::get_class_keyword()));
 	}
 }

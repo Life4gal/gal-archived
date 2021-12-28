@@ -176,12 +176,18 @@ namespace gal::ast
 				{"export"},// export
 				{"using"}, // type alias
 				{"declare"},
+						{"self"},
+						{"class"},
+						{"extends"},
 		};
 
 		[[nodiscard]] constexpr static keyword_literal_type get_continue_keyword() noexcept { return non_token_keywords[0]; }
 		[[nodiscard]] constexpr static keyword_literal_type get_export_keyword() noexcept { return non_token_keywords[1]; }
 		[[nodiscard]] constexpr static keyword_literal_type get_type_alias_keyword() noexcept { return non_token_keywords[2]; }
 		[[nodiscard]] constexpr static keyword_literal_type get_declare_keyword() noexcept { return non_token_keywords[3]; }
+		[[nodiscard]] constexpr static keyword_literal_type get_self_keyword() noexcept { return non_token_keywords[3]; }
+		[[nodiscard]] constexpr static keyword_literal_type get_class_keyword() noexcept { return non_token_keywords[4]; }
+		[[nodiscard]] constexpr static keyword_literal_type get_extend_keyword() noexcept { return non_token_keywords[5]; }
 
 		/**
 		 * @brief 1 ~ 255
@@ -215,6 +221,7 @@ namespace gal::ast
 				'\'',
 				'"',
 				'_',
+				'@',
 		};
 
 		[[nodiscard]] constexpr static char get_assignment_symbol() noexcept { return non_token_symbol[0]; }
@@ -244,6 +251,7 @@ namespace gal::ast
 		[[nodiscard]] constexpr static char get_single_quotation_symbol() noexcept { return non_token_symbol[24]; }
 		[[nodiscard]] constexpr static char get_double_quotation_symbol() noexcept { return non_token_symbol[25]; }
 		[[nodiscard]] constexpr static char get_underscore_symbol() noexcept { return non_token_symbol[26]; }
+		[[nodiscard]] constexpr static char get_at_symbol() noexcept { return non_token_symbol[27]; }
 
 		/**
 		 * @brief attempt to read a token, return the read token and the read length,
@@ -541,6 +549,8 @@ namespace gal::ast
 		[[nodiscard]] constexpr token_type get_type() const noexcept { return type_; }
 
 		[[nodiscard]] constexpr utils::location get_location() const noexcept { return loc_; }
+
+		constexpr void reset_location(const utils::location new_loc) noexcept { loc_ = new_loc; }
 
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR data_or_name_type get_data_or_name() const noexcept
 		{

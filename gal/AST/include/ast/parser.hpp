@@ -15,8 +15,102 @@
 
 namespace gal::ast
 {
+	// template<typename T>
+	// using ast_stack = std::stack<T, std::vector<T>>;
+
 	template<typename T>
-	using ast_stack = std::stack<T, std::vector<T>>;
+	class temporary_stack
+	{
+		template<typename> friend class temporary_stack;
+	public:
+		using holding_container_type = std::vector<T>;
+		using size_type = typename holding_container_type::size_type;
+		using value_type = typename holding_container_type::value_type;
+
+	private:
+		holding_container_type& container_;
+		size_type begin_;
+		size_type used_;
+
+	public:
+		explicit temporary_stack(holding_container_type& container)
+			: container_{container},
+			  begin_{container.size()},
+			  used_{0} {}
+
+		temporary_stack(const temporary_stack&) = delete;
+		temporary_stack& operator=(const temporary_stack&) = delete;
+		temporary_stack(temporary_stack&&) = delete;
+		temporary_stack& operator=(temporary_stack&&) = delete;
+
+		~temporary_stack() noexcept { container_.erase(begin(), end()); }
+
+		[[nodiscard]] constexpr decltype(auto) top() const { return std::as_const(container_.back()); }
+
+		[[nodiscard]] constexpr decltype(auto) bottom() const { return std::as_const(container_[begin_]); }
+
+		[[nodiscard]] constexpr bool empty() const noexcept { return used_ == 0; }
+
+		[[nodiscard]] constexpr size_type size() const noexcept { return used_; }
+
+		constexpr decltype(auto) operator[](size_type index) { return container_[begin_ + index]; }
+
+		constexpr void push(const value_type& value)
+		{
+			++used_;
+			container_.push_back(value);
+		}
+
+		constexpr void push(value_type&& value)
+		{
+			++used_;
+			container_.push_back(std::move(value));
+		}
+
+		template<typename... Args>
+		constexpr decltype(auto) emplace(Args&&... args)
+		{
+			++used_;
+			return container_.emplace_back(std::forward<Args>(args)...);
+		}
+
+		constexpr void pop()
+		{
+			--used_;
+			container_.pop_back();
+		}
+
+		template<typename U, typename Func>
+			requires requires(temporary_stack<T>& dest, const temporary_stack<U>& source, Func func)
+			{
+				dest.push(func(source.top()));
+			}
+		constexpr void insert(const temporary_stack<U>& source, Func func) { for (const auto& data: source) { push(func(data)); } }
+
+		template<std::convertible_to<T> U>
+		constexpr void insert(const temporary_stack<U>& source) { for (const auto& data: source) { push(static_cast<T>(data)); } }
+
+	private:
+		// internal use only
+		[[nodiscard]] constexpr auto begin() noexcept
+		{
+			return container_.begin() + begin_;
+		}
+		[[nodiscard]] constexpr auto begin() const noexcept
+		{
+			return container_.cbegin() + begin_;
+		}
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR auto end() noexcept
+		{
+			gal_assert(container_.size() == begin_ + used_);
+			return container_.end();
+		}
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR auto end() const noexcept
+		{
+			gal_assert(container_.size() == begin_ + used_);
+			return container_.cend();
+		}
+	};
 
 	struct parse_result
 	{
@@ -33,17 +127,17 @@ namespace gal::ast
 	class parser
 	{
 	public:
-		using ast_statement_stack_type = ast_stack<ast_statement*>;
-		using ast_expression_stack_type = ast_stack<ast_expression*>;
-		using ast_name_stack_type = ast_stack<ast_name>;
-		using ast_local_stack_type = ast_stack<ast_local*>;
-		using ast_table_property_stack_type = ast_stack<ast_type_table::ast_table_property>;
-		using ast_type_stack_type = ast_stack<ast_type*>;
-		using ast_type_or_pack_type = ast_stack<ast_type_or_pack>;
-		using ast_class_property_stack_type = ast_stack<ast_statement_declare_class::ast_declared_class_property>;
-		using ast_table_item_stack_type = ast_stack<ast_expression_table::item>;
-		using ast_argument_name_stack_type = ast_stack<ast_argument_name>;
-		using ast_optional_argument_name_stack_type = ast_stack<std::optional<ast_argument_name>>;
+		using ast_statement_stack_type = std::vector<ast_statement*>;
+		using ast_expression_stack_type = std::vector<ast_expression*>;
+		using ast_name_stack_type = std::vector<ast_name>;
+		using ast_local_stack_type = std::vector<ast_local*>;
+		using ast_table_property_stack_type = std::vector<ast_type_table::ast_table_property>;
+		using ast_type_stack_type = std::vector<ast_type*>;
+		using ast_type_or_pack_type = std::vector<ast_type_or_pack>;
+		using ast_class_property_stack_type = std::vector<ast_statement_declare_class::ast_declared_class_property>;
+		using ast_table_item_stack_type = std::vector<ast_expression_table::item>;
+		using ast_argument_name_stack_type = std::vector<ast_argument_name>;
+		using ast_optional_argument_name_stack_type = std::vector<std::optional<ast_argument_name>>;
 
 		using locals_stack_size_type = ast_local_stack_type::size_type;
 
@@ -71,11 +165,11 @@ namespace gal::ast
 			bool vararg;
 			std::size_t loop_depth;
 
-			constexpr bool is_root() const noexcept { return loop_depth == 0; }
+			[[nodiscard]] constexpr bool is_root() const noexcept { return loop_depth == 0; }
 		};
 
-		using parse_name_binding_result_stack_type = ast_stack<parse_name_binding_result>;
-		using parse_function_result_stack_type = ast_stack<parse_function_result>;
+		using parse_name_binding_result_stack_type = std::vector<parse_name_binding_result>;
+		using parse_function_result_stack_type = std::vector<parse_function_result>;
 
 		parse_options options_;
 
@@ -122,7 +216,7 @@ namespace gal::ast
 		 * @note Internal use only.
 		 */
 		template<typename R, typename T>
-		R put_object_to_allocator(const ast_stack<T>& data);
+		R put_object_to_allocator(const temporary_stack<T>& data);
 
 		template<typename R, typename T>
 		R put_object_to_allocator(T data);
@@ -170,12 +264,12 @@ namespace gal::ast
 		// continue
 		ast_statement* parse_continue(utils::location begin);
 
-		// for name `=' expression `,' expression [`,' exp] do block end |
+		// for name `=' expression `,' expression [`,' expression] do block end |
 		// for name_list in expression_list do block end |
 		ast_statement* parse_for();
 
 		// function function_name function_body |
-		// function_name ::= name {`.' name} [`:' name]
+		// function_name ::= name {`.' name} [`@' name]
 		ast_statement* parse_function_statement();
 
 		// local function function_ame function_body |
@@ -185,7 +279,7 @@ namespace gal::ast
 		// return [expression_list]
 		ast_statement* parse_return();
 
-		// `using` alias_name `=' type_annotation
+		// `using` alias_name [`<' var_list `>'] `=' type_annotation
 		ast_statement* parse_type_alias(utils::location begin, bool exported);
 
 		ast_statement_declare_class::ast_declared_class_property parse_declared_class_method();
@@ -205,14 +299,14 @@ namespace gal::ast
 		std::pair<ast_expression_function*, ast_local*> parse_function_body(bool has_self, const lexeme_point& match_function, ast_name debug_name, std::optional<parse_name_result> local_name);
 
 		// expression_list ::= {expression `,'} expression
-		void parse_expression_list(ast_stack<ast_expression*>& result);
+		void parse_expression_list(temporary_stack<ast_expression*>& result);
 
 		// binding ::= name [`:` type_annotation]
 		parse_name_binding_result parse_binding();
 
 		// binding_list ::= (binding | `...') {`,' binding_list}
 		// returns the location of the vararg ..., or std::nullopt if the function is not vararg.
-		std::pair<std::optional<utils::location>, ast_type_pack*> parse_binding_list(ast_stack<parse_name_binding_result>& result, bool allow_ellipsis = false);
+		std::pair<std::optional<utils::location>, ast_type_pack*> parse_binding_list(temporary_stack<parse_name_binding_result>& result, bool allow_ellipsis = false);
 
 		ast_type* parse_optional_type_annotation();
 
@@ -227,7 +321,7 @@ namespace gal::ast
 		//      |   `{' [property_list] `}'
 		//      |   `(' [type_list] `)' `->` return_type
 		// returns the variadic annotation, if it exists.
-		ast_type_pack* parse_type_list(ast_stack<ast_type*>& result, ast_stack<std::optional<ast_argument_name>>& result_names);
+		ast_type_pack* parse_type_list(temporary_stack<ast_type*>& result, temporary_stack<std::optional<ast_argument_name>>& result_names);
 
 		std::optional<ast_type_list> parse_optional_return_type_annotation();
 		std::pair<utils::location, ast_type_list> parse_return_type_annotation();
@@ -235,13 +329,13 @@ namespace gal::ast
 		ast_type_table::ast_table_indexer* parse_table_indexer_annotation();
 
 		ast_type_or_pack parse_function_type_annotation(bool allow_pack);
-		ast_type* parse_function_type_annotation_tail(const lexeme_point& begin, ast_type_function::generic_names_type generics, ast_type_function::generic_names_type generic_packs, ast_array<ast_type*>& params, ast_type_function::argument_names_type& param_names, ast_type_pack* vararg_annotation);
+		ast_type* parse_function_type_annotation_tail(const lexeme_point& begin, generic_names_type generics, generic_names_type generic_packs, ast_array<ast_type*>& params, ast_type_function::argument_names_type& param_names, ast_type_pack* vararg_annotation);
 
 		ast_type* parse_table_type_annotation();
 		ast_type_or_pack parse_simple_type_annotation(bool allow_pack);
 
 		ast_type_or_pack parse_type_or_pack_annotation();
-		ast_type* parse_type_annotation(ast_stack<ast_type*>& parts, utils::location begin);
+		ast_type* parse_type_annotation(temporary_stack<ast_type*>& parts, utils::location begin);
 		ast_type* parse_type_annotation();
 
 		ast_type_pack* parse_type_pack_annotation();
@@ -283,7 +377,7 @@ namespace gal::ast
 		parse_name_result parse_index_name(ast_name context, utils::position previous);
 
 		// `<' name_list `>'
-		std::pair<ast_array<ast_name>, ast_array<ast_name>> parse_generic_type_list();
+		std::pair<generic_names_type, generic_names_type> parse_generic_type_list();
 
 		// `<' type_annotation [, ...] `>'
 		ast_array<ast_type_or_pack> parse_type_params();
@@ -296,6 +390,22 @@ namespace gal::ast
 		locals_stack_size_type save_locals();
 
 		void restore_locals(locals_stack_size_type offset);
+
+		template<bool Increase, typename... Args>
+			requires(std::is_convertible_v<Args, lexeme_point::token_underlying_type> && ...) && ((not std::is_convertible_v<Args, lexeme_point::token_type>) && ...)
+		constexpr void count_match_recovery_stop_on_token(Args ... args) noexcept
+		{
+			([&](const auto arg)
+				{
+					if constexpr (Increase) { ++match_recovery_stop_on_token_[arg]; }
+					else { --match_recovery_stop_on_token_[arg]; }
+				}(args),
+				...);
+		}
+
+		template<bool Increase, typename... Args>
+			requires(std::is_convertible_v<Args, lexeme_point::token_type> && ...)
+		constexpr void count_match_recovery_stop_on_token(Args ... args) noexcept { count_match_recovery_stop_on_token<Increase>(static_cast<lexeme_point::token_underlying_type>(static_cast<lexeme_point::token_type>(args))...); }
 
 		// check that parser is at lexeme_point/symbol, move to next lexeme_point/symbol on success, report failure and continue on failure
 		bool expect_and_consume(lexeme_point::token_underlying_type type, const char* context = nullptr);

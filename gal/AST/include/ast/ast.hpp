@@ -60,6 +60,8 @@ namespace gal::ast
 	template<typename T>
 	using ast_array = std::span<T>;
 
+	using generic_names_type = ast_array<ast_name>;
+
 	struct ast_type_list
 	{
 		ast_array<ast_type*> types;
@@ -446,7 +448,6 @@ namespace gal::ast
 	class ast_type_function final : public ast_type
 	{
 	public:
-		using generic_names_type = ast_array<ast_name>;
 		using argument_names_type = ast_array<std::optional<ast_argument_name>>;
 
 	private:
@@ -752,7 +753,7 @@ namespace gal::ast
 		ast_expression_index_name(const utils::location loc, ast_expression* expression, ast_name index, const utils::location index_loc, const utils::position operand_pos, const char operand)
 			: ast_expression{get_rtti_index(), loc},
 			  expression_{expression},
-			  index_{std::move(index)},
+			  index_{index},
 			  index_loc_{index_loc},
 			  operand_pos_{operand_pos},
 			  operand_{operand} {}
@@ -1264,7 +1265,6 @@ namespace gal::ast
 	{
 	private:
 		ast_local* var_;
-
 		ast_expression* begin_;
 		ast_expression* end_;
 		ast_expression* step_;
@@ -1280,6 +1280,7 @@ namespace gal::ast
 
 		constexpr ast_statement_for(
 				const utils::location loc,
+				ast_local* var,
 				ast_expression* begin,
 				ast_expression* end,
 				ast_expression* step,
@@ -1287,6 +1288,7 @@ namespace gal::ast
 				std::optional<utils::location> do_loc,
 				const bool has_end)
 			: ast_statement{get_rtti_index(), loc},
+			  var_{var},
 			  begin_{begin},
 			  end_{end},
 			  step_{step},
@@ -1396,7 +1398,7 @@ namespace gal::ast
 
 		ast_statement_return(const utils::location loc, expression_list_type list)
 			: ast_statement{get_rtti_index(), loc},
-			  list_{std::move(list)} {}
+			  list_{list} {}
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { for (const auto& expression: list_) { expression->visit(visitor); } } }
 
@@ -1440,8 +1442,8 @@ namespace gal::ast
 		                    value_expressions_type values,
 		                    const std::optional<utils::location> assignment_loc)
 			: ast_statement{get_rtti_index(), loc},
-			  vars_{std::move(vars)},
-			  values_{std::move(values)},
+			  vars_{vars},
+			  values_{values},
 			  assignment_loc_{assignment_loc.value_or(utils::location{})} {}
 
 		void visit(ast_visitor& visitor) override
@@ -1519,9 +1521,9 @@ namespace gal::ast
 		// todo: interface
 	};
 
-	class ast_statement_function : public ast_statement
+	class ast_statement_function final : public ast_statement
 	{
-	protected:
+	private:
 		ast_expression* name_;
 		ast_expression_function* function_;
 
@@ -1545,12 +1547,19 @@ namespace gal::ast
 		// todo: interface
 	};
 
-	class ast_statement_function_local final : public ast_statement_function
+	class ast_statement_function_local final : public ast_statement
 	{
+	private:
+		ast_local* name_;
+		ast_expression_function* function_;
+
 	public:
 		GAL_SET_RTTI(ast_statement_function_local)
 
-		using ast_statement_function::ast_statement_function;
+		constexpr ast_statement_function_local(const utils::location loc, ast_local* name, ast_expression_function* function)
+			: ast_statement{get_rtti_index(), loc},
+			  name_{name},
+			  function_{function} {}
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { function_->visit(visitor); } }
 
@@ -1559,9 +1568,6 @@ namespace gal::ast
 
 	class ast_statement_type_alias final : public ast_statement
 	{
-	public:
-		using generic_names_type = ast_array<ast_name>;
-
 	private:
 		ast_name name_;
 		generic_names_type generics_;
@@ -1579,9 +1585,9 @@ namespace gal::ast
 		                         ast_type* type,
 		                         const bool exported)
 			: ast_statement{get_rtti_index(), loc},
-			  name_{std::move(name)},
-			  generics_{std::move(generics)},
-			  generic_packs_{std::move(generic_packs)},
+			  name_{name},
+			  generics_{generics},
+			  generic_packs_{generic_packs},
 			  type_{type},
 			  exported_{exported} {}
 
@@ -1601,7 +1607,7 @@ namespace gal::ast
 
 		ast_statement_declare_global(const utils::location loc, ast_name name, ast_type* type)
 			: ast_statement{get_rtti_index(), loc},
-			  name_{std::move(name)},
+			  name_{name},
 			  type_{type} {}
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { type_->visit(visitor); } }
@@ -1612,7 +1618,6 @@ namespace gal::ast
 	class ast_statement_declare_function final : public ast_statement
 	{
 	public:
-		using generic_names_type = ast_array<ast_name>;
 		using arguments_type = ast_array<ast_argument_name>;
 
 	private:
@@ -1636,12 +1641,12 @@ namespace gal::ast
 				ast_type_list return_type
 				)
 			: ast_statement{get_rtti_index(), loc},
-			  name_{std::move(name)},
-			  generics_{std::move(generics)},
-			  generic_packs_{std::move(generic_packs)},
-			  params_{std::move(params)},
-			  param_names_{std::move(param_names)},
-			  return_types_{std::move(return_type)} {}
+			  name_{name},
+			  generics_{generics},
+			  generic_packs_{generic_packs},
+			  params_{params},
+			  param_names_{param_names},
+			  return_types_{return_type} {}
 
 		void visit(ast_visitor& visitor) override
 		{
@@ -1684,9 +1689,9 @@ namespace gal::ast
 				class_properties_type properties
 				)
 			: ast_statement{get_rtti_index(), loc},
-			  name_{std::move(name)},
-			  super_name_{std::move(super_name)},
-			  properties_{std::move(properties)} {}
+			  name_{name},
+			  super_name_{super_name},
+			  properties_{properties} {}
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { for (const auto& property: properties_) { property.visit(visitor); } } }
 
