@@ -93,9 +93,9 @@ namespace gal::ast
 			}
 		}
 
-		for (auto i = length; i != 0; --i) { consume(); }
+		consume_n(length);
 
-		return {lexeme_point::token_type::quoted_string, {begin, {0, 0}}, {buffer_.data() + start_offset, offset_ - start_offset - quoted_string_begin_or_end_length()}};
+		return {lexeme_point::token_type::quoted_string, {begin, {0, 0}}, {buffer_.data() + start_offset, offset_ - start_offset - length}};
 	}
 
 	lexeme_point lexer::read_comment()
@@ -202,36 +202,31 @@ namespace gal::ast
 		auto make_location = [begin](const utils::point::size_type length) { return make_horizontal_line(begin, length); };
 
 		const auto [token, length] = lexeme_point::get_compound_symbol(
-				[this]() constexpr noexcept { return peek_char(); },
-				[this]() constexpr noexcept { consume(); },
-				[](const char c) constexpr noexcept
-				{
-					return c == lexeme_point::get_dot_symbol() ||
-					       c == lexeme_point::get_single_quotation_symbol() ||
-					       c == lexeme_point::get_double_quotation_symbol() ||
-					       c == lexeme_point::get_underscore_symbol() ||
-					       utils::is_digit(c) ||
-					       utils::is_alpha(c);
-				}
-				);
+				[this](const std::size_t offset) constexpr noexcept { return peek_char(offset); });
 
-		if (token == lexeme_point::token_type::comment) { return read_comment(); }
+		if (token == lexeme_point::token_type::comment)
+		{
+			consume_n(length);
+			return read_comment();
+		}
+		if (token == lexeme_point::token_type::quoted_string)
+		{
+			const auto quotation = peek_char();
+			consume_n(length);
+			return read_quoted_string(quotation, length);
+		}
 
 		const auto scalar = lexeme_point::token_to_scalar(token);
 		if (scalar == multi_line_string_begin())
 		{
+			consume_n(length);
 			const auto level = read_multi_line_string_level();
 
 			if (level.second == multi_line_string_error_format) { return {lexeme_point::token_type::broken_string, make_location(0)}; }
 			if (level.second == multi_line_string_its_not) { return {token, make_location(0)}; }
 			return read_multi_line_string(begin, level, lexeme_point::token_type::raw_string, lexeme_point::token_type::broken_string);
 		}
-		if (scalar == lexeme_point::get_dot_symbol())
-		{
-			if (peek_char(1) == lexeme_point::get_dot_symbol() && peek_char(2) == lexeme_point::get_dot_symbol()) { return {lexeme_point::token_type::ellipsis, make_location(3)}; }
-			if (utils::is_digit(peek_char(1))) { return read_number(begin, offset_); }
-		}
-		if (scalar == lexeme_point::get_single_quotation_symbol() || scalar == lexeme_point::get_double_quotation_symbol()) { return read_quoted_string(static_cast<char>(scalar), length); }
+		if (scalar == lexeme_point::get_dot_symbol()) { if (utils::is_digit(peek_char(1))) { return read_number(begin, offset_); } }
 		if (utils::is_digit(static_cast<char>(scalar))) { return read_number(begin, offset_); }
 		if (utils::is_alpha(static_cast<char>(scalar)) || scalar == lexeme_point::get_underscore_symbol())
 		{

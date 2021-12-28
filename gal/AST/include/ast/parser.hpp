@@ -324,10 +324,15 @@ namespace gal::ast
 		ast_type_pack* parse_type_list(temporary_stack<ast_type*>& result, temporary_stack<std::optional<ast_argument_name>>& result_names);
 
 		std::optional<ast_type_list> parse_optional_return_type_annotation();
+
+		// return_type ::= type_annotation | `(' type_list `)'
 		std::pair<utils::location, ast_type_list> parse_return_type_annotation();
 
+		// table_indexer ::= `[' type_annotation `]' `:' type_annotation
 		ast_type_table::ast_table_indexer* parse_table_indexer_annotation();
 
+		// return_type ::= type_annotation | `(' type_list `)'
+		// function_type_annotation ::= [`<' var_list `>'] `(' [type_list] `)' `->` return_type
 		ast_type_or_pack parse_function_type_annotation(bool allow_pack);
 		ast_type* parse_function_type_annotation_tail(const lexeme_point& begin, generic_names_type generics, generic_names_type generic_packs, ast_array<ast_type*>& params, ast_type_function::argument_names_type& param_names, ast_type_pack* vararg_annotation);
 
