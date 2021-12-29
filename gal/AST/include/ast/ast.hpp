@@ -18,15 +18,16 @@
 
 namespace gal::ast
 {
-	using gal_boolean_type = bool;
-	using gal_number_type = double;
-	using gal_string_type = std::string;
-
 	/**
 	 * @note ast_name does not `own` the target memory.
 	 */
 	using ast_name = std::string_view;
 	using ast_name_owned = std::basic_string<ast_name::value_type, ast_name::traits_type>;
+
+	using gal_boolean_type = bool;
+	using gal_number_type = double;
+
+	using gal_string_type = ast_name;
 
 	class ast_visitor;
 
@@ -179,12 +180,12 @@ namespace gal::ast
 
 	private:
 		error_expressions_type expressions_;
-		unsigned message_index_;
+		std::size_t message_index_;
 
 	public:
 		GAL_SET_RTTI(ast_expression_error)
 
-		ast_expression_error(const utils::location loc, error_expressions_type expressions, const unsigned message_index)
+		ast_expression_error(const utils::location loc, error_expressions_type expressions, const std::size_t message_index)
 			: ast_expression{get_rtti_index(), loc},
 			  expressions_{expressions},
 			  message_index_{message_index} {}
@@ -238,12 +239,12 @@ namespace gal::ast
 	private:
 		error_expressions_type expressions_;
 		error_statements_type statements_;
-		unsigned message_index_;
+		std::size_t message_index_;
 
 	public:
 		GAL_SET_RTTI(ast_statement_error)
 
-		ast_statement_error(const utils::location loc, error_expressions_type expressions, error_statements_type statements, const unsigned message_index)
+		ast_statement_error(const utils::location loc, error_expressions_type expressions, error_statements_type statements, const std::size_t message_index)
 			: ast_statement{get_rtti_index(), loc},
 			  expressions_{expressions},
 			  statements_{statements},
@@ -284,12 +285,12 @@ namespace gal::ast
 	private:
 		error_types_type types_;
 		bool is_missing_;
-		unsigned message_index_;
+		std::size_t message_index_;
 
 	public:
 		GAL_SET_RTTI(ast_type_error)
 
-		ast_type_error(const utils::location loc, error_types_type types, bool is_missing, unsigned message_index)
+		ast_type_error(const utils::location loc, error_types_type types, const bool is_missing, const std::size_t message_index)
 			: ast_type{get_rtti_index(), loc},
 			  types_{types},
 			  is_missing_{is_missing},
@@ -371,6 +372,10 @@ namespace gal::ast
 			requires utils::is_any_type_of_v<T, ast_type, ast_type_pack>
 		[[nodiscard]] constexpr bool holding() const noexcept { return std::holds_alternative<T*>(value_); }
 
+		template<typename T>
+			requires utils::is_any_type_of_v<T, ast_type, ast_type_pack>
+		[[nodiscard]] constexpr decltype(auto) as() noexcept { return std::get<T*>(value_); }
+
 		template<typename Callable>
 		constexpr auto visit(Callable&& callable) { return std::visit(std::forward<Callable>(callable), value_); }
 
@@ -394,7 +399,7 @@ namespace gal::ast
 		ast_type_reference(
 				const utils::location loc,
 				ast_name name,
-				std::optional<ast_name> prefix,
+				const std::optional<ast_name> prefix,
 				std::optional<parameter_types_type> parameters = std::nullopt
 				)
 			: ast_type{get_rtti_index(), loc},
@@ -501,7 +506,7 @@ namespace gal::ast
 		// todo: interface
 	};
 
-	class ast_type_typeof final : ast_type
+	class ast_type_typeof final : public ast_type
 	{
 	private:
 		ast_expression* expression_;
@@ -662,7 +667,7 @@ namespace gal::ast
 
 		ast_expression_constant_string(const utils::location loc, gal_string_type value)
 			: ast_expression{get_rtti_index(), loc},
-			  value_{std::move(value)} {}
+			  value_{value} {}
 
 		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
 	};
@@ -885,21 +890,20 @@ namespace gal::ast
 	class ast_expression_table final : public ast_expression
 	{
 	public:
+		enum class item_type
+		{
+			// value only
+			list,
+			// key is a ast_expression_constant_string
+			record,
+			general,
+		};
+
 		struct item
 		{
-			enum class item_type
-			{
-				// value only
-				list,
-				// key is a ast_expression_constant_string
-				record,
-				general,
-			};
-
-			// todo: use set & map
-
 			item_type type;
-			std::pair<ast_expression*, ast_expression*> kv;
+			ast_expression* key;
+			ast_expression* value;
 		};
 
 		using items_type = ast_array<item>;
@@ -918,9 +922,8 @@ namespace gal::ast
 		{
 			if (visitor.visit(*this))
 			{
-				for (const auto& [_, kv]: items_)
+				for (const auto& [_, key, value]: items_)
 				{
-					const auto& [key, value] = kv;
 					if (key) { key->visit(visitor); }
 					value->visit(visitor);
 				}
@@ -971,6 +974,7 @@ namespace gal::ast
 				case operand_type::unary_plus: { return "+"; }
 				case operand_type::unary_minus: { return "-"; }
 				case operand_type::unary_not: { return "not"; }
+				case operand_type::unary_bitwise_not: { return "~"; }
 			}
 
 			UNREACHABLE();
@@ -989,7 +993,7 @@ namespace gal::ast
 		enum class operand_type
 		{
 			// +
-			binary_plus,
+			binary_plus = 0,
 			// -
 			binary_minus,
 			// *
@@ -1072,6 +1076,13 @@ namespace gal::ast
 					{binary_greater_equal, {7, 7}}// order
 			};
 		};
+
+		// for unary operand
+		// if the priority of the binary operand is greater than this, then it will precede the unary operand
+		// fortunately, the priority of binary operands we support seems to be lower than unary...
+		constexpr static operand_priority_type unary_operand_priority = 20;
+
+		constexpr static operand_priority get_priority(operand_type operand) noexcept { return operand_priority_manager::operands[static_cast<std::underlying_type_t<operand_type>>(operand)].priority; }
 
 	private:
 		operand_type operand_;

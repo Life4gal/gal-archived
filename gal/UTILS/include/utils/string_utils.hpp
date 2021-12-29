@@ -6,6 +6,7 @@
 #include<string>
 #include<string_view>
 #include <range/v3/view.hpp>
+#include <range/v3/algorithm.hpp>
 
 #include<utils/concept.hpp>
 
@@ -85,6 +86,21 @@ namespace gal::utils
 			         container.push_back(string);
 		         }
 	constexpr void split(String delimiter, std::type_identity_t<String> string, Container& container) { for (auto&& each: split(delimiter, string)) { container.push_back(std::move(each)); } }
+
+	template<typename Pred, typename String>
+		requires is_any_type_of_v<String, std::basic_string<typename String::value_type, typename String::traits_type, typename String::allocator_type>> &&
+		         std::is_invocable_r_v<bool, Pred, typename String::value_type>
+	constexpr String trim_right(const String& string, Pred pred) { return string | ranges::views::reverse | ranges::views::drop_while(pred) | ranges::views::reverse | ranges::to<String>(); }
+
+	template<typename Pred, typename String>
+		requires is_any_type_of_v<String, std::basic_string<typename String::value_type, typename String::traits_type, typename String::allocator_type>> &&
+		         std::is_invocable_r_v<bool, Pred, typename String::value_type>
+	constexpr String trim_left(const String& string, Pred pred) { return string | ranges::views::drop_while(pred) | ranges::to<String>(); }
+
+	template<typename Pred, typename String>
+		requires is_any_type_of_v<String, std::basic_string<typename String::value_type, typename String::traits_type, typename String::allocator_type>> &&
+		         std::is_invocable_r_v<bool, Pred, typename String::value_type>
+	constexpr String trim_entire(const String& string, Pred pred) { return ranges::views::trim(string, pred) | ranges::to<String>(); }
 
 	constexpr bool is_whitespace(const char c) noexcept { return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f'; }
 

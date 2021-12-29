@@ -6,16 +6,16 @@
 namespace gal::utils
 {
 	template<typename T, typename... Args>
-		requires std::is_enum_v<T> && (std::is_convertible_v<Args, T> && ...)
+		requires std::is_enum_v<T> && ((std::is_convertible_v<Args, T> || std::is_convertible_v<Args, std::underlying_type_t<T>>) && ...)
 	constexpr bool is_any_enum_of(T current_enum, Args ... requires_enums) noexcept
 	{
-		return ([current_enum](auto requires_enum) { return current_enum == static_cast<T>(requires_enum); }(requires_enums) ||
+		return ([current = static_cast<std::underlying_type_t<T>>(current_enum)](auto requires_enum) { return current == static_cast<std::underlying_type_t<T>>(requires_enum); }(requires_enums) ||
 			...);
 	}
 
-	template<bool Opened = true, bool Closed = true, typename T>
-		requires std::is_enum_v<T>
-	constexpr bool is_enum_between_of(T current_enum, std::type_identity_t<T> enum_begin, std::type_identity_t<T> enum_end) noexcept
+	template<bool Opened = true, bool Closed = true, typename T, typename U>
+		requires std::is_enum_v<T> && (std::is_convertible_v<U, T> || std::is_convertible_v<U, std::underlying_type_t<T>>)
+	constexpr bool is_enum_between_of(T current_enum, U enum_begin, std::type_identity_t<U> enum_end) noexcept
 	{
 		using underlying_type = std::underlying_type_t<T>;
 

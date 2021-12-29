@@ -170,6 +170,8 @@ namespace gal::ast
 
 		[[nodiscard]] constexpr static bool is_keyword(const ast_name keyword) noexcept { return std::ranges::find(keywords, keyword) != std::ranges::end(keywords); }
 
+		[[nodiscard]] constexpr static keyword_literal_type get_keyword(const token_type token) noexcept { return keywords[token_to_scalar(token) - token_to_scalar(token_type::keyword_sentinel_begin) - 1]; }
+
 		constexpr static keyword_literal_type non_token_keywords[] =
 		{
 				{"continue"},
@@ -179,15 +181,17 @@ namespace gal::ast
 				{"self"},
 				{"class"},
 				{"extends"},
+				{"typeof"},
 		};
 
 		[[nodiscard]] constexpr static keyword_literal_type get_continue_keyword() noexcept { return non_token_keywords[0]; }
 		[[nodiscard]] constexpr static keyword_literal_type get_export_keyword() noexcept { return non_token_keywords[1]; }
 		[[nodiscard]] constexpr static keyword_literal_type get_type_alias_keyword() noexcept { return non_token_keywords[2]; }
 		[[nodiscard]] constexpr static keyword_literal_type get_declare_keyword() noexcept { return non_token_keywords[3]; }
-		[[nodiscard]] constexpr static keyword_literal_type get_self_keyword() noexcept { return non_token_keywords[3]; }
-		[[nodiscard]] constexpr static keyword_literal_type get_class_keyword() noexcept { return non_token_keywords[4]; }
-		[[nodiscard]] constexpr static keyword_literal_type get_extend_keyword() noexcept { return non_token_keywords[5]; }
+		[[nodiscard]] constexpr static keyword_literal_type get_self_keyword() noexcept { return non_token_keywords[4]; }
+		[[nodiscard]] constexpr static keyword_literal_type get_class_keyword() noexcept { return non_token_keywords[5]; }
+		[[nodiscard]] constexpr static keyword_literal_type get_extend_keyword() noexcept { return non_token_keywords[6]; }
+		[[nodiscard]] constexpr static keyword_literal_type get_typeof_keyword() noexcept { return non_token_keywords[7]; }
 
 		/**
 		 * @brief 1 ~ 255
@@ -222,6 +226,7 @@ namespace gal::ast
 				'"',
 				'_',
 				'@',
+				'?',
 		};
 
 		[[nodiscard]] constexpr static char get_assignment_symbol() noexcept { return non_token_symbol[0]; }
@@ -252,6 +257,7 @@ namespace gal::ast
 		[[nodiscard]] constexpr static char get_double_quotation_symbol() noexcept { return non_token_symbol[25]; }
 		[[nodiscard]] constexpr static char get_underscore_symbol() noexcept { return non_token_symbol[26]; }
 		[[nodiscard]] constexpr static char get_at_symbol() noexcept { return non_token_symbol[27]; }
+		[[nodiscard]] constexpr static char get_question_mark_symbol() noexcept { return non_token_symbol[28]; }
 
 		/**
 		 * @brief attempt to read a token, return the read token and the read length,
@@ -510,7 +516,8 @@ namespace gal::ast
 			  data_{data_or_name}
 		{
 			gal_assert(
-					utils::is_any_enum_of(type, token_type::raw_string, token_type::quoted_string, token_type::number, token_type::comment, token_type::block_comment, token_type::name) || utils::is_enum_between_of<false, false>(type_, token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end),
+					is_any_type_of(token_type::raw_string, token_type::quoted_string, token_type::number, token_type::comment, token_type::block_comment, token_type::name) ||
+					is_any_keyword(),
 					"Mismatch type! Type should be string/number/comment/name/keyword."
 					);
 		}
@@ -523,12 +530,16 @@ namespace gal::ast
 		[[nodiscard]] static lexeme_point bad_lexeme_point(const utils::location loc) { return {token_type::eof, loc}; }
 
 		template<typename... Args>
-			requires(std::is_convertible_v<Args, token_type> && ...)
-		[[nodiscard]] constexpr bool is_any_type_of(Args&&... types) const noexcept { return utils::is_any_enum_of(type_, std::forward<Args>(types)...); }
+			requires((std::is_convertible_v<Args, token_type> || std::is_convertible_v<Args, token_underlying_type>) && ...)
+		[[nodiscard]] constexpr bool is_any_type_of(Args ... types) const noexcept { return utils::is_any_enum_of(type_, static_cast<token_underlying_type>(types)...); }
 
-		template<typename... Args>
-			requires(std::is_convertible_v<Args, token_underlying_type> && ...) && ((not std::is_convertible_v<Args, token_type>) && ...)
-		[[nodiscard]] constexpr bool is_any_type_of(Args&&... types) const noexcept { return is_any_type_of(static_cast<token_type>(static_cast<token_underlying_type>(types))...); }
+		template<bool Opened = true, bool Closed = true, typename T>
+			requires(std::is_convertible_v<T, token_type> || std::is_convertible_v<T, token_underlying_type>)
+		[[nodiscard]] constexpr bool is_between_type_of(T begin, std::type_identity_t<T> end) const noexcept { return utils::is_enum_between_of<Opened, Closed>(type_, begin, end); }
+
+		[[nodiscard]] constexpr bool is_any_keyword() const noexcept { return is_between_type_of<false, false>(token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end); }
+
+		[[nodiscard]] constexpr bool is_any_character() const noexcept { return is_between_type_of<false, false>(token_type::char_sentinel_begin, token_type::char_sentinel_end); }
 
 		[[nodiscard]] constexpr bool is_comment() const noexcept { return is_any_type_of(token_type::comment, token_type::block_comment); }
 
@@ -566,6 +577,17 @@ namespace gal::ast
 			return std::nullopt;
 		}
 
+		template<typename Reporter>
+			requires std::is_invocable_v<Reporter, utils::location, std::string>
+		[[nodiscard]] constexpr std::optional<ast_expression_unary::operand_type> check_unary_operand(Reporter reporter) const noexcept
+		{
+			using enum ast_expression_unary::operand_type;
+			// there should be nothing confusing to unary operands...
+			(void)type_;
+			(void)reporter;
+			return std::nullopt;
+		}
+
 		[[nodiscard]] constexpr std::optional<ast_expression_binary::operand_type> to_binary_operand() const noexcept
 		{
 			using enum ast_expression_binary::operand_type;
@@ -596,6 +618,18 @@ namespace gal::ast
 			if (scalar == get_less_than_symbol()) { return binary_less_than; }
 			if (scalar == get_greater_than_symbol()) { return binary_greater_than; }
 
+			return std::nullopt;
+		}
+
+		template<typename Reporter>
+			requires std::is_invocable_v<Reporter, utils::location, std::string>
+		[[nodiscard]] constexpr std::optional<ast_expression_binary::operand_type> check_binary_operand(Reporter reporter) const noexcept
+		{
+			using enum ast_expression_binary::operand_type;
+			// unfortunately we support almost all binary operands...
+			// maybe the unary operand conflicts with the binary operand priority?
+			(void)type_;
+			(void)reporter;
 			return std::nullopt;
 		}
 
@@ -674,8 +708,8 @@ namespace gal::ast
 				}
 				default:
 				{
-					if (utils::is_enum_between_of<false, false>(type_, token_type::char_sentinel_begin, token_type::char_sentinel_end)) { return std_format::format("'{}'", static_cast<char>(type_)); }
-					if (utils::is_enum_between_of<false, false>(type_, token_type::keyword_sentinel_begin, token_type::keyword_sentinel_end)) { return std_format::format("'{}'", keywords[static_cast<token_underlying_type>(type_) - static_cast<token_underlying_type>(token_type::keyword_sentinel_begin) - 1]); }
+					if (is_any_keyword()) { return std_format::format("'{}'", get_keyword(type_)); }
+					if (is_any_character()) { return std_format::format("{}", static_cast<char>(type_)); }
 					return "<unknown>";
 				}
 			}

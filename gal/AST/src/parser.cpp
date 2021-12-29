@@ -1,35 +1,47 @@
 #include <ast/parser.hpp>
 
 #include <ast/lexer.hpp>
+#include <charconv>
 
 namespace gal::ast
 {
-	template<typename R, typename T>
-	R parser::put_object_to_allocator(const temporary_stack<T>& data)
+	template<typename R, typename T, template <typename> class Container>
+	R parser::put_object_to_allocator(const Container<T>& container)
 	{
-		// todo
-		// auto result = R{static_cast<T>(allocator_.allocate(sizeof(T) * data.size())), data.size()};
-		// std::uninitialized_copy(data.begin(), data.end(), result.data());
-		// return result;
+		auto result = R{static_cast<T*>(allocator_.allocate(sizeof(T) * container.size())), container.size()};
 
-		(void)data;
-		return R{};
+		std::uninitialized_copy(container.begin(), container.end(), result.data());
+
+		return result;
 	}
 
 	template<typename R, typename T>
 	R parser::put_object_to_allocator(T data)
 	{
-		// todo
-		// auto result = R{static_cast<T>(allocator_.allocate(sizeof(T) * 1)), 1};
+		// auto  result = R{static_cast<T*>(allocator_.allocate(sizeof(T) * typename R::size_type{1})), typename R::size_type{1}};
+		//
 		// std::construct_at(result.data(), data);
+		//
 		// return result;
 
+		// todo
 		(void)data;
+		(void)this;
 		return R{};
 	}
 
-	parser::parser(const ast_name buffer, ast_name_table& name_table, utils::trivial_allocator& allocator)
-		: lexer_{buffer, name_table},
+	gal_string_type parser::put_object_to_allocator(const std::string& data) const
+	{
+		const gal_string_type result{static_cast<gal_string_type::value_type*>(allocator_.allocate(sizeof(gal_string_type::value_type) * data.size())), data.size()};
+
+		std::uninitialized_copy(data.begin(), data.end(), result.data());
+
+		return result;
+	}
+
+	parser::parser(const ast_name buffer, ast_name_table& name_table, utils::trivial_allocator& allocator, parse_options options)
+		: options_{options},
+		  lexer_{buffer, name_table},
 		  allocator_{allocator},
 		  recursion_counter_{0},
 		  name_self_{name_table.insert(keyword_self)},
@@ -1026,7 +1038,7 @@ namespace gal::ast
 					{put_object_to_allocator<ast_type_list::types_list_type>(result), vararg_annotation}};
 		}
 
-		auto types = put_object_to_allocator<ast_type_list::types_list_type>(result);
+		const auto types = put_object_to_allocator<ast_type_list::types_list_type>(result);
 		auto names = put_object_to_allocator<ast_type_function::argument_names_type>(result_names);
 
 		temporary_stack fallback_return_types{scratch_annotations_};
@@ -1085,7 +1097,7 @@ namespace gal::ast
 
 		count_match_recovery_stop_on_token<false>(lexeme_point::token_type::right_arrow);
 
-		auto param_types = put_object_to_allocator<ast_type_list::types_list_type>(params);
+		const auto param_types = put_object_to_allocator<ast_type_list::types_list_type>(params);
 
 		// Not a function at all. Just a parenthesized type. Or maybe a type pack with a single element
 		if (params.size() == 1 && not vararg_annotation && monomorphic && not lexer_.current().is_any_type_of(lexeme_point::token_type::right_arrow))
@@ -1099,5 +1111,1227 @@ namespace gal::ast
 		auto param_names = put_object_to_allocator<ast_type_function::argument_names_type>(names);
 
 		return parse_function_type_annotation_tail(begin, generics, generic_packs, param_types, param_names, vararg_annotation);
+	}
+
+	ast_type* parser::parse_function_type_annotation_tail(const lexeme_point& begin, generic_names_type generics, generic_names_type generic_packs, const ast_array<ast_type*>& params, ast_type_function::argument_names_type& param_names, ast_type_pack* vararg_annotation)
+	{
+		increase_recursion_counter("type annotation");
+
+		// Users occasionally write '()' as the 'unit' type when they actually want to use 'null', here we'll try to give a more specific error
+		if (not lexer_.current().is_any_type_of(lexeme_point::token_type::right_arrow) && generics.empty() && generic_packs.empty() && params.empty())
+		{
+			report(make_longest_line(begin.get_location(), lexer_.previous_location()), std_format::format("Expected '->' after '{}{}' when parsing function type; did you mean '{}'?", lexeme_point::get_parentheses_bracket_open_symbol(), lexeme_point::get_parentheses_bracket_close_symbol(), keyword_null));
+
+			return allocator_.new_object<ast_type_reference>(
+					begin.get_location(),
+					name_null_,
+					std::nullopt);
+		}
+
+		expect_and_consume(lexeme_point::token_type::right_arrow, "function type");
+
+		const auto [end_loc, return_type_list] = parse_return_type_annotation();
+
+		return allocator_.new_object<ast_type_function>(
+				make_longest_line(begin.get_location(), end_loc),
+				generics,
+				generic_packs,
+				ast_type_list{params, vararg_annotation},
+				param_names,
+				return_type_list);
+	}
+
+	ast_type* parser::parse_table_type_annotation()
+	{
+		increase_recursion_counter("type annotation");
+
+		temporary_stack properties{scratch_table_properties_};
+		ast_type_table::ast_table_indexer* indexer = nullptr;
+
+		const auto begin = lexer_.current().get_location();
+
+		const auto match_brace = lexer_.current();
+		expect_and_consume(lexeme_point::get_curly_bracket_open_symbol(), "table type");
+
+		while (not lexer_.current().is_any_type_of(lexeme_point::get_curly_bracket_close_symbol()))
+		{
+			if (lexer_.current().is_any_type_of(lexeme_point::get_square_bracket_open_symbol()))
+			{
+				// maybe we don't need to parse the entire bad indexer...
+				// however, we either have { or [ to lint, not the entire table type or the bad indexer.
+				auto* bad_indexer = parse_table_indexer_annotation();
+
+				if (indexer)
+				{
+					// we lose all additional indexer expressions from the AST after error recovery here
+					report(bad_indexer->loc, "Cannot have more than one table indexer");
+				}
+				else { indexer = bad_indexer; }
+			}
+			else if (properties.empty() && not indexer && not(lexer_.current().is_any_type_of(lexeme_point::token_type::name) && lexer_.peek_next().is_any_type_of(lexeme_point::get_colon_symbol())))
+			{
+				auto* type = parse_type_annotation();
+
+				// array-like table type: {T} de-sugars into {[number]: T}
+				auto* index = allocator_.new_object<ast_type_reference>(
+						type->get_location(),
+						name_number_,
+						std::nullopt);
+
+				indexer = allocator_.new_object<ast_type_table::ast_table_indexer>(
+						index,
+						type,
+						type->get_location());
+
+				break;
+			}
+			else
+			{
+				auto name = parse_name_optional("table field");
+
+				if (not name.has_value()) { break; }
+
+				expect_and_consume(lexeme_point::get_colon_symbol(), "table field");
+
+				auto* type = parse_type_annotation();
+
+				properties.emplace(name->name, name->loc, type);
+			}
+
+			if (lexer_.current().is_any_type_of(lexeme_point::get_comma_symbol(), lexeme_point::get_semicolon_symbol()))
+			{
+				next_lexeme_point();// , or ;
+			}
+			else { if (not lexer_.current().is_any_type_of(lexeme_point::get_curly_bracket_close_symbol())) { break; } }
+		}
+
+		auto end = lexer_.current().get_location();
+
+		if (not expect_match_and_consume(lexeme_point::get_curly_bracket_close_symbol(), match_brace)) { end = lexer_.previous_location(); }
+
+		return allocator_.new_object<ast_type_table>(
+				make_longest_line(begin, end),
+				put_object_to_allocator<ast_type_table::table_properties_type>(properties),
+				indexer);
+	}
+
+	ast_type_or_pack parser::parse_simple_type_annotation(const bool allow_pack)
+	{
+		increase_recursion_counter("type annotation");
+
+		auto begin = lexer_.current().get_location();
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::keyword_null))
+		{
+			next_lexeme_point();// null
+			return allocator_.new_object<ast_type_reference>(
+					begin,
+					name_null_,
+					std::nullopt);
+		}
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::name))
+		{
+			auto name = parse_name("type name");
+
+			std::optional<ast_name> prefix;
+
+			if (lexer_.current().is_any_type_of(lexeme_point::get_dot_symbol()))
+			{
+				const auto dot_pos = lexer_.current().get_location().begin;
+				next_lexeme_point();// .
+
+				prefix = name.name;
+				name = parse_index_name("field name", dot_pos);
+			}
+			else if (name.name == lexeme_point::get_typeof_keyword())
+			{
+				const auto typeof_begin = lexer_.current();
+				expect_and_consume(lexeme_point::get_parentheses_bracket_open_symbol(), "typeof type");
+
+				auto* expression = parse_expression();
+
+				const auto end = lexer_.current().get_location();
+
+				expect_match_and_consume(lexeme_point::get_parentheses_bracket_close_symbol(), typeof_begin);
+
+				return allocator_.new_object<ast_type_typeof>(
+						make_longest_line(begin, end),
+						expression
+						);
+			}
+
+			std::optional<decltype(parse_type_params())> parameters;
+
+			if (lexer_.current().is_any_type_of(lexeme_point::get_less_than_symbol())) { parameters = parse_type_params(); }
+
+			const auto end = lexer_.previous_location();
+
+			return allocator_.new_object<ast_type_reference>(
+					make_longest_line(begin, end),
+					name.name,
+					prefix,
+					parameters
+					);
+		}
+
+		if (lexer_.current().is_any_type_of(lexeme_point::get_curly_bracket_open_symbol())) { return parse_table_type_annotation(); }
+
+		if (lexer_.current().is_any_type_of(lexeme_point::get_parentheses_bracket_open_symbol(), lexeme_point::get_less_than_symbol())) { parse_function_type_annotation(allow_pack); }
+
+		// For a missing type annotation, capture 'space' between last token and the next one
+		const utils::location loc{lexer_.previous_location().end, lexer_.current().get_location().begin};
+
+		return report_type_annotation_error(loc, {}, true, std_format::format("Expected type, but got {}", lexer_.current().to_string()));
+	}
+
+	ast_type_or_pack parser::parse_type_or_pack_annotation()
+	{
+		const auto previous_recursion_count = recursion_counter_;
+
+		increase_recursion_counter("type annotation");
+
+		const auto begin = lexer_.current().get_location();
+
+		temporary_stack parts{scratch_annotations_};
+
+		auto type_or_pack = parse_simple_type_annotation(true);
+
+		if (type_or_pack.holding<ast_type_pack>()) { return type_or_pack; }
+
+		parts.push(type_or_pack.as<ast_type>());
+
+		recursion_counter_ = previous_recursion_count;
+
+		return parse_type_annotation(parts, begin);
+	}
+
+	ast_type* parser::parse_type_annotation(temporary_stack<ast_type*>& parts, utils::location begin)
+	{
+		gal_assert(not parts.empty());
+
+		increase_recursion_counter("type annotation");
+
+		bool is_union = false;
+		bool is_intersection = false;
+
+		auto loc = begin;
+
+		while (true)
+		{
+			if (lexer_.current().is_any_type_of(lexeme_point::get_bitwise_or_symbol(), lexeme_point::get_bitwise_and_symbol()))
+			{
+				next_lexeme_point();// | or &
+
+				parts.push(parse_simple_type_annotation(false).as<ast_type>());
+
+				is_union = lexer_.current().is_any_type_of(lexeme_point::get_bitwise_or_symbol());
+				is_intersection = lexer_.current().is_any_type_of(lexeme_point::get_bitwise_and_symbol());
+			}
+			else if (lexer_.current().is_any_type_of(lexeme_point::get_question_mark_symbol()))
+			{
+				const auto current = lexer_.current().get_location();
+				next_lexeme_point();// ?
+
+				parts.push(allocator_.new_object<ast_type_reference>(
+						current,
+						name_null_,
+						std::nullopt));
+				is_union = true;
+			}
+			else { break; }
+		}
+
+		if (parts.size() == 1) { return parts.bottom(); }
+
+		if (is_union && is_intersection)
+		{
+			return report_type_annotation_error(
+					make_longest_line(begin, parts.top()->get_location()),
+					put_object_to_allocator<ast_type_error::error_types_type>(parts),
+					false,
+					std_format::format("Mixing union('{}') and intersection('{}') types is not allowed; consider wrapping in parentheses.", lexeme_point::get_bitwise_or_symbol(), lexeme_point::get_bitwise_and_symbol()));
+		}
+
+		loc.end = parts.top()->get_location().end;
+
+		if (is_union) { return allocator_.new_object<ast_type_union>(loc, put_object_to_allocator<ast_type_union::union_types_type>(parts)); }
+
+		if (is_intersection) { return allocator_.new_object<ast_type_intersection>(loc, put_object_to_allocator<ast_type_intersection::intersection_types_type>(parts)); }
+
+		gal_assert(false, "Composite type was not an intersection or union.");
+		throw parse_error{begin, "Composite type was not an intersection or union."};
+	}
+
+	ast_type* parser::parse_type_annotation()
+	{
+		const auto previous_recursion_count = recursion_counter_;
+
+		increase_recursion_counter("type annotation");
+
+		const auto begin = lexer_.current().get_location();
+
+		temporary_stack parts{scratch_annotations_};
+		parts.push(parse_simple_type_annotation(false).as<ast_type>());
+
+		recursion_counter_ = previous_recursion_count;
+
+		return parse_type_annotation(parts, begin);
+	}
+
+
+	ast_type_pack* parser::parse_type_pack_annotation()
+	{
+		// variadic: ...T
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::ellipsis))
+		{
+			const auto begin = lexer_.current().get_location();
+
+			next_lexeme_point();// ...
+
+			auto* vararg_type = parse_type_annotation();
+			return allocator_.new_object<ast_type_pack_variadic>(make_longest_line(begin, vararg_type->get_location()), vararg_type);
+		}
+
+		// generic: a...
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::name) && lexer_.peek_next().is_any_type_of(lexeme_point::token_type::ellipsis))
+		{
+			auto [name, loc] = parse_name("generic name");
+			const auto end = lexer_.current().get_location();
+
+			// This will not fail because of the peek_next guard.
+			expect_and_consume(lexeme_point::token_type::ellipsis, "generic type pack annotation");
+			return allocator_.new_object<ast_type_pack_generic>(make_longest_line(loc, end), name);
+		}
+
+		// No type pack annotation exists here.
+		return nullptr;
+	}
+
+	ast_type_pack* parser::parse_variadic_argument_annotation()
+	{
+		// generic: a...
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::name) && lexer_.peek_next().is_any_type_of(lexeme_point::token_type::ellipsis))
+		{
+			auto [name, loc] = parse_name("generic name");
+			const auto end = lexer_.current().get_location();
+
+			// This will not fail because of the peek_next guard.
+			expect_and_consume(lexeme_point::token_type::ellipsis, "generic type pack annotation");
+			return allocator_.new_object<ast_type_pack_generic>(make_longest_line(loc, end), name);
+		}
+
+		// variadic: ...T
+		auto* variadic_annotation = parse_type_annotation();
+		return allocator_.new_object<ast_type_pack_variadic>(variadic_annotation->get_location(), variadic_annotation);
+	}
+
+
+	ast_expression* parser::parse_expression(ast_expression_binary::operand_priority_type limit)
+	{
+		const auto previous_recursion_count = recursion_counter_;
+
+		// this handles recursive calls to parse sub-expression/ parse expression
+		increase_recursion_counter("expression");
+
+		const auto begin = lexer_.current().get_location();
+
+		ast_expression* expression;
+
+		auto unary_operand = lexer_.current().to_unary_operand();
+
+		if (not unary_operand.has_value()) { unary_operand = lexer_.current().check_unary_operand([this](const utils::location loc, std::string message) { report(loc, std::move(message)); }); }
+
+		if (unary_operand.has_value())
+		{
+			next_lexeme_point();// pass this unary operand
+
+			auto* sub_expression = parse_expression(ast_expression_binary::unary_operand_priority);
+
+			expression = allocator_.new_object<ast_expression_unary>(make_longest_line(begin, sub_expression->get_location()), unary_operand.value(), sub_expression);
+		}
+		else { expression = parse_assertion_expression(); }
+
+		// expand while operators have priorities higher than `limit'
+		auto binary_operand = lexer_.current().to_binary_operand();
+
+		if (not binary_operand.has_value()) { binary_operand = lexer_.current().check_binary_operand([this](const utils::location loc, std::string message) { report(loc, std::move(message)); }); }
+
+		while (binary_operand.has_value())
+		{
+			const auto [left, right] = ast_expression_binary::get_priority(binary_operand.value());
+
+			if (left <= limit) { break; }
+
+			next_lexeme_point();
+
+			// read sub-expression with higher priority
+			auto* next = parse_expression(right);
+
+			expression = allocator_.new_object<ast_expression_binary>(make_longest_line(begin, next->get_location()), binary_operand.value(), expression, next);
+			binary_operand = lexer_.current().to_binary_operand();
+
+			if (not binary_operand.has_value()) { binary_operand = lexer_.current().check_binary_operand([this](const utils::location loc, std::string message) { report(loc, std::move(message)); }); }
+
+			// note: while the parser isn't recursive here, we're generating recursive structures of unbounded depth
+			increase_recursion_counter("expression");
+		}
+
+		recursion_counter_ = previous_recursion_count;
+
+		return expression;
+	}
+
+	ast_expression* parser::parse_name_expression(const char* context)
+	{
+		auto name = parse_name_optional(context);
+
+		if (not name.has_value())
+		{
+			return allocator_.new_object<ast_expression_error>(
+					lexer_.current().get_location(),
+					ast_expression_error::error_expressions_type{},
+					parse_errors_.size() - 1
+					);
+		}
+
+		if (const auto value = local_map_.find(name->name);
+			value != local_map_.end() && value->second)
+		{
+			auto& [_, local] = *value;
+
+			return allocator_.new_object<ast_expression_local>(
+					name->loc,
+					local,
+					local->function_depth != function_stack_.size() - 1
+					);
+		}
+
+		return allocator_.new_object<ast_expression_global>(name->loc, name->name);
+	}
+
+	ast_expression* parser::parse_prefix_expression()
+	{
+		if (lexer_.current().is_any_type_of(lexeme_point::get_parentheses_bracket_open_symbol()))
+		{
+			const auto begin = lexer_.current().get_location();
+
+			const auto match_paren = lexer_.current();
+
+			next_lexeme_point();// (
+
+			auto* expression = parse_expression();
+
+			auto end = lexer_.current().get_location();
+
+			if (not lexer_.current().is_any_type_of(lexeme_point::get_parentheses_bracket_close_symbol()))
+			{
+				expect_match_and_consume_fail(
+						static_cast<lexeme_point::token_type>(lexeme_point::get_parentheses_bracket_close_symbol()),
+						match_paren,
+						lexer_.current().is_any_type_of(lexeme_point::get_assignment_symbol()) ? std_format::format("; did you mean to use '{}' when defining a table?", lexeme_point::get_curly_bracket_open_symbol()) : ""
+						);
+
+				end = lexer_.previous_location();
+			}
+			else
+			{
+				next_lexeme_point();// )
+			}
+
+			return allocator_.new_object<ast_expression_group>(make_longest_line(begin, end), expression);
+		}
+
+		return parse_name_expression("expression");
+	}
+
+
+	ast_expression* parser::parse_primary_expression(const bool as_statement)
+	{
+		const auto begin = lexer_.current().get_location();
+
+		auto* expression = parse_prefix_expression();
+
+		const auto previous_recursion_count = recursion_counter_;
+
+		while (true)
+		{
+			if (lexer_.current().is_any_type_of(lexeme_point::get_dot_symbol()))
+			{
+				const auto operand_pos = lexer_.current().get_location().begin;
+
+				next_lexeme_point();// .
+
+				auto [name, loc] = parse_index_name(nullptr, operand_pos);
+
+				expression = allocator_.new_object<ast_expression_index_name>(
+						make_longest_line(begin, loc),
+						expression,
+						name,
+						loc,
+						operand_pos,
+						lexeme_point::get_dot_symbol());
+			}
+			else if (lexer_.current().is_any_type_of(lexeme_point::get_square_bracket_open_symbol()))
+			{
+				const auto match_bracket = lexer_.current();
+
+				next_lexeme_point();// [
+
+				auto* index = parse_expression();
+
+				const auto end = lexer_.current().get_location();
+
+				expect_match_and_consume(lexeme_point::get_square_bracket_close_symbol(), match_bracket);
+
+				expression = allocator_.new_object<ast_expression_index_expression>(
+						make_longest_line(begin, end),
+						expression,
+						index);
+			}
+			else if (lexer_.current().is_any_type_of(lexeme_point::get_at_symbol()))
+			{
+				const auto operand_pos = lexer_.current().get_location().begin;
+
+				next_lexeme_point();// @
+
+				auto [name, loc] = parse_index_name("method name", operand_pos);
+
+				auto* function = allocator_.new_object<ast_expression_index_name>(
+						make_longest_line(begin, loc),
+						expression,
+						name,
+						loc,
+						operand_pos,
+						lexeme_point::get_colon_symbol());
+
+				expression = parse_function_arguments(function, true, loc);
+			}
+			else if (lexer_.current().is_any_type_of(lexeme_point::get_parentheses_bracket_open_symbol()))
+			{
+				// This error is handled inside 'parse_function_arguments' as well, but for better error recovery we need to break out the current loop here
+				if (not as_statement && expression->get_location().end.line != lexer_.current().get_location().begin.line)
+				{
+					report(lexer_.current().get_location(),
+					       std_format::format("Ambiguous syntax: this looks like an argument list for a function call, but could also be a start of "
+					                          "new statement; use '{}' to separate statements",
+					                          lexeme_point::get_semicolon_symbol())
+							);
+
+					break;
+				}
+
+				expression = parse_function_arguments(expression, false, {});
+			}
+			else if (lexer_.current().is_any_type_of(lexeme_point::get_curly_bracket_open_symbol(), lexeme_point::token_type::raw_string, lexeme_point::token_type::quoted_string)) { expression = parse_function_arguments(expression, false, {}); }
+			else { break; }
+
+			// note: while the parser isn't recursive here, we're generating recursive structures of unbounded depth
+			increase_recursion_counter("expression");
+		}
+
+		recursion_counter_ = previous_recursion_count;
+
+		return expression;
+	}
+
+	ast_expression* parser::parse_assertion_expression()
+	{
+		const auto begin = lexer_.current().get_location();
+
+		auto* expression = parse_simple_expression();
+
+		if (options_.allow_type_annotations && lexer_.current().is_any_type_of(lexeme_point::token_type::double_colon))
+		{
+			next_lexeme_point();// ::
+
+			auto* annotation = parse_type_annotation();
+
+			return allocator_.new_object<ast_expression_type_assertion>(
+					make_longest_line(begin, annotation->get_location()),
+					expression,
+					annotation);
+		}
+
+		return expression;
+	}
+
+	ast_expression* parser::parse_simple_expression()
+	{
+		auto begin = lexer_.current().get_location();
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::number))
+		{
+			scratch_data_.assign(lexer_.current().get_data_or_name());
+
+			// Remove all internal _
+			if (scratch_data_.find(lexeme_point::get_underscore_symbol()) != decltype(scratch_data_)::npos) { std::erase(scratch_data_, lexeme_point::get_underscore_symbol()); }
+
+			gal_number_type value{0};
+			const auto [ptr, ec] = std::from_chars(scratch_data_.data(), scratch_data_.data() + scratch_data_.size(), value);
+
+			next_lexeme_point();
+
+			if (ec != std::errc{} || ptr != scratch_data_.data() + scratch_data_.size()) { return report_expression_error(begin, {}, std_format::format("Malformed number: {}", scratch_data_)); }
+			return allocator_.new_object<ast_expression_constant_number>(begin, value);
+		}
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::raw_string, lexeme_point::token_type::quoted_string)) { return parse_string(); }
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::broken_string))
+		{
+			next_lexeme_point();
+			return report_expression_error(begin, {}, "Malformed string");
+		}
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::keyword_null))
+		{
+			next_lexeme_point();// null
+
+			return allocator_.new_object<ast_expression_constant_null>(begin);
+		}
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::keyword_true, lexeme_point::token_type::keyword_false))
+		{
+			next_lexeme_point();// true / false
+
+			return allocator_.new_object<ast_expression_constant_boolean>(begin, lexer_.current().is_any_type_of(lexeme_point::token_type::keyword_true));
+		}
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::ellipsis))
+		{
+			next_lexeme_point();// ...
+
+			if (function_stack_.back().vararg) { return allocator_.new_object<ast_expression_varargs>(begin); }
+			return report_expression_error(begin, {}, "Cannot use ellipsis('...') outside of a vararg function");
+		}
+
+		if (lexer_.current().is_any_type_of(lexeme_point::get_curly_bracket_open_symbol())) { return parse_table_constructor(); }
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::keyword_function))
+		{
+			const auto match_function = lexer_.current();
+
+			next_lexeme_point();// function
+
+			return parse_function_body(false, match_function, {}, {}).first;
+		}
+
+		return parse_primary_expression(false);
+	}
+
+	ast_expression* parser::parse_function_arguments(ast_expression* function, bool has_self, utils::location self_loc)
+	{
+		(void)self_loc;
+
+		if (lexer_.current().is_any_type_of(lexeme_point::get_parentheses_bracket_open_symbol()))
+		{
+			const auto arg_begin = lexer_.current().get_location().end;
+
+			if (function->get_location().end.line != lexer_.current().get_location().begin.line)
+				report(lexer_.current().get_location(),
+				       std_format::format("Ambiguous syntax: this looks like an argument list for a function call, but could also be a start of new statement; use '{}' to separate statements", lexeme_point::get_semicolon_symbol()));
+
+			const auto match_paren = lexer_.current();
+
+			next_lexeme_point();// (
+
+			temporary_stack args{scratch_expressions_};
+
+			if (not lexer_.current().is_any_type_of(lexeme_point::get_parentheses_bracket_close_symbol())) { parse_expression_list(args); }
+
+			const auto end = lexer_.current().get_location();
+			const auto arg_end = end.end;
+
+			expect_match_and_consume(lexeme_point::get_parentheses_bracket_close_symbol(), match_paren);
+
+			return allocator_.new_object<ast_expression_call>(
+					make_longest_line(function->get_location(), end),
+					function,
+					put_object_to_allocator<ast_expression_call::call_args_type>(args),
+					has_self,
+					utils::location{arg_begin, arg_end});
+		}
+
+		if (lexer_.current().is_any_type_of(lexeme_point::get_curly_bracket_open_symbol()))
+		{
+			const auto arg_begin = lexer_.current().get_location().end;
+			auto* expression = parse_table_constructor();
+			const auto arg_end = lexer_.previous_location().end;
+
+			return allocator_.new_object<ast_expression_call>(
+					make_longest_line(function->get_location(), expression->get_location()),
+					function,
+					put_object_to_allocator<ast_expression_call::call_args_type>(expression),
+					has_self,
+					utils::location{arg_begin, arg_end});
+		}
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::raw_string, lexeme_point::token_type::quoted_string))
+		{
+			const auto arg_loc = lexer_.current().get_location();
+			auto* expression = parse_string();
+
+			return allocator_.new_object<ast_expression_call>(
+					make_longest_line(function->get_location(), expression->get_location()),
+					function,
+					put_object_to_allocator<ast_expression_call::call_args_type>(expression),
+					has_self,
+					arg_loc);
+		}
+
+		if (has_self && lexer_.current().get_location().begin.line != function->get_location().end.line)
+		{
+			return report_expression_error(
+					function->get_location(),
+					put_object_to_allocator<ast_expression_error::error_expressions_type>(function),
+					std_format::format("Expected function call arguments after '{}'", lexeme_point::get_parentheses_bracket_open_symbol()));
+		}
+
+		return report_expression_error(
+				utils::location{function->get_location().begin, lexer_.current().get_location().begin},
+				put_object_to_allocator<ast_expression_error::error_expressions_type>(function),
+				std_format::format("Expected '{}', '{}' or <string> when parsing function call, got {}", lexeme_point::get_parentheses_bracket_open_symbol(), lexeme_point::get_curly_bracket_open_symbol(), lexer_.current().to_string()));
+	}
+
+	ast_expression* parser::parse_table_constructor()
+	{
+		temporary_stack items{scratch_items_};
+
+		const auto begin = lexer_.current().get_location();
+
+		const auto match_brace = lexer_.current();
+
+		expect_and_consume(lexeme_point::get_curly_bracket_open_symbol(), "table literal");
+
+		while (not lexer_.current().is_any_type_of(lexeme_point::get_curly_bracket_close_symbol()))
+		{
+			if (lexer_.current().is_any_type_of(lexeme_point::get_square_bracket_open_symbol()))
+			{
+				const auto match_bracket = lexer_.current();
+
+				next_lexeme_point();// [
+
+				auto* key = parse_expression();
+
+				expect_match_and_consume(lexeme_point::get_square_bracket_close_symbol(), match_bracket);
+
+				expect_and_consume(lexeme_point::get_assignment_symbol(), "table field");
+
+				auto* value = parse_expression();
+
+				items.emplace(ast_expression_table::item_type::general, key, value);
+			}
+			else if (lexer_.current().is_any_type_of(lexeme_point::token_type::name) && lexer_.peek_next().is_any_type_of(lexeme_point::get_assignment_symbol()))
+			{
+				auto [name, loc] = parse_name("table field");
+
+				expect_and_consume(lexeme_point::get_assignment_symbol(), "table field");
+
+				auto* value = parse_expression();
+
+				items.emplace(ast_expression_table::item_type::record, allocator_.new_object<ast_expression_constant_string>(loc, name), value);
+			}
+			else
+			{
+				auto* expression = parse_expression();
+
+				items.emplace(ast_expression_table::item_type::list, nullptr, expression);
+			}
+
+			if (lexer_.current().is_any_type_of(lexeme_point::get_comma_symbol(), lexeme_point::get_semicolon_symbol()))
+			{
+				next_lexeme_point();// , or ;
+			}
+			else { if (not lexer_.current().is_any_type_of(lexeme_point::get_curly_bracket_close_symbol())) { break; } }
+		}
+
+		auto end = lexer_.current().get_location();
+
+		if (not expect_match_and_consume(lexeme_point::get_curly_bracket_close_symbol(), match_brace)) { end = lexer_.previous_location(); }
+
+		return allocator_.new_object<ast_expression_table>(
+				make_longest_line(begin, end),
+				put_object_to_allocator<ast_expression_table::items_type>(items));
+	}
+
+	ast_expression* parser::parse_if_else_expression()
+	{
+		const auto begin = lexer_.current().get_location();
+
+		next_lexeme_point();// if or elif
+
+		auto* condition = parse_expression();
+
+		bool has_then = expect_and_consume(lexeme_point::token_type::keyword_then, "if then else expression");
+
+		auto* true_branch = parse_expression();
+		bool has_else;
+		decltype(true_branch) false_branch;
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::keyword_elif))
+		{
+			const auto previous_recursion_count = recursion_counter_;
+
+			increase_recursion_counter("expression");
+
+			has_else = true;
+			false_branch = parse_if_else_expression();
+
+			recursion_counter_ = previous_recursion_count;
+		}
+		else
+		{
+			has_else = expect_and_consume(lexeme_point::token_type::keyword_else, "if then else expression");
+			false_branch = parse_expression();
+		}
+
+		const auto end = false_branch->get_location();
+
+		return allocator_.new_object<ast_expression_if_else>(
+				make_longest_line(begin, end),
+				has_then,
+				has_else,
+				condition,
+				true_branch,
+				false_branch);
+	}
+
+	std::optional<parser::parse_name_result> parser::parse_name_optional(const char* context)
+	{
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::name))
+		{
+			const parse_name_result result{lexer_.current().get_data_or_name(), lexer_.current().get_location()};
+
+			next_lexeme_point();// name
+
+			return result;
+		}
+
+		report_name_error(context);
+
+		return std::nullopt;
+	}
+
+	parser::parse_name_result parser::parse_name(const char* context)
+	{
+		if (const auto name = parse_name_optional(context); name.has_value()) { return name.value(); }
+
+		return {name_error_, {lexer_.current().get_location().begin, lexer_.current().get_location().begin}};
+	}
+
+
+	parser::parse_name_result parser::parse_index_name(const char* context, utils::position previous)
+	{
+		if (const auto name = parse_name_optional(context); name.has_value()) { return name.value(); }
+
+		// If we have a reserved keyword next at the same line, assume it's an incomplete name
+		if (lexer_.current().is_any_keyword() && lexer_.peek_next().get_location().begin.line == previous.line)
+		{
+			const parse_name_result result{lexer_.current().get_data_or_name(), lexer_.current().get_location()};
+
+			next_lexeme_point();// keyword
+
+			return result;
+		}
+
+		return {name_error_, {lexer_.current().get_location().begin, lexer_.current().get_location().begin}};
+	}
+
+	std::pair<generic_names_type, generic_names_type> parser::parse_generic_type_list()
+	{
+		temporary_stack names{scratch_names_};
+		temporary_stack name_packs{scratch_pack_names_};
+
+		if (lexer_.current().is_any_type_of(lexeme_point::get_less_than_symbol()))
+		{
+			const auto begin = lexer_.current();
+
+			next_lexeme_point();// <
+
+			bool has_pack = false;
+			while (true)
+			{
+				auto name = parse_name().name;
+				if (lexer_.current().is_any_type_of(lexeme_point::token_type::ellipsis))
+				{
+					has_pack = true;
+
+					next_lexeme_point();// ...
+
+					name_packs.push(name);
+				}
+				else
+				{
+					if (has_pack) { report(lexer_.current().get_location(), "Generic types come before generic type packs"); }
+
+					names.push(name);
+				}
+
+				if (lexer_.current().is_any_type_of(lexeme_point::get_comma_symbol()))
+				{
+					next_lexeme_point();// ,
+				}
+				else { break; }
+			}
+
+			expect_match_and_consume(lexeme_point::get_greater_than_symbol(), begin);
+		}
+
+		return {put_object_to_allocator<generic_names_type>(names), put_object_to_allocator<generic_names_type>(name_packs)};
+	}
+
+	ast_array<ast_type_or_pack> parser::parse_type_params()
+	{
+		temporary_stack parameters{scratch_type_or_pack_annotations_};
+
+		if (lexer_.current().is_any_type_of(lexeme_point::get_less_than_symbol()))
+		{
+			const auto begin = lexer_.current();
+
+			next_lexeme_point();// <
+
+			while (true)
+			{
+				if (lexer_.current().is_any_type_of(lexeme_point::token_type::ellipsis) || (lexer_.current().is_any_type_of(lexeme_point::token_type::name) && lexer_.peek_next().is_any_type_of(lexeme_point::token_type::ellipsis))) { parameters.emplace(parse_type_pack_annotation()); }
+				else if (lexer_.current().is_any_type_of(lexeme_point::get_parentheses_bracket_open_symbol())) { parameters.push(parse_type_or_pack_annotation()); }
+				else if (lexer_.current().is_any_type_of(lexeme_point::get_greater_than_symbol()) && parameters.empty()) { break; }
+				else { parameters.emplace(parse_type_annotation()); }
+
+				if (lexer_.current().is_any_type_of(lexeme_point::get_comma_symbol()))
+				{
+					next_lexeme_point();// ,
+				}
+				else { break; }
+			}
+
+			expect_match_and_consume(lexeme_point::get_greater_than_symbol(), begin);
+		}
+
+		return put_object_to_allocator<ast_array<ast_type_or_pack>>(parameters);
+	}
+
+	std::optional<gal_string_type> parser::parse_char_array()
+	{
+		gal_assert(lexer_.current().is_any_type_of(lexeme_point::token_type::raw_string, lexeme_point::token_type::quoted_string));
+
+		scratch_data_.assign(lexer_.current().get_data_or_name());
+
+		if (lexer_.current().is_any_type_of(lexeme_point::token_type::raw_string)) { lexer::write_multi_line_string(scratch_data_); }
+		else
+		{
+			if (not lexer::write_quoted_string(scratch_data_))
+			{
+				next_lexeme_point();
+				return std::nullopt;
+			}
+		}
+
+		auto ret = put_object_to_allocator(scratch_data_);
+		next_lexeme_point();
+		return std::make_optional(ret);
+	}
+
+	ast_expression* parser::parse_string()
+	{
+		auto loc = lexer_.current().get_location();
+		if (auto value = parse_char_array();
+			value.has_value()) { return allocator_.new_object<ast_expression_constant_string>(loc, value.value()); }
+
+		return report_expression_error(loc, {}, "String literal contains malformed escape sequence");
+	}
+
+	ast_local* parser::push_local(const parse_name_binding_result& binding)
+	{
+		const auto& [name, annotation] = binding;
+
+		auto& local = local_map_[name.name];
+
+		local = allocator_.new_object<ast_local>(name.name, name.loc, local, function_stack_.size() - 1, function_stack_.back().loop_depth, annotation);
+
+		local_stack_.push_back(local);
+
+		return local;
+	}
+
+	constexpr parser::locals_stack_size_type parser::save_locals() const { return local_stack_.size(); }
+
+	void parser::restore_locals(const locals_stack_size_type offset)
+	{
+		for (auto i = local_stack_.size(); i > offset; --i)
+		{
+			const auto* local = local_stack_[i - 1];
+
+			local_map_[local->name] = local->shadow;
+		}
+
+		local_stack_.resize(offset);
+	}
+
+	bool parser::expect_and_consume(lexeme_point::token_underlying_type type, const char* context) { return expect_and_consume(static_cast<lexeme_point::token_type>(type), context); }
+
+
+	bool parser::expect_and_consume(lexeme_point::token_type type, const char* context)
+	{
+		if (not lexer_.current().is_any_type_of(type))
+		{
+			expect_and_consume_fail(type, context);
+
+			// check if this is an extra token and the expected token is next
+			if (lexer_.peek_next().is_any_type_of(type))
+			{
+				// skip invalid and consume expected
+				next_lexeme_point();
+				next_lexeme_point();
+			}
+
+			return false;
+		}
+
+		next_lexeme_point();
+		return true;
+	}
+
+	void parser::expect_and_consume_fail(lexeme_point::token_type type, const char* context)
+	{
+		auto type_string = lexeme_point{type, {}}.to_string();
+		auto current_point_string = lexer_.current().to_string();
+
+		report(
+				lexer_.current().get_location(),
+				std_format::format(
+						"Expected {}{}{}, but got {}",
+						type_string,
+						context ? " when parsing " : "",
+						context ? context : "",
+						current_point_string
+						)
+				);
+	}
+
+	bool parser::expect_match_and_consume(lexeme_point::token_underlying_type type, const lexeme_point& begin, const bool search_for_missing) { return expect_match_and_consume(static_cast<lexeme_point::token_type>(type), begin, search_for_missing); }
+
+	bool parser::expect_match_and_consume(const lexeme_point::token_type type, const lexeme_point& begin, const bool search_for_missing)
+	{
+		if (not lexer_.current().is_any_type_of(type))
+		{
+			expect_match_and_consume_fail(type, begin);
+
+			if (search_for_missing)
+			{
+				// previous location is taken because 'current' lexeme_point is already the next token
+				const auto current_line = lexer_.previous_location().end.line;
+
+				// search to the end of the line for expected token
+				// we will also stop if we hit a token that can be handled by parsing function above the current one
+				auto current_type = lexer_.current().get_type();
+
+				while (current_line == lexer_.current().get_location().begin.line && current_type != type && get_match_recovery_stop_on_token(current_type) == 0)
+				{
+					next_lexeme_point();
+
+					current_type = lexer_.current().get_type();
+				}
+
+				if (current_type == type)
+				{
+					next_lexeme_point();
+
+					return true;
+				}
+			}
+			else
+			{
+				// check if this is an extra token and the expected token is next
+				if (lexer_.peek_next().is_any_type_of(type))
+				{
+					// skip invalid and consume expected
+					next_lexeme_point();
+					next_lexeme_point();
+
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		next_lexeme_point();
+		return true;
+	}
+
+
+	void parser::expect_match_and_consume_fail(const lexeme_point::token_type type, const lexeme_point& begin, const std::string& extra)
+	{
+		auto type_string = lexeme_point{type, {}}.to_string();
+
+		report(
+				lexer_.current().get_location(),
+				std_format::format(
+						"Expected {} (to close {} at {} {}), got {}{}",
+						type_string,
+						begin.to_string(),
+						lexer_.current().get_location().begin.line == begin.get_location().begin.line ? "column" : "line",
+						lexer_.current().get_location().begin.line == begin.get_location().begin.line ? begin.get_location().begin.column + 1 : begin.get_location().begin.line + 1,
+						lexer_.current().to_string(),
+						extra)
+				);
+	}
+
+	bool parser::expect_match_end_and_consume(lexeme_point::token_type type, const lexeme_point& begin)
+	{
+		if (not lexer_.current().is_any_type_of(type))
+		{
+			expect_match_end_and_consume_fail(type, begin);
+
+			// check if this is an extra token and the expected token is next
+			if (lexer_.peek_next().is_any_type_of(type))
+			{
+				// skip invalid and consume expected
+				next_lexeme_point();
+				next_lexeme_point();
+
+				return true;
+			}
+
+			return false;
+		}
+
+		// If the token matches on a different line and a different column, it suggests misleading indentation
+		// This can be used to pinpoint the problem location for a possible future *actual* mismatch
+		const auto [current_line, current_column] = lexer_.current().get_location().begin;
+		const auto [line, column] = begin.get_location().begin;
+		if (
+			current_line != line &&
+			current_column != column &&
+			// Only replace the previous suspect with more recent suspects
+			end_mismatch_suspect_.get_location().begin.line < line) { end_mismatch_suspect_ = begin; }
+
+		next_lexeme_point();
+
+		return true;
+	}
+
+	void parser::expect_match_end_and_consume_fail(lexeme_point::token_type type, const lexeme_point& begin)
+	{
+		if (not end_mismatch_suspect_.is_end_point() && end_mismatch_suspect_.get_location().begin.line > begin.get_location().begin.line) { expect_match_and_consume_fail(type, begin, std_format::format("; did you forget to close {} at line {}?", end_mismatch_suspect_.to_string(), end_mismatch_suspect_.get_location().begin.line + 1)); }
+		else { expect_match_and_consume_fail(type, begin, ""); }
+	}
+
+	void parser::increase_recursion_counter(const char* context)
+	{
+		++recursion_counter_;
+
+		if (recursion_counter_ > max_recursion_size) { throw parse_error{lexer_.current().get_location(), std_format::format("Exceeded allowed recursion depth: {}; simplify your {} to make the code compile", max_recursion_size, context)}; }
+	}
+
+	void parser::report(utils::location loc, std::string message)
+	{
+		// To reduce number of errors reported to user for incomplete statements, we skip multiple errors at the same location
+		if (not parse_errors_.empty() && loc == parse_errors_.back().where_error()) { return; }
+
+		parse_errors_.emplace_back(loc, std::move(message));
+
+		if (parse_errors_.size() >= max_parse_error_size) { throw parse_error{loc, std_format::format("Reached error limit: {}", max_parse_error_size)}; }
+	}
+
+	void parser::report_name_error(const char* context)
+	{
+		report(lexer_.current().get_location(),
+		       std_format::format(
+				       "Expected identifier{}{}, but got {}",
+				       context ? " when parsing " : "",
+				       context ? context : "",
+				       lexer_.current().to_string()
+				       ));
+	}
+
+	ast_statement_error* parser::report_statement_error(
+			utils::location loc,
+			ast_statement_error::error_expressions_type expressions,
+			ast_statement_error::error_statements_type statements,
+			std::string message)
+	{
+		report(loc, std::move(message));
+
+		return allocator_.new_object<ast_statement_error>(loc, expressions, statements, parse_errors_.size() - 1);
+	}
+
+
+	ast_expression_error* parser::report_expression_error(
+			utils::location loc,
+			ast_expression_error::error_expressions_type expressions,
+			std::string message)
+	{
+		report(loc, std::move(message));
+
+		return allocator_.new_object<ast_expression_error>(loc, expressions, parse_errors_.size() - 1);
+	}
+
+	ast_type_error* parser::report_type_annotation_error(utils::location loc, ast_type_error::error_types_type types, bool is_missing, std::string message)
+	{
+		report(loc, std::move(message));
+
+		return allocator_.new_object<ast_type_error>(loc, types, is_missing, parse_errors_.size() - 1);
+	}
+
+
+	const lexeme_point& parser::next_lexeme_point()
+	{
+		if (options_.capture_comments)
+		{
+			while (true)
+			{
+				// Subtlety: Broken comments are weird because we record them as comments AND pass them to the parser as a lexeme.
+				// The parser will turn this into a proper syntax error.
+				if (const auto& lexeme_point = lexer_.next(false);
+					lexeme_point.is_any_type_of(lexeme_point::token_type::broken_comment) || lexeme_point.is_comment()) { comment_locations_.emplace_back(lexeme_point.get_type(), lexeme_point.get_location()); }
+				else { return lexeme_point; }
+			}
+		}
+
+		return lexer_.next();
+	}
+
+	parse_result parser::parse(const ast_name buffer, ast_name_table& name_table, utils::trivial_allocator& allocator, const parse_options options)
+	{
+		// todo: timer?
+
+		parser p{buffer, name_table, allocator, options};
+
+		try
+		{
+			std::vector<std::string> hot_comments;
+
+			while (p.lexer_.current().is_any_type_of(lexeme_point::token_type::broken_comment) || p.lexer_.current().is_comment())
+			{
+				if (auto data = p.lexer_.current().get_data_or_name(); 
+					not data.empty() && data[0] == lexeme_point::get_not_symbol())
+				{
+					hot_comments.emplace_back(
+							data.begin() + 1,
+							std::ranges::find_if_not(data.rbegin(), data.rend(), [](const auto c) { return utils::is_whitespace(c); }).base());
+				}
+
+				const auto type = p.lexer_.current().get_type();
+				const auto loc = p.lexer_.current().get_location();
+
+				p.lexer_.next();
+
+				if (options.capture_comments) { p.comment_locations_.emplace_back(type, loc); }
+			}
+
+			p.lexer_.set_skip_comment(true);
+
+			auto* root = p.parse_chunk();
+
+			return {root, std::move(hot_comments), std::move(p.parse_errors_), std::move(p.comment_locations_)};
+		}
+		catch (parse_error& error)
+		{
+			// when catching a fatal error, append it to the list of non-fatal errors and return
+			p.parse_errors_.push_back(error);
+
+			return {nullptr, {}, std::move(p.parse_errors_), {}};
+		}
 	}
 }

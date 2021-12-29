@@ -29,7 +29,7 @@ TEST(TestStringUtils, TestSplitInserter)
 
 TEST(TestStringUtils, TestSplitContainer)
 {
-	constexpr auto				  bits = "https:*//*cppreference*.*com"sv;
+	constexpr auto bits = "https:*//*cppreference*.*com"sv;
 
 	std::vector<std::string_view> vec{};
 	split("*"sv, bits, vec);
@@ -40,4 +40,19 @@ TEST(TestStringUtils, TestSplitContainer)
 	ASSERT_EQ(vec[2], "cppreference");
 	ASSERT_EQ(vec[3], ".");
 	ASSERT_EQ(vec[4], "com");
+}
+
+TEST(TestStringUtils, TestTrim)
+{
+	const std::string str0 = "11111abc22222";
+
+	const auto str1 = trim_left(str0, [](const char c) { return is_digit(c); });
+
+	const auto str2 = trim_right(str0, [](const char c) { return is_digit(c); });
+
+	const auto str3 = trim_entire(str0, [](const char c) { return is_digit(c); });
+
+	ASSERT_EQ(str1, "abc22222");
+	ASSERT_EQ(str2, "11111abc");
+	ASSERT_EQ(str3, "abc");
 }

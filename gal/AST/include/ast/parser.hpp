@@ -15,13 +15,11 @@
 
 namespace gal::ast
 {
-	// template<typename T>
-	// using ast_stack = std::stack<T, std::vector<T>>;
-
 	template<typename T>
 	class temporary_stack
 	{
-		template<typename> friend class temporary_stack;
+		template<typename>
+		friend class temporary_stack;
 	public:
 		using holding_container_type = std::vector<T>;
 		using size_type = typename holding_container_type::size_type;
@@ -90,21 +88,15 @@ namespace gal::ast
 		template<std::convertible_to<T> U>
 		constexpr void insert(const temporary_stack<U>& source) { for (const auto& data: source) { push(static_cast<T>(data)); } }
 
-	private:
-		// internal use only
-		[[nodiscard]] constexpr auto begin() noexcept
-		{
-			return container_.begin() + begin_;
-		}
-		[[nodiscard]] constexpr auto begin() const noexcept
-		{
-			return container_.cbegin() + begin_;
-		}
+		[[nodiscard]] constexpr auto begin() noexcept { return container_.begin() + begin_; }
+		[[nodiscard]] constexpr auto begin() const noexcept { return container_.cbegin() + begin_; }
+
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR auto end() noexcept
 		{
 			gal_assert(container_.size() == begin_ + used_);
 			return container_.end();
 		}
+
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR auto end() const noexcept
 		{
 			gal_assert(container_.size() == begin_ + used_);
@@ -140,6 +132,10 @@ namespace gal::ast
 		using ast_optional_argument_name_stack_type = std::vector<std::optional<ast_argument_name>>;
 
 		using locals_stack_size_type = ast_local_stack_type::size_type;
+
+		// todo
+		constexpr static std::size_t max_recursion_size = 1000;
+		constexpr static parse_result::parse_errors_type::size_type max_parse_error_size = 100;
 
 	private:
 		struct parse_name_result
@@ -215,13 +211,16 @@ namespace gal::ast
 		/**
 		 * @note Internal use only.
 		 */
-		template<typename R, typename T>
-		R put_object_to_allocator(const temporary_stack<T>& data);
+		template<typename R, typename T, template<typename> typename Container>
+		R put_object_to_allocator(const Container<T>& container);
 
 		template<typename R, typename T>
 		R put_object_to_allocator(T data);
 
-		parser(ast_name buffer, ast_name_table& name_table, utils::trivial_allocator& allocator);
+		// for scratch_data
+		[[nodiscard]] gal_string_type put_object_to_allocator(const std::string& data) const;
+
+		parser(ast_name buffer, ast_name_table& name_table, utils::trivial_allocator& allocator, parse_options options);
 
 		ast_statement_block* parse_chunk();
 
@@ -334,12 +333,26 @@ namespace gal::ast
 		// return_type ::= type_annotation | `(' type_list `)'
 		// function_type_annotation ::= [`<' var_list `>'] `(' [type_list] `)' `->` return_type
 		ast_type_or_pack parse_function_type_annotation(bool allow_pack);
-		ast_type* parse_function_type_annotation_tail(const lexeme_point& begin, generic_names_type generics, generic_names_type generic_packs, ast_array<ast_type*>& params, ast_type_function::argument_names_type& param_names, ast_type_pack* vararg_annotation);
+		ast_type* parse_function_type_annotation_tail(const lexeme_point& begin, generic_names_type generics, generic_names_type generic_packs, const ast_array<ast_type*>& params, ast_type_function::argument_names_type& param_names, ast_type_pack* vararg_annotation);
 
+		// ast_type_table::ast_table_property ::= name `:' type_annotation
+		// ast_type_table_property_or_indexer ::= ast_type_table::ast_table_property | ast_type_table::ast_table_indexer
+		// properties_list ::= ast_type_table_property_or_indexer {field_separator ast_type_table_property_or_indexer} [field_separator]
+		// table_type_annotation ::= `{' properties_list `}'
 		ast_type* parse_table_type_annotation();
+
+		// type_annotation ::= null | name[`.' name] [ `<' type_annotation [`,' ...] `>' ] | `typeof' `(' expression `)' | `{' [properties_list] `}'
+		//   | [`<' var_list `>'] `(' [type_list] `)' `->` return_type
 		ast_type_or_pack parse_simple_type_annotation(bool allow_pack);
 
 		ast_type_or_pack parse_type_or_pack_annotation();
+
+		// type_annotation ::=
+		//      null |
+		//      name[`.' name] [`<' name_list `>'] |
+		//      `{' [properties_list] `}' |
+		//      `(' [type_list] `)' `->` return_type
+		//      `typeof` type_annotation
 		ast_type* parse_type_annotation(temporary_stack<ast_type*>& parts, utils::location begin);
 		ast_type* parse_type_annotation();
 
@@ -351,12 +364,12 @@ namespace gal::ast
 		ast_expression* parse_expression(ast_expression_binary::operand_priority_type limit = 0);
 
 		// name
-		ast_expression* parse_name_expression(ast_name context = "");
+		ast_expression* parse_name_expression(const char* context = nullptr);
 
 		// prefix_expression -> name | '(' expression ')'
 		ast_expression* parse_prefix_expression();
 
-		// primary_expression -> prefix_expression { `.' name | `[' expression `]' | `:' name function_args | function_args }
+		// primary_expression -> prefix_expression { `.' name | `[' expression `]' | `@' name function_args | function_args }
 		ast_expression* parse_primary_expression(bool as_statement);
 
 		// assertion_expression -> simple_expression [`::' type_annotation]
@@ -365,7 +378,7 @@ namespace gal::ast
 		// simple_expression -> NUMBER | STRING | null | true | false | ... | constructor | FUNCTION body | primary_expression
 		ast_expression* parse_simple_expression();
 
-		// args ::=  `(' [expression_list] `)' | table_constructor | String
+		// args ::=  `(' [expression_list] `)' | table_constructor | STRING
 		ast_expression* parse_function_arguments(ast_expression* function, bool has_self, utils::location self_loc);
 
 		// table_constructor ::= `{' [field_list] `}'
@@ -379,7 +392,7 @@ namespace gal::ast
 		// name
 		std::optional<parse_name_result> parse_name_optional(const char* context = nullptr);
 		parse_name_result parse_name(const char* context = nullptr);
-		parse_name_result parse_index_name(ast_name context, utils::position previous);
+		parse_name_result parse_index_name(const char* context, utils::position previous);
 
 		// `<' name_list `>'
 		std::pair<generic_names_type, generic_names_type> parse_generic_type_list();
@@ -387,12 +400,12 @@ namespace gal::ast
 		// `<' type_annotation [, ...] `>'
 		ast_array<ast_type_or_pack> parse_type_params();
 
-		std::optional<ast_array<char>> parse_char_array();
+		std::optional<gal_string_type> parse_char_array();
 		ast_expression* parse_string();
 
 		ast_local* push_local(const parse_name_binding_result& binding);
 
-		locals_stack_size_type save_locals();
+		[[nodiscard]] constexpr locals_stack_size_type save_locals() const;
 
 		void restore_locals(locals_stack_size_type offset);
 
@@ -412,6 +425,14 @@ namespace gal::ast
 			requires(std::is_convertible_v<Args, lexeme_point::token_type> && ...)
 		constexpr void count_match_recovery_stop_on_token(Args ... args) noexcept { count_match_recovery_stop_on_token<Increase>(static_cast<lexeme_point::token_underlying_type>(static_cast<lexeme_point::token_type>(args))...); }
 
+		template<typename T>
+			requires std::is_convertible_v<T, lexeme_point::token_underlying_type> && (not std::is_convertible_v<T, lexeme_point::token_type>)
+		[[nodiscard]] constexpr auto get_match_recovery_stop_on_token(T index) const noexcept { return match_recovery_stop_on_token_[index]; }
+
+		template<typename T>
+			requires std::is_convertible_v<T, lexeme_point::token_type>
+		[[nodiscard]] constexpr auto get_match_recovery_stop_on_token(T index) const noexcept { return get_match_recovery_stop_on_token(static_cast<lexeme_point::token_underlying_type>(index)); }
+
 		// check that parser is at lexeme_point/symbol, move to next lexeme_point/symbol on success, report failure and continue on failure
 		bool expect_and_consume(lexeme_point::token_underlying_type type, const char* context = nullptr);
 		bool expect_and_consume(lexeme_point::token_type type, const char* context = nullptr);
@@ -419,7 +440,7 @@ namespace gal::ast
 
 		bool expect_match_and_consume(lexeme_point::token_underlying_type type, const lexeme_point& begin, bool search_for_missing = false);
 		bool expect_match_and_consume(lexeme_point::token_type type, const lexeme_point& begin, bool search_for_missing = false);
-		void expect_match_and_consume_fail(lexeme_point::token_type type, const lexeme_point& begin, const char* extra = nullptr);
+		void expect_match_and_consume_fail(lexeme_point::token_type type, const lexeme_point& begin, const std::string& extra = "");
 
 		bool expect_match_end_and_consume(lexeme_point::token_type type, const lexeme_point& begin);
 		void expect_match_end_and_consume_fail(lexeme_point::token_type type, const lexeme_point& begin);
@@ -434,7 +455,7 @@ namespace gal::ast
 
 		ast_expression_error* report_expression_error(utils::location loc, ast_expression_error::error_expressions_type expressions, std::string message);
 
-		ast_type_error* report_type_annotation_error(utils::location, ast_type_error::error_types_type types, bool is_missing, std::string message);
+		ast_type_error* report_type_annotation_error(utils::location loc, ast_type_error::error_types_type types, bool is_missing, std::string message);
 
 		const lexeme_point& next_lexeme_point();
 
@@ -448,7 +469,7 @@ namespace gal::ast
 		// for name_null
 		constexpr static lexeme_point::keyword_literal_type keyword_null{"null"};
 
-		static parse_result parse(ast_name buffer, ast_name_table& name_table, parse_options options = {});
+		static parse_result parse(ast_name buffer, ast_name_table& name_table, utils::trivial_allocator& allocator, parse_options options = {});
 	};
 }
 
