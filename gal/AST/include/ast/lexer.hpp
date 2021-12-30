@@ -7,7 +7,6 @@
 #include <concepts>
 
 #include <utils/point.hpp>
-#include <utils/allocator.hpp>
 #include <utils/assert.hpp>
 #include <utils/enum_utils.hpp>
 #include <utils/confusable.hpp>
@@ -16,6 +15,7 @@
 #include <utils/string_utils.hpp>
 
 #include <ast/ast.hpp>
+#include <ast/allocator.hpp>
 
 namespace gal::ast
 {

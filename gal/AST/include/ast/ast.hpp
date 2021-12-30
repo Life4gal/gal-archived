@@ -14,7 +14,7 @@
 #include <utils/concept.hpp>
 #include <utils/macro.hpp>
 
-#include "ast.hpp"
+#include <ast/common.hpp>
 
 namespace gal::ast
 {
@@ -23,11 +23,6 @@ namespace gal::ast
 	 */
 	using ast_name = std::string_view;
 	using ast_name_owned = std::basic_string<ast_name::value_type, ast_name::traits_type>;
-
-	using gal_boolean_type = bool;
-	using gal_number_type = double;
-
-	using gal_string_type = ast_name;
 
 	class ast_visitor;
 

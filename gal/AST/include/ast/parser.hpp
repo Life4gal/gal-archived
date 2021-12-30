@@ -170,7 +170,7 @@ namespace gal::ast
 		parse_options options_;
 
 		lexer lexer_;
-		utils::trivial_allocator& allocator_;
+		ast_allocator& allocator_;
 
 		parse_result::comment_locations_type comment_locations_;
 
@@ -212,15 +212,15 @@ namespace gal::ast
 		 * @note Internal use only.
 		 */
 		template<typename R, typename T, template<typename> typename Container>
-		R put_object_to_allocator(const Container<T>& container);
+		R put_object_into_allocator(const Container<T>& container);
 
 		template<typename R, typename T>
-		R put_object_to_allocator(T data);
+		R put_object_into_allocator(T data);
 
 		// for scratch_data
-		[[nodiscard]] gal_string_type put_object_to_allocator(const std::string& data) const;
+		[[nodiscard]] gal_string_type put_object_into_allocator(const std::string& data) const;
 
-		parser(ast_name buffer, ast_name_table& name_table, utils::trivial_allocator& allocator, parse_options options);
+		parser(ast_name buffer, ast_name_table& name_table, ast_allocator& allocator, parse_options options);
 
 		ast_statement_block* parse_chunk();
 
@@ -469,7 +469,7 @@ namespace gal::ast
 		// for name_null
 		constexpr static lexeme_point::keyword_literal_type keyword_null{"null"};
 
-		static parse_result parse(ast_name buffer, ast_name_table& name_table, utils::trivial_allocator& allocator, parse_options options = {});
+		static parse_result parse(ast_name buffer, ast_name_table& name_table, ast_allocator& allocator, parse_options options = {});
 	};
 }
 

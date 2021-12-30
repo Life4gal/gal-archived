@@ -5,3 +5,4 @@ project(
 
 add_subdirectory(AST)
 add_subdirectory(UTILS)
+add_subdirectory(COMPILER)

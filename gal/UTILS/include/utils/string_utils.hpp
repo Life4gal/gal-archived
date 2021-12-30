@@ -88,14 +88,29 @@ namespace gal::utils
 	constexpr void split(String delimiter, std::type_identity_t<String> string, Container& container) { for (auto&& each: split(delimiter, string)) { container.push_back(std::move(each)); } }
 
 	template<typename Pred, typename String>
+		requires is_any_type_of_v<String, std::basic_string_view<typename String::value_type, typename String::traits_type>> &&
+		         std::is_invocable_r_v<bool, Pred, typename String::value_type>
+	constexpr std::basic_string<typename String::value_type, typename String::traits_type> trim_right(String string, Pred pred) { return string | ranges::views::reverse | ranges::views::drop_while(pred) | ranges::views::reverse | ranges::to<std::basic_string<typename String::value_type, typename String::traits_type>>(); }
+
+	template<typename Pred, typename String>
 		requires is_any_type_of_v<String, std::basic_string<typename String::value_type, typename String::traits_type, typename String::allocator_type>> &&
 		         std::is_invocable_r_v<bool, Pred, typename String::value_type>
 	constexpr String trim_right(const String& string, Pred pred) { return string | ranges::views::reverse | ranges::views::drop_while(pred) | ranges::views::reverse | ranges::to<String>(); }
 
 	template<typename Pred, typename String>
+		requires is_any_type_of_v<String, std::basic_string_view<typename String::value_type, typename String::traits_type>> &&
+		         std::is_invocable_r_v<bool, Pred, typename String::value_type>
+	constexpr std::basic_string<typename String::value_type, typename String::traits_type> trim_left(String string, Pred pred) { return string | ranges::views::drop_while(pred) | ranges::to<std::basic_string<typename String::value_type, typename String::traits_type>>(); }
+
+	template<typename Pred, typename String>
 		requires is_any_type_of_v<String, std::basic_string<typename String::value_type, typename String::traits_type, typename String::allocator_type>> &&
 		         std::is_invocable_r_v<bool, Pred, typename String::value_type>
 	constexpr String trim_left(const String& string, Pred pred) { return string | ranges::views::drop_while(pred) | ranges::to<String>(); }
+
+	template<typename Pred, typename String>
+		requires is_any_type_of_v<String, std::basic_string_view<typename String::value_type, typename String::traits_type>> &&
+		         std::is_invocable_r_v<bool, Pred, typename String::value_type>
+	constexpr std::basic_string<typename String::value_type, typename String::traits_type> trim_entire(String string, Pred pred) { return ranges::views::trim(string, pred) | ranges::to<std::basic_string<typename String::value_type, typename String::traits_type>>(); }
 
 	template<typename Pred, typename String>
 		requires is_any_type_of_v<String, std::basic_string<typename String::value_type, typename String::traits_type, typename String::allocator_type>> &&

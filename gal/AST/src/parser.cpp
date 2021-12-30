@@ -6,7 +6,7 @@
 namespace gal::ast
 {
 	template<typename R, typename T, template <typename> class Container>
-	R parser::put_object_to_allocator(const Container<T>& container)
+	R parser::put_object_into_allocator(const Container<T>& container)
 	{
 		auto result = R{static_cast<T*>(allocator_.allocate(sizeof(T) * container.size())), container.size()};
 
@@ -16,21 +16,21 @@ namespace gal::ast
 	}
 
 	template<typename R, typename T>
-	R parser::put_object_to_allocator(T data)
+	R parser::put_object_into_allocator(T data)
 	{
-		// auto  result = R{static_cast<T*>(allocator_.allocate(sizeof(T) * typename R::size_type{1})), typename R::size_type{1}};
+		// auto result = R{static_cast<T*>(allocator_.allocate(sizeof(T) * typename R::size_type{1})), typename R::size_type{1}};
 		//
 		// std::construct_at(result.data(), data);
 		//
 		// return result;
 
-		// todo
+		// // todo
 		(void)data;
 		(void)this;
 		return R{};
 	}
 
-	gal_string_type parser::put_object_to_allocator(const std::string& data) const
+	gal_string_type parser::put_object_into_allocator(const std::string& data) const
 	{
 		const gal_string_type result{static_cast<gal_string_type::value_type*>(allocator_.allocate(sizeof(gal_string_type::value_type) * data.size())), data.size()};
 
@@ -39,7 +39,7 @@ namespace gal::ast
 		return result;
 	}
 
-	parser::parser(const ast_name buffer, ast_name_table& name_table, utils::trivial_allocator& allocator, parse_options options)
+	parser::parser(const ast_name buffer, ast_name_table& name_table, ast_allocator& allocator, parse_options options)
 		: options_{options},
 		  lexer_{buffer, name_table},
 		  allocator_{allocator},
@@ -106,7 +106,7 @@ namespace gal::ast
 			if (not statement->has_statement_follow()) { break; }
 		}
 
-		return allocator_.new_object<ast_statement_block>(utils::location{previous_position, lexer_.current().get_location().begin}, put_object_to_allocator<ast_statement_block::block_body_type>(body));
+		return allocator_.new_object<ast_statement_block>(utils::location{previous_position, lexer_.current().get_location().begin}, put_object_into_allocator<ast_statement_block::block_body_type>(body));
 	}
 
 	ast_statement* parser::parse_statement()
@@ -159,7 +159,7 @@ namespace gal::ast
 		// skip unexpected symbol if lexer couldn't advance at all (statements are parsed in a loop)
 		if (begin == lexer_.current().get_location()) { next_lexeme_point(); }
 
-		return report_statement_error(expression->get_location(), put_object_to_allocator<ast_statement_error::error_expressions_type>(expression), {}, "Incomplete statement: expected assignment or a function call.");
+		return report_statement_error(expression->get_location(), put_object_into_allocator<ast_statement_error::error_expressions_type>(expression), {}, "Incomplete statement: expected assignment or a function call.");
 	}
 
 	ast_statement* parser::parse_if()
@@ -280,7 +280,7 @@ namespace gal::ast
 
 		auto* ret = allocator_.new_object<ast_statement_continue>(begin);
 
-		if (function_stack_.back().is_root()) { return report_statement_error(begin, {}, put_object_to_allocator<ast_statement_error::error_statements_type>(ret), "break statement must be inside a loop."); }
+		if (function_stack_.back().is_root()) { return report_statement_error(begin, {}, put_object_into_allocator<ast_statement_error::error_statements_type>(ret), "break statement must be inside a loop."); }
 
 		return ret;
 	}
@@ -289,7 +289,7 @@ namespace gal::ast
 	{
 		auto* ret = allocator_.new_object<ast_statement_continue>(begin);
 
-		if (function_stack_.back().is_root()) { return report_statement_error(begin, {}, put_object_to_allocator<ast_statement_error::error_statements_type>(ret), "continue statement must be inside a loop."); }
+		if (function_stack_.back().is_root()) { return report_statement_error(begin, {}, put_object_into_allocator<ast_statement_error::error_statements_type>(ret), "continue statement must be inside a loop."); }
 
 		return ret;
 	}
@@ -387,8 +387,8 @@ namespace gal::ast
 
 		return allocator_.new_object<ast_statement_for_in>(
 				make_longest_line(begin, end),
-				put_object_to_allocator<ast_statement_for_in::var_locals_type>(vars),
-				put_object_to_allocator<ast_statement_for_in::value_expressions_type>(values),
+				put_object_into_allocator<ast_statement_for_in::var_locals_type>(vars),
+				put_object_into_allocator<ast_statement_for_in::value_expressions_type>(values),
 				body,
 				has_in ? std::make_optional(in_loc) : std::nullopt,
 				has_do ? std::make_optional(match_do.get_location()) : std::nullopt,
@@ -529,8 +529,8 @@ namespace gal::ast
 
 		return allocator_.new_object<ast_statement_local>(
 				make_longest_line(begin, end),
-				put_object_to_allocator<ast_statement_local::var_locals_type>(vars),
-				put_object_to_allocator<ast_statement_local::value_expressions_type>(values),
+				put_object_into_allocator<ast_statement_local::var_locals_type>(vars),
+				put_object_into_allocator<ast_statement_local::value_expressions_type>(values),
 				assignment_loc);
 	}
 
@@ -548,7 +548,7 @@ namespace gal::ast
 
 		return allocator_.new_object<ast_statement_return>(
 				make_longest_line(begin, end),
-				put_object_to_allocator<ast_statement_return::expression_list_type>(list));
+				put_object_into_allocator<ast_statement_return::expression_list_type>(list));
 	}
 
 	ast_statement* parser::parse_type_alias(utils::location begin, bool exported)
@@ -633,8 +633,8 @@ namespace gal::ast
 				make_longest_line(begin, end),
 				generics,
 				generic_packs,
-				ast_type_list{put_object_to_allocator<ast_array<ast_type*>>(vars), vararg_annotation},
-				put_object_to_allocator<ast_type_function::argument_names_type>(var_names),
+				ast_type_list{put_object_into_allocator<ast_array<ast_type*>>(vars), vararg_annotation},
+				put_object_into_allocator<ast_type_function::argument_names_type>(var_names),
 				return_type);
 
 		return {function_name.name, function_type, true};
@@ -688,8 +688,8 @@ namespace gal::ast
 					global_name.name,
 					generics,
 					generic_packs,
-					ast_type_list{put_object_to_allocator<ast_array<ast_type*>>(vars), vararg_annotation},
-					put_object_to_allocator<ast_statement_declare_function::arguments_type>(var_names),
+					ast_type_list{put_object_into_allocator<ast_array<ast_type*>>(vars), vararg_annotation},
+					put_object_into_allocator<ast_statement_declare_function::arguments_type>(var_names),
 					return_types);
 		}
 		if (lexer_.current().is_any_type_of(lexeme_point::token_type::name) && lexer_.current().get_data_or_name() == lexeme_point::get_class_keyword())
@@ -732,7 +732,7 @@ namespace gal::ast
 					make_longest_line(class_begin, class_end),
 					class_name.name,
 					super_name,
-					put_object_to_allocator<ast_statement_declare_class::class_properties_type>(properties));
+					put_object_into_allocator<ast_statement_declare_class::class_properties_type>(properties));
 		}
 		if (const auto global_name = parse_name_optional("global variable name"); global_name.has_value())
 		{
@@ -749,7 +749,7 @@ namespace gal::ast
 
 	ast_statement* parser::parse_assignment(ast_expression* initial)
 	{
-		if (not initial->is_lvalue()) { initial = report_expression_error(initial->get_location(), put_object_to_allocator<ast_expression_error::error_expressions_type>(initial), "Assigned expression must be a variable or a field"); }
+		if (not initial->is_lvalue()) { initial = report_expression_error(initial->get_location(), put_object_into_allocator<ast_expression_error::error_expressions_type>(initial), "Assigned expression must be a variable or a field"); }
 
 		temporary_stack vars{scratch_expressions_};
 		vars.push(initial);
@@ -760,7 +760,7 @@ namespace gal::ast
 
 			auto* expression = parse_primary_expression(false);
 
-			if (not expression->is_lvalue()) { expression = report_expression_error(expression->get_location(), put_object_to_allocator<ast_expression_error::error_expressions_type>(expression), "Assigned expression must be a variable or a field"); }
+			if (not expression->is_lvalue()) { expression = report_expression_error(expression->get_location(), put_object_into_allocator<ast_expression_error::error_expressions_type>(expression), "Assigned expression must be a variable or a field"); }
 
 			vars.push(expression);
 		}
@@ -772,13 +772,13 @@ namespace gal::ast
 
 		return allocator_.new_object<ast_statement_assign>(
 				make_longest_line(initial->get_location(), values.top()->get_location()),
-				put_object_to_allocator<ast_statement_assign::var_expressions_type>(vars),
-				put_object_to_allocator<ast_statement_assign::value_expressions_type>(values));
+				put_object_into_allocator<ast_statement_assign::var_expressions_type>(vars),
+				put_object_into_allocator<ast_statement_assign::value_expressions_type>(values));
 	}
 
 	ast_statement* parser::parse_compound_assignment(ast_expression* initial, ast_expression_binary::operand_type operand)
 	{
-		if (not initial->is_lvalue()) { initial = report_expression_error(initial->get_location(), put_object_to_allocator<ast_expression_error::error_expressions_type>(initial), "Assigned expression must be a variable or a field"); }
+		if (not initial->is_lvalue()) { initial = report_expression_error(initial->get_location(), put_object_into_allocator<ast_expression_error::error_expressions_type>(initial), "Assigned expression must be a variable or a field"); }
 
 		next_lexeme_point();// xxx=
 
@@ -844,7 +844,7 @@ namespace gal::ast
 						generics,
 						generic_packs,
 						self,
-						put_object_to_allocator<ast_expression_function::args_locals_type>(vars),
+						put_object_into_allocator<ast_expression_function::args_locals_type>(vars),
 						vararg,
 						body,
 						function_stack_.size(),
@@ -1001,7 +1001,7 @@ namespace gal::ast
 
 			const auto result_location = result.empty() ? vararg_annotation->get_location() : result.bottom()->get_location();
 
-			return {result_location, {put_object_to_allocator<ast_type_list::types_list_type>(result), vararg_annotation}};
+			return {result_location, {put_object_into_allocator<ast_type_list::types_list_type>(result), vararg_annotation}};
 		}
 
 		next_lexeme_point();// (
@@ -1029,24 +1029,24 @@ namespace gal::ast
 				return
 				{
 						make_longest_line(loc, return_type->get_location()),
-						{put_object_to_allocator<ast_type_list::types_list_type>(return_type), vararg_annotation}
+						{put_object_into_allocator<ast_type_list::types_list_type>(return_type), vararg_annotation}
 				};
 			}
 
 			return {
 					loc,
-					{put_object_to_allocator<ast_type_list::types_list_type>(result), vararg_annotation}};
+					{put_object_into_allocator<ast_type_list::types_list_type>(result), vararg_annotation}};
 		}
 
-		const auto types = put_object_to_allocator<ast_type_list::types_list_type>(result);
-		auto names = put_object_to_allocator<ast_type_function::argument_names_type>(result_names);
+		const auto types = put_object_into_allocator<ast_type_list::types_list_type>(result);
+		auto names = put_object_into_allocator<ast_type_function::argument_names_type>(result_names);
 
 		temporary_stack fallback_return_types{scratch_annotations_};
 		fallback_return_types.push(parse_function_type_annotation_tail(begin, {}, {}, types, names, vararg_annotation));
 
 		return {
 				make_longest_line(loc, fallback_return_types.bottom()->get_location()),
-				{put_object_to_allocator<ast_type_list::types_list_type>(fallback_return_types), vararg_annotation}
+				{put_object_into_allocator<ast_type_list::types_list_type>(fallback_return_types), vararg_annotation}
 		};
 	}
 
@@ -1097,7 +1097,7 @@ namespace gal::ast
 
 		count_match_recovery_stop_on_token<false>(lexeme_point::token_type::right_arrow);
 
-		const auto param_types = put_object_to_allocator<ast_type_list::types_list_type>(params);
+		const auto param_types = put_object_into_allocator<ast_type_list::types_list_type>(params);
 
 		// Not a function at all. Just a parenthesized type. Or maybe a type pack with a single element
 		if (params.size() == 1 && not vararg_annotation && monomorphic && not lexer_.current().is_any_type_of(lexeme_point::token_type::right_arrow))
@@ -1108,7 +1108,7 @@ namespace gal::ast
 
 		if (not lexer_.current().is_any_type_of(lexeme_point::token_type::right_arrow) && monomorphic && allow_pack) { return allocator_.new_object<ast_type_pack_explicit>(begin.get_location(), ast_type_list{param_types, vararg_annotation}); }
 
-		auto param_names = put_object_to_allocator<ast_type_function::argument_names_type>(names);
+		auto param_names = put_object_into_allocator<ast_type_function::argument_names_type>(names);
 
 		return parse_function_type_annotation_tail(begin, generics, generic_packs, param_types, param_names, vararg_annotation);
 	}
@@ -1211,7 +1211,7 @@ namespace gal::ast
 
 		return allocator_.new_object<ast_type_table>(
 				make_longest_line(begin, end),
-				put_object_to_allocator<ast_type_table::table_properties_type>(properties),
+				put_object_into_allocator<ast_type_table::table_properties_type>(properties),
 				indexer);
 	}
 
@@ -1348,16 +1348,16 @@ namespace gal::ast
 		{
 			return report_type_annotation_error(
 					make_longest_line(begin, parts.top()->get_location()),
-					put_object_to_allocator<ast_type_error::error_types_type>(parts),
+					put_object_into_allocator<ast_type_error::error_types_type>(parts),
 					false,
 					std_format::format("Mixing union('{}') and intersection('{}') types is not allowed; consider wrapping in parentheses.", lexeme_point::get_bitwise_or_symbol(), lexeme_point::get_bitwise_and_symbol()));
 		}
 
 		loc.end = parts.top()->get_location().end;
 
-		if (is_union) { return allocator_.new_object<ast_type_union>(loc, put_object_to_allocator<ast_type_union::union_types_type>(parts)); }
+		if (is_union) { return allocator_.new_object<ast_type_union>(loc, put_object_into_allocator<ast_type_union::union_types_type>(parts)); }
 
-		if (is_intersection) { return allocator_.new_object<ast_type_intersection>(loc, put_object_to_allocator<ast_type_intersection::intersection_types_type>(parts)); }
+		if (is_intersection) { return allocator_.new_object<ast_type_intersection>(loc, put_object_into_allocator<ast_type_intersection::intersection_types_type>(parts)); }
 
 		gal_assert(false, "Composite type was not an intersection or union.");
 		throw parse_error{begin, "Composite type was not an intersection or union."};
@@ -1747,7 +1747,7 @@ namespace gal::ast
 			return allocator_.new_object<ast_expression_call>(
 					make_longest_line(function->get_location(), end),
 					function,
-					put_object_to_allocator<ast_expression_call::call_args_type>(args),
+					put_object_into_allocator<ast_expression_call::call_args_type>(args),
 					has_self,
 					utils::location{arg_begin, arg_end});
 		}
@@ -1761,7 +1761,7 @@ namespace gal::ast
 			return allocator_.new_object<ast_expression_call>(
 					make_longest_line(function->get_location(), expression->get_location()),
 					function,
-					put_object_to_allocator<ast_expression_call::call_args_type>(expression),
+					put_object_into_allocator<ast_expression_call::call_args_type>(expression),
 					has_self,
 					utils::location{arg_begin, arg_end});
 		}
@@ -1774,7 +1774,7 @@ namespace gal::ast
 			return allocator_.new_object<ast_expression_call>(
 					make_longest_line(function->get_location(), expression->get_location()),
 					function,
-					put_object_to_allocator<ast_expression_call::call_args_type>(expression),
+					put_object_into_allocator<ast_expression_call::call_args_type>(expression),
 					has_self,
 					arg_loc);
 		}
@@ -1783,13 +1783,13 @@ namespace gal::ast
 		{
 			return report_expression_error(
 					function->get_location(),
-					put_object_to_allocator<ast_expression_error::error_expressions_type>(function),
+					put_object_into_allocator<ast_expression_error::error_expressions_type>(function),
 					std_format::format("Expected function call arguments after '{}'", lexeme_point::get_parentheses_bracket_open_symbol()));
 		}
 
 		return report_expression_error(
 				utils::location{function->get_location().begin, lexer_.current().get_location().begin},
-				put_object_to_allocator<ast_expression_error::error_expressions_type>(function),
+				put_object_into_allocator<ast_expression_error::error_expressions_type>(function),
 				std_format::format("Expected '{}', '{}' or <string> when parsing function call, got {}", lexeme_point::get_parentheses_bracket_open_symbol(), lexeme_point::get_curly_bracket_open_symbol(), lexer_.current().to_string()));
 	}
 
@@ -1851,7 +1851,7 @@ namespace gal::ast
 
 		return allocator_.new_object<ast_expression_table>(
 				make_longest_line(begin, end),
-				put_object_to_allocator<ast_expression_table::items_type>(items));
+				put_object_into_allocator<ast_expression_table::items_type>(items));
 	}
 
 	ast_expression* parser::parse_if_else_expression()
@@ -1977,7 +1977,7 @@ namespace gal::ast
 			expect_match_and_consume(lexeme_point::get_greater_than_symbol(), begin);
 		}
 
-		return {put_object_to_allocator<generic_names_type>(names), put_object_to_allocator<generic_names_type>(name_packs)};
+		return {put_object_into_allocator<generic_names_type>(names), put_object_into_allocator<generic_names_type>(name_packs)};
 	}
 
 	ast_array<ast_type_or_pack> parser::parse_type_params()
@@ -2007,7 +2007,7 @@ namespace gal::ast
 			expect_match_and_consume(lexeme_point::get_greater_than_symbol(), begin);
 		}
 
-		return put_object_to_allocator<ast_array<ast_type_or_pack>>(parameters);
+		return put_object_into_allocator<ast_array<ast_type_or_pack>>(parameters);
 	}
 
 	std::optional<gal_string_type> parser::parse_char_array()
@@ -2026,7 +2026,7 @@ namespace gal::ast
 			}
 		}
 
-		auto ret = put_object_to_allocator(scratch_data_);
+		auto ret = put_object_into_allocator(scratch_data_);
 		next_lexeme_point();
 		return std::make_optional(ret);
 	}
@@ -2292,7 +2292,7 @@ namespace gal::ast
 		return lexer_.next();
 	}
 
-	parse_result parser::parse(const ast_name buffer, ast_name_table& name_table, utils::trivial_allocator& allocator, const parse_options options)
+	parse_result parser::parse(const ast_name buffer, ast_name_table& name_table, ast_allocator& allocator, const parse_options options)
 	{
 		// todo: timer?
 
@@ -2304,7 +2304,7 @@ namespace gal::ast
 
 			while (p.lexer_.current().is_any_type_of(lexeme_point::token_type::broken_comment) || p.lexer_.current().is_comment())
 			{
-				if (auto data = p.lexer_.current().get_data_or_name(); 
+				if (auto data = p.lexer_.current().get_data_or_name();
 					not data.empty() && data[0] == lexeme_point::get_not_symbol())
 				{
 					hot_comments.emplace_back(
