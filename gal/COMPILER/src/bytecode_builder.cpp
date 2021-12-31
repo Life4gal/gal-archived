@@ -958,11 +958,11 @@ namespace gal::compiler
 		}
 	}
 
-	std::int32_t bytecode_builder::add_constant(const constant& key, const constant& value)
+	bytecode_builder::signed_index_type bytecode_builder::add_constant(const constant& key, const constant& value)
 	{
 		if (const auto it = constant_map_.find(key); it != constant_map_.end()) { return it->second; }
 
-		const auto id = static_cast<std::int32_t>(constants_.size());
+		const auto id = static_cast<signed_index_type>(constants_.size());
 
 		if (std::cmp_greater_equal(id, max_constant_size)) { return -1; }
 
@@ -1007,7 +1007,7 @@ namespace gal::compiler
 		function.max_stack_size = max_stack_size;
 		function.num_upvalues = num_upvalues;
 
-		gal_assert((validate(), true));  // NOLINT(clang-diagnostic-comma)
+		gal_assert((validate(), true));// NOLINT(clang-diagnostic-comma)
 
 		// very approximate: 4 bytes per instruction for code, 1 byte for debug line, and 1-2 bytes for aux data like constants
 		function.data.reserve(instructions_.size() * 7);
@@ -1098,7 +1098,7 @@ namespace gal::compiler
 		return add_constant(key, key);
 	}
 
-	bytecode_builder::signed_index_type bytecode_builder::add_child_function(function_id_type function_id)
+	bytecode_builder::signed_index_type bytecode_builder::add_child_function(const function_id_type function_id)
 	{
 		const auto id = static_cast<signed_index_type>(protos_.size());
 
@@ -1108,4 +1108,289 @@ namespace gal::compiler
 
 		return id;
 	}
+
+	constexpr void bytecode_builder::emit_operand_abc(const operands operand, const operand_abc_underlying_type a, const operand_abc_underlying_type b, const operand_abc_underlying_type c)
+	{
+		instructions_.push_back(static_cast<operand_underlying_type>(operand) | a << 8 | b << 16 | c << 24);
+		lines_.push_back(debug_line_);
+	}
+
+	constexpr void bytecode_builder::emit_operand_ad(const operands operand, const operand_abc_underlying_type a, const operand_d_underlying_type d)
+	{
+		instructions_.push_back(static_cast<operand_underlying_type>(operand) | a << 8 | d << 16);
+		lines_.push_back(debug_line_);
+	}
+
+	constexpr void bytecode_builder::emit_operand_e(const operands operand, const operand_e_underlying_type e)
+	{
+		instructions_.push_back(static_cast<operand_underlying_type>(operand) | e << 8);
+		lines_.push_back(debug_line_);
+	}
+
+	constexpr void bytecode_builder::emit_operand_aux(const operand_aux_underlying_type aux)
+	{
+		instructions_.push_back(aux);
+		lines_.push_back(debug_line_);
+	}
+
+	constexpr bytecode_builder::label_type bytecode_builder::emit_label() const noexcept { return instructions_.size(); }
+
+	bool bytecode_builder::patch_jump_d(const label_type jump_label, const label_type target_label)
+	{
+		gal_assert(jump_label < instructions_.size());
+
+		gal_assert(utils::is_any_enum_of(
+				instruction_to_operand<false>(instructions_[jump_label]),
+				operands::jump,
+				operands::jump_back,
+				operands::jump_if,
+				operands::jump_if_not,
+				operands::jump_if_equal,
+				operands::jump_if_less_equal,
+				operands::jump_if_less_than,
+				operands::jump_if_not_equal,
+				operands::jump_if_not_less_equal,
+				operands::jump_if_not_less_than,
+				operands::for_numeric_loop_prepare,
+				operands::for_numeric_loop,
+				operands::for_generic_loop,
+				operands::for_generic_loop_prepare_inext,
+				operands::for_generic_loop_inext,
+				operands::for_generic_loop_prepare_next,
+				operands::for_generic_loop_next,
+				operands::jump_if_equal_key,
+				operands::jump_if_not_equal_key
+				));
+		gal_assert(instruction_to_d(instructions_[jump_label]) == 0);
+
+		gal_assert(target_label <= instructions_.size());
+
+		if (const auto offset = static_cast<label_offset_type>(target_label) - static_cast<label_offset_type>(jump_label) - 1;
+			static_cast<operand_d_underlying_type>(offset) == offset) { instructions_[jump_label] |= d_to_instruction(static_cast<operand_d_underlying_type>(offset)); }
+		else if (std::abs(offset) < max_jump_distance)
+		{
+			// our jump doesn't fit into 16 bits; we will need to re-patch the byte-code sequence with jump trampolines, see expand_jumps
+			has_long_jump_ = true;
+		}
+		else { return false; }
+
+		jumps_.emplace_back(jump_label, target_label);
+		return true;
+	}
+
+	bool bytecode_builder::patch_skip_c(const label_type jump_label, const label_type target_label)
+	{
+		gal_assert(jump_label < instructions_.size());
+
+		gal_assert(utils::is_any_enum_of(
+				instruction_to_operand<false>(instructions_[jump_label]),
+				operands::fastcall,
+				operands::fastcall_1,
+				operands::fastcall_2,
+				operands::fastcall_2_key
+				));
+		gal_assert(instruction_to_c(instructions_[jump_label]) == 0);
+
+		if (const auto offset = static_cast<label_offset_type>(target_label) - static_cast<label_offset_type>(jump_label) - 1;
+			static_cast<operand_abc_underlying_type>(offset) != offset) { return false; }
+		else
+		{
+			instructions_[jump_label] |= c_to_instruction(static_cast<operand_abc_underlying_type>(offset));
+			return true;
+		}
+	}
+
+	void bytecode_builder::fold_jumps()
+	{
+		// if our function has long jumps, some processing below can make jump instructions not-jumps (e.g. JUMP->CALL_RETURN)
+		// it's safer to skip this processing
+		if (has_long_jump_) { return; }
+
+		for (auto& jump: jumps_)
+		{
+			const auto jump_label = jump.source;
+			const auto jump_instruction = instructions_[jump_label];
+
+			// follow jump target through forward unconditional jumps
+			// we only follow forward jumps to make sure the process terminates
+			auto target_label = jump_label + 1 + instruction_to_d(jump_instruction);
+			gal_assert(target_label < instructions_.size());
+			auto target_instruction = instructions_[target_label];
+
+			while (instruction_to_operand<false>(target_instruction) == operands::jump && instruction_to_d(target_instruction) >= 0)
+			{
+				target_label = target_label + 1 + instruction_to_d(target_instruction);
+				gal_assert(target_label < instructions_.size());
+				target_instruction = instructions_[target_label];
+			}
+
+			// for unconditional jumps to CALL_RETURN, we can replace JUMP with CALL_RETURN
+			if (const auto offset = static_cast<label_offset_type>(target_label) - static_cast<label_offset_type>(jump_label) - 1;
+				instruction_to_operand<false>(jump_instruction) == operands::jump && instruction_to_operand<false>(target_instruction) == operands::call_return
+			)
+			{
+				instructions_[jump_label] = target_instruction;
+				lines_[jump_label] = lines_[target_label];
+			}
+			else if (static_cast<operand_d_underlying_type>(offset) == offset)
+			{
+				instructions_[jump_label] &= std::numeric_limits<std::make_unsigned_t<operand_d_underlying_type>>::max();
+				instructions_[jump_label] |= d_to_instruction(static_cast<operand_d_underlying_type>(offset));
+			}
+
+			jump.target = target_label;
+		}
+	}
+
+	void bytecode_builder::expand_jumps()
+	{
+		if (not has_long_jump_) { return; }
+
+		// we have some jump instructions that couldn't be patched which means their offset didn't fit into 16 bits
+		// our strategy for replacing instructions is as follows:
+		// instead of
+		//   OPERANDS jump_offset
+		// we will synthesize a jump trampoline before our instruction (note that jump offsets are relative to next instruction):
+		//   JUMP +1
+		//   JUMP_EXTRA jump_offset
+		//   OPERANDS -2
+		// the idea is that during forward execution, we will jump over JUMP_EXTRA into OPERANDS
+		// if OPERANDS decides to jump, it will jump to JUMP_EXTRA
+		// JUMP_EXTRA can carry a 24-bit jump offset
+
+		// jump trampolines expand the code size, which can increase existing jump distances.
+		// because of this, we may need to expand jumps that previously fit into 16-bit just fine.
+		// the worst-case expansion is 3x, so to be conservative we will re-patch all jumps that have an offset >= 32767/3
+		constexpr decltype(max_jump_distance) max_jump_distance_conservative = 32767 / 3;
+
+		// we will need to process jumps in order
+		std::ranges::sort(jumps_, std::ranges::less{}, [](const auto& jump) { return jump.source; });
+
+		// first, let's add jump thunks for every jump with a distance that's too big
+		// we will create new instruction buffers, with remap table keeping track of the moves: remap[previous_pc] = new_pc
+		std::vector remap(instructions_.size(), operand_underlying_type{});
+
+		decltype(instructions_) new_instructions;
+		decltype(lines_) new_lines;
+
+		gal_assert(instructions_.size() == lines_.size());
+		new_instructions.reserve(instructions_.size());
+		new_lines.reserve(instructions_.size());
+
+		decltype(jumps_.size()) current_jump = 0;
+		decltype(current_jump) pending_trampolines = 0;
+		for (decltype(instructions_.size()) i = 0; i < instructions_.size();)
+		{
+			const auto operand = instruction_to_operand<false>(instructions_[i]);
+			gal_assert(is_any_operand(operand));
+
+			if (current_jump < jumps_.size() && jumps_[current_jump].source == i)
+			{
+				const auto offset = jumps_[current_jump].distance();
+
+				if (std::abs(offset) > max_jump_distance_conservative)
+				{
+					// insert jump trampoline as described above; we keep JUMP_EXTRA offset uninitialized in this pass
+					new_instructions.push_back(operand_to_instruction(operands::jump) | 1 << 16);
+					new_instructions.push_back(operand_to_instruction(operands::jump));
+
+					new_lines.push_back(lines_[i]);
+					new_lines.push_back(lines_[i]);
+
+					++pending_trampolines;
+				}
+
+				++current_jump;
+			}
+
+			const auto length = get_operand_length(operand);
+
+			// copy instruction and line info to the new stream
+			for (decltype(new_instructions.size()) j = 0; j < length; ++j)
+			{
+				remap[i] = static_cast<decltype(remap)::value_type>(new_instructions.size());
+
+				new_instructions.push_back(instructions_[i]);
+				new_lines.push_back(lines_[i]);
+
+				++i;
+			}
+		}
+
+		gal_assert(current_jump == jumps_.size());
+		gal_assert(pending_trampolines > 0);
+
+		// now we need to recompute offsets for jump instructions - we could not do this in the first pass because the offsets are between *target*
+		// instructions
+		for (auto& jump: jumps_)
+		{
+			const auto offset = jump.distance();
+			const auto new_offset = static_cast<label_offset_type>(remap[jump.target]) - static_cast<label_offset_type>(remap[jump.source]) - 1;
+
+			if (std::abs(offset) > max_jump_distance_conservative)
+			{
+				// fix up jump trampoline
+				auto& instruction_target = new_instructions[remap[jump.source] - 1];
+				auto& instruct_jump = new_instructions[remap[jump.source]];
+
+				gal_assert(instruction_to_operand<false>(instruction_target) == operands::jump_extra);
+
+				// patch JUMP_EXTRA to JUMP_EXTRA to target location; note that new_offset is the offset of the jump *relative to OPERANDS*, so we need to add 1 to make it
+				// relative to JUMP_EXTRA
+				instruction_target &= max_operands_size;
+				instruction_target |= e_to_instruction(static_cast<operand_e_underlying_type>(new_offset + 1));
+
+				// patch OPERANDS to OPERANDS - 2
+				instruct_jump &= std::numeric_limits<std::make_unsigned_t<operand_d_underlying_type>>::max();
+				instruct_jump |= d_to_instruction(static_cast<operand_d_underlying_type>(static_cast<std::make_unsigned_t<operand_d_underlying_type>>(-2)));
+
+				--pending_trampolines;
+			}
+			else
+			{
+				auto& instruction = new_instructions[remap[jump.source]];
+
+				// make sure jump instruction had the correct offset before we started
+				gal_assert(instruction_to_d(instruction) == offset);
+
+				// patch instruction with the new offset
+				gal_assert(instruction_to_d(static_cast<operand_underlying_type>(new_offset)) == new_offset);
+
+				instruction &= std::numeric_limits<std::make_unsigned_t<operand_d_underlying_type>>::max();
+				instruction |= d_to_instruction(static_cast<operand_d_underlying_type>(new_offset));
+			}
+		}
+
+		gal_assert(pending_trampolines == 0);
+
+		// this was hard, but we're done.
+		instructions_.swap(new_instructions);
+		lines_.swap(new_lines);
+	}
+
+	void bytecode_builder::set_debug_function_name(const string_ref_type name)
+	{
+		const auto index = add_string_table_entry(name);
+
+		functions_[current_function_].debug_name_index = index;
+
+		if (dump_handler_)
+		{
+			functions_[current_function_].dump_name = name;
+		}
+	}
+
+	void bytecode_builder::set_debug_line(const int line)
+	{
+		debug_line_ = line;
+	}
+
+	void bytecode_builder::push_debug_local(const string_ref_type name, const std::uint8_t reg, const std::uint32_t begin_pc, const std::uint32_t end_pc)
+	{
+		const auto index = add_string_table_entry(name);
+
+		debug_locals_.emplace_back(index, reg, begin_pc, end_pc);
+	}
+
+
 }

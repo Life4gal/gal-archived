@@ -39,13 +39,14 @@ namespace gal::compiler
 	public:
 		using index_type = std::uint32_t;
 		using signed_index_type = std::int32_t;
-
 		using function_id_type = std::uint32_t;
 		using string_ref_type = std::string_view;
+		using label_type = std::size_t;
+		using label_offset_type = std::make_signed_t<label_type>;
 
 		constexpr static index_type max_constant_size = 1 << 23;
 		constexpr static index_type max_closure_size = 1 << 15;
-		constexpr static int max_jump_distant = 1 << 23;
+		constexpr static int max_jump_distance = 1 << 23;
 
 		struct table_shape
 		{
@@ -163,8 +164,10 @@ namespace gal::compiler
 
 		struct jump
 		{
-			std::uint32_t source;
-			std::uint32_t target;
+			label_type source : 32;
+			label_type target : 32;
+
+			[[nodiscard]] constexpr label_offset_type distance() const noexcept { return static_cast<label_offset_type>(target) - static_cast<label_offset_type>(source) - 1; }
 		};
 
 		std::vector<function> functions_;
@@ -208,8 +211,8 @@ namespace gal::compiler
 		void write_line_info(std::string& str) const;
 		void write_string_table(std::string& str) const;
 
-		std::int32_t add_constant(const constant& key, const constant& value);
-		std::uint32_t add_string_table_entry(string_ref_type value);
+		signed_index_type add_constant(const constant& key, const constant& value);
+		index_type add_string_table_entry(string_ref_type value);
 
 	public:
 		explicit bytecode_builder(bytecode_encoder* encoder = nullptr)
@@ -236,15 +239,15 @@ namespace gal::compiler
 
 		signed_index_type add_child_function(function_id_type function_id);
 
-		void emit_operand_abc(operands operand, std::uint8_t a, std::uint8_t b, std::uint8_t c);
-		void emit_operand_ad(operands operand, std::uint8_t a, std::int16_t d);
-		void emit_operand_e(operands operand, std::int32_t e);
-		void emit_operand_aux(std::uint32_t aux);
+		constexpr void emit_operand_abc(operands operand, operand_abc_underlying_type a, operand_abc_underlying_type b, operand_abc_underlying_type c);
+		constexpr void emit_operand_ad(operands operand, operand_abc_underlying_type a, operand_d_underlying_type d);
+		constexpr void emit_operand_e(operands operand, operand_e_underlying_type e);
+		constexpr void emit_operand_aux(operand_aux_underlying_type aux);
 
-		std::size_t emit_label();
+		[[nodiscard]] constexpr label_type emit_label() const noexcept;
 
-		[[nodiscard]] bool patch_jump_d(std::size_t jump_label, std::size_t target_label);
-		[[nodiscard]] bool patch_skip_c(std::size_t jump_label, std::size_t target_label);
+		[[nodiscard]] bool patch_jump_d(label_type jump_label, label_type target_label);
+		[[nodiscard]] bool patch_skip_c(label_type jump_label, label_type target_label);
 
 		void fold_jumps();
 		void expand_jumps();

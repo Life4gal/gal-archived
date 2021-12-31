@@ -44,6 +44,7 @@ namespace gal::compiler
 	using operand_abc_underlying_type = std::uint8_t;
 	using operand_d_underlying_type = std::int16_t;
 	using operand_e_underlying_type = std::int32_t;
+	using operand_aux_underlying_type = operand_underlying_type;
 
 	enum class operands : operand_underlying_type
 	{
@@ -399,7 +400,7 @@ namespace gal::compiler
 		operand_sentinel_end = operand_sentinel_size
 	};
 
-	constexpr static operand_underlying_type max_operands_size = 0xff;
+	constexpr static operand_underlying_type max_operands_size = std::numeric_limits<operand_abc_underlying_type>::max();
 	static_assert(static_cast<operand_underlying_type>(operands::operand_sentinel_size) < max_operands_size);
 
 	/**
@@ -514,30 +515,37 @@ namespace gal::compiler
 		else { return static_cast<operands>(instruction & max_operands_size); }
 	}
 
+	constexpr operand_underlying_type operand_to_instruction(const operands operand) noexcept { return static_cast<operand_underlying_type>(operand); }
+
 	/**
 	 * @brief ABC encoding: three 8-bit values, containing registers or small numbers
 	 */
 	constexpr auto instruction_to_a(const operand_underlying_type instruction) noexcept { return static_cast<operand_abc_underlying_type>((instruction >> 8) & max_operands_size); }
+	constexpr auto a_to_instruction(const operand_abc_underlying_type a) noexcept { return static_cast<operand_underlying_type>(a) << 8; }
 
 	/**
 	 * @brief ABC encoding: three 8-bit values, containing registers or small numbers
 	 */
 	constexpr auto instruction_to_b(const operand_underlying_type instruction) noexcept { return static_cast<operand_abc_underlying_type>((instruction >> 16) & max_operands_size); }
+	constexpr auto b_to_instruction(const operand_abc_underlying_type b) noexcept { return static_cast<operand_underlying_type>(b) << 16; }
 
 	/**
 	 * @brief ABC encoding: three 8-bit values, containing registers or small numbers
 	 */
 	constexpr auto instruction_to_c(const operand_underlying_type instruction) noexcept { return static_cast<operand_abc_underlying_type>((instruction >> 24) & max_operands_size); }
+	constexpr auto c_to_instruction(const operand_abc_underlying_type c) noexcept { return static_cast<operand_underlying_type>(c) << 24; }
 
 	/**
 	 * @brief AD encoding: one 8-bit value, one signed 16-bit value
 	 */
 	constexpr auto instruction_to_d(const operand_underlying_type instruction) noexcept { return static_cast<operand_d_underlying_type>(instruction >> 16); }
+	constexpr auto d_to_instruction(const operand_d_underlying_type d) noexcept { return static_cast<operand_underlying_type>(d) << 16; }
 
 	/**
 	 * @brief E encoding: one signed 24-bit value
 	 */
-	constexpr auto instruction_to_e(const std::uint32_t instruction) noexcept { return static_cast<operand_e_underlying_type>(instruction >> 8); }
+	constexpr auto instruction_to_e(const operand_underlying_type instruction) noexcept { return static_cast<operand_e_underlying_type>(instruction >> 8); }
+	constexpr auto e_to_instruction(const operand_e_underlying_type e) noexcept { return static_cast<operand_underlying_type>(e) << 8; }
 
 	GAL_ASSERT_CONSTEXPR capture_type instruction_to_capture_type(const operand_abc_underlying_type operand) noexcept
 	{

@@ -32,21 +32,21 @@ namespace gal::utils
 	}
 
 	template<typename Operator, typename Enum, typename Value>
-		requires std::is_enum_v<Enum> &&
+		requires std::is_enum_v<Enum> && std::is_scalar_v<Value> &&
 		         std::is_convertible_v<std::underlying_type_t<Enum>, Value> &&
 		         std::is_convertible_v<Value, std::underlying_type_t<Enum>> &&
 		         std::is_invocable_r_v<Value, Operator, Value, Value>
 	constexpr decltype(auto) invoke_enum_operator(Enum e, Value v, Operator o) noexcept(std::is_nothrow_invocable_r_v<Value, Operator, Value, Value>) { return o(static_cast<Value>(static_cast<std::underlying_type_t<Enum>>(e)), v); }
 
 	template<typename Operator, typename Value, typename Enum>
-		requires std::is_enum_v<Enum> &&
+		requires std::is_scalar_v<Value> && std::is_enum_v<Enum> &&
 		         std::is_convertible_v<std::underlying_type_t<Enum>, Value> &&
 		         std::is_convertible_v<Value, std::underlying_type_t<Enum>> &&
 		         std::is_invocable_r_v<Value, Operator, Value, Value>
 	constexpr decltype(auto) invoke_enum_operator(Value v, Enum e, Operator o) noexcept(std::is_nothrow_invocable_r_v<Value, Operator, Value, Value>) { return o(v, static_cast<Value>(static_cast<std::underlying_type_t<Enum>>(e))); }
 
 	template<bool All = true, typename Value, typename... Enums>
-		requires(std::is_enum_v<Enums> && ...) && (std::is_convertible_v<std::underlying_type_t<Enums>, Value> && ...)
+		requires std::is_scalar_v<Value> && (std::is_enum_v<Enums> && ...) && (std::is_convertible_v<std::underlying_type_t<Enums>, Value> && ...)
 	constexpr bool is_enum_flag_contains(Value v, Enums ... enums) noexcept
 	{
 		if constexpr (All)
@@ -65,6 +65,44 @@ namespace gal::utils
 						[](const Value lhs, const Value rhs) constexpr noexcept { return (lhs & rhs) != 0; }) ||
 				...);
 		}
+	}
+
+	struct set_enum_flag_type_set
+	{
+		template<typename Value, typename Enum>
+			requires std::is_scalar_v<Value> && std::is_enum_v<Enum> && std::is_convertible_v<std::underlying_type_t<Enum>, Value>
+		constexpr void operator()(Value& v, const Enum e) const noexcept { v |= static_cast<Value>(e); }
+	};
+
+	struct set_enum_flag_type_unset
+	{
+		template<typename Value, typename Enum>
+			requires std::is_scalar_v<Value> && std::is_enum_v<Enum> && std::is_convertible_v<std::underlying_type_t<Enum>, Value>
+		constexpr void operator()(Value& v, const Enum e) const noexcept { v &= ~static_cast<Value>(e); }
+	};
+
+	template<typename Operator, typename Value, typename... Enums>
+		requires
+		std::is_scalar_v<Value> &&
+		(std::is_enum_v<Enums> && ...) &&
+		(std::is_convertible_v<std::underlying_type_t<Enums>, Value> && ...) &&
+		(std::is_invocable_v<Operator, Value&, Enums> && ...)
+	constexpr void set_enum_flag(Operator o, Value& v, Enums ... enums) noexcept
+	{
+		return ([&v, o](const auto e) { o(v, e); }(enums),
+			...);
+	}
+
+	template<typename Operator, typename Value, typename... Enums>
+		requires std::is_scalar_v<Value> &&
+		         (std::is_enum_v<Enums> && ...) &&
+		         (std::is_convertible_v<std::underlying_type_t<Enums>, Value> && ...) &&
+		         (std::is_invocable_v<Operator, Value&, Enums> && ...)
+	constexpr Value set_new_enum_flag(Operator o, const Value& v, Enums ... enums) noexcept
+	{
+		Value flag = v;
+		set_enum_flag(o, flag, enums...);
+		return flag;
 	}
 }
 
