@@ -26,7 +26,7 @@ using std_source_location = std::experimental::source_location;
 namespace gal
 {
 	#ifndef GAL_NO_ASSERT
-	#define GAL_ASSERT_CONSTEXPR
+	#define GAL_ASSERT_CONSTEXPR inline
 	void gal_assert(
 			bool condition,
 			std::string_view message = {"no details"},

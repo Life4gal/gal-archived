@@ -4,8 +4,10 @@
 #define GAL_LANG_COMPILER_OPERAND_CODES_HPP
 
 #include<cstdint>
+#include <string_view>
 #include <utils/assert.hpp>
 #include <utils/enum_utils.hpp>
+#include <utils/macro.hpp>
 
 namespace gal::compiler
 {
@@ -166,7 +168,7 @@ namespace gal::compiler
 		// C: predicted slot index (based on hash)
 		// AUX: constant table index
 		// Note that this instruction must be followed directly by *CALL*; it prepares the arguments
-		// This instruction is roughly equivalent to (load_table_string_key + move) pair, but we need a special instruction to support custom __named_call metamethod
+		// This instruction is roughly equivalent to (load_table_string_key + move) pair, but we need a special instruction to support custom __named_call meta method
 		named_call,
 
 		// call specified function
@@ -397,12 +399,13 @@ namespace gal::compiler
 		operand_sentinel_end = operand_sentinel_size
 	};
 
-	static_assert(static_cast<operand_underlying_type>(operands::operand_sentinel_size) < 0xff);
+	constexpr static operand_underlying_type max_operands_size = 0xff;
+	static_assert(static_cast<operand_underlying_type>(operands::operand_sentinel_size) < max_operands_size);
 
 	/**
 	 * @brief byte-code tags, used internally for byte-code encoded as a string
 	 */
-	enum class bytecode_tag
+	enum class bytecode_tag : operand_abc_underlying_type
 	{
 		// byte-code version
 		version = 0,
@@ -507,24 +510,24 @@ namespace gal::compiler
 	template<bool Underlying = true>
 	constexpr auto instruction_to_operand(const operand_underlying_type instruction) noexcept
 	{
-		if constexpr (Underlying) { return instruction & 0xff; }
-		else { return static_cast<operands>(instruction & 0xff); }
+		if constexpr (Underlying) { return instruction & max_operands_size; }
+		else { return static_cast<operands>(instruction & max_operands_size); }
 	}
 
 	/**
 	 * @brief ABC encoding: three 8-bit values, containing registers or small numbers
 	 */
-	constexpr auto instruction_to_a(const operand_underlying_type instruction) noexcept { return static_cast<operand_abc_underlying_type>((instruction >> 8) & 0xff); }
+	constexpr auto instruction_to_a(const operand_underlying_type instruction) noexcept { return static_cast<operand_abc_underlying_type>((instruction >> 8) & max_operands_size); }
 
 	/**
 	 * @brief ABC encoding: three 8-bit values, containing registers or small numbers
 	 */
-	constexpr auto instruction_to_b(const operand_underlying_type instruction) noexcept { return static_cast<operand_abc_underlying_type>((instruction >> 16) & 0xff); }
+	constexpr auto instruction_to_b(const operand_underlying_type instruction) noexcept { return static_cast<operand_abc_underlying_type>((instruction >> 16) & max_operands_size); }
 
 	/**
 	 * @brief ABC encoding: three 8-bit values, containing registers or small numbers
 	 */
-	constexpr auto instruction_to_c(const operand_underlying_type instruction) noexcept { return static_cast<operand_abc_underlying_type>((instruction >> 24) & 0xff); }
+	constexpr auto instruction_to_c(const operand_underlying_type instruction) noexcept { return static_cast<operand_abc_underlying_type>((instruction >> 24) & max_operands_size); }
 
 	/**
 	 * @brief AD encoding: one 8-bit value, one signed 16-bit value
@@ -536,7 +539,7 @@ namespace gal::compiler
 	 */
 	constexpr auto instruction_to_e(const std::uint32_t instruction) noexcept { return static_cast<operand_e_underlying_type>(instruction >> 8); }
 
-	constexpr capture_type instruction_to_capture_type(const operand_abc_underlying_type operand) noexcept
+	GAL_ASSERT_CONSTEXPR capture_type instruction_to_capture_type(const operand_abc_underlying_type operand) noexcept
 	{
 		gal_assert(
 				operand == static_cast<operand_abc_underlying_type>(capture_type::value) ||
@@ -600,6 +603,119 @@ namespace gal::compiler
 			case fastcall_2_key: { return 2; }
 			default: { return 1; }
 		}
+	}
+
+	using operand_name_type = std::string_view;
+
+	constexpr operand_name_type get_operands_name(const operands operand) noexcept
+	{
+		switch (operand)// NOLINT(clang-diagnostic-switch-enum)
+		{
+				using enum operands;
+			case debugger_break: { return "debugger_break"; }
+			case load_null: { return "load_null"; }
+			case load_boolean: { return "load_boolean"; }
+			case load_number: { return "load_number"; }
+			case load_key: { return "load_key"; }
+			case move: { return "move"; }
+			case load_global: { return "load_global"; }
+			case set_global: { return "set_global"; }
+			case load_upvalue: { return "load_upvalue"; }
+			case set_upvalue: { return "set_upvalue"; }
+			case close_upvalues: { return "close_upvalues"; }
+			case load_import: { return "load_import"; }
+			case load_table: { return "load_table"; }
+			case set_table: { return "set_table"; }
+			case load_table_string_key: { return "load_table_string_key"; }
+			case set_table_string_key: { return "set_table_string_key"; }
+			case load_table_number_key: { return "load_table_number_key"; }
+			case set_table_number_key: { return "set_table_number_key"; }
+			case new_closure: { return "new_closure"; }
+			case named_call: { return "named_call"; }
+			case call: { return "call"; }
+			case call_return: { return "call_return"; }
+			case jump: { return "jump"; }
+			case jump_back: { return "jump_back"; }
+			case jump_if: { return "jump_if"; }
+			case jump_if_not: { return "jump_if_not"; }
+			case jump_if_equal: { return "jump_if_equal"; }
+			case jump_if_less_equal: { return "jump_if_less_equal"; }
+			case jump_if_less_than: { return "jump_if_less_than"; }
+			case jump_if_not_equal: { return "jump_if_not_equal"; }
+			case jump_if_not_less_equal: { return "jump_if_not_less_equal"; }
+			case jump_if_not_less_than: { return "jump_if_not_less_than"; }
+			case plus: { return "plus"; }
+			case minus: { return "minus"; }
+			case multiply: { return "multiply"; }
+			case divide: { return "divide"; }
+			case modulus: { return "modulus"; }
+			case pow: { return "pow"; }
+			case bitwise_and: { return "bitwise_and"; }
+			case bitwise_or: { return "bitwise_or"; }
+			case bitwise_xor: { return "bitwise_xor"; }
+			case bitwise_left_shift: { return "bitwise_left_shift"; }
+			case bitwise_right_shift: { return "bitwise_right_shift"; }
+			case plus_key: { return "plus_key"; }
+			case minus_key: { return "minus_key"; }
+			case multiply_key: { return "multiply_key"; }
+			case divide_key: { return "divide_key"; }
+			case modulus_key: { return "modulus_key"; }
+			case pow_key: { return "pow_key"; }
+			case bitwise_and_key: { return "bitwise_and_key"; }
+			case bitwise_or_key: { return "bitwise_or_key"; }
+			case bitwise_xor_key: { return "bitwise_xor_key"; }
+			case bitwise_left_shift_key: { return "bitwise_left_shift_key"; }
+			case bitwise_right_shift_key: { return "bitwise_right_shift_key"; }
+			case logical_and: { return "logical_and"; }
+			case logical_or: { return "logical_or"; }
+			case logical_and_key: { return "logical_and_key"; }
+			case logical_or_key: { return "logical_or_key"; }
+			case unary_plus: { return "unary_plus"; }
+			case unary_minus: { return "unary_minus"; }
+			case unary_not: { return "unary_not"; }
+			case unary_bitwise_not: { return "unary_bitwise_not"; }
+			case new_table: { return "new_table"; }
+			case copy_table: { return "copy_table"; }
+			case set_list: { return "set_list"; }
+			case for_numeric_loop_prepare: { return "for_numeric_loop_prepare"; }
+			case for_numeric_loop: { return "for_numeric_loop"; }
+			case for_generic_loop: { return "for_generic_loop"; }
+			case for_generic_loop_prepare_inext: { return "for_generic_loop_prepare_inext"; }
+			case for_generic_loop_inext: { return "for_generic_loop_inext"; }
+			case for_generic_loop_prepare_next: { return "for_generic_loop_prepare_next"; }
+			case for_generic_loop_next: { return "for_generic_loop_next"; }
+			case load_varargs: { return "load_varargs"; }
+			case copy_closure: { return "copy_closure"; }
+			case prepare_varargs: { return "prepare_varargs"; }
+			case load_key_extra: { return "load_key_extra"; }
+			case jump_extra: { return "jump_extra"; }
+			case fastcall: { return "fastcall"; }
+			case coverage: { return "coverage"; }
+			case capture: { return "capture"; }
+			case jump_if_equal_key: { return "jump_if_equal_key"; }
+			case jump_if_not_equal_key: { return "jump_if_not_key"; }
+			case fastcall_1: { return "fastcall_1"; }
+			case fastcall_2: { return "fastcall_2"; }
+			case fastcall_2_key: { return "fastcall_2_key"; }
+			default:
+			{
+				UNREACHABLE();
+				gal_assert(false, "Unsupported operand!");
+			}
+		}
+	}
+
+	constexpr operand_name_type get_capture_type_name(const capture_type type) noexcept
+	{
+		switch (type)
+		{
+				using enum capture_type;
+			case value: { return "value"; }
+			case reference: { return "reference"; }
+			case upvalue: { return "upvalue"; }
+		}
+		UNREACHABLE();
+		gal_assert(false, "Unsupported capture type!");
 	}
 
 	template<typename T>

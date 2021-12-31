@@ -30,6 +30,42 @@ namespace gal::utils
 
 		return begin <= current && current <= end;
 	}
+
+	template<typename Operator, typename Enum, typename Value>
+		requires std::is_enum_v<Enum> &&
+		         std::is_convertible_v<std::underlying_type_t<Enum>, Value> &&
+		         std::is_convertible_v<Value, std::underlying_type_t<Enum>> &&
+		         std::is_invocable_r_v<Value, Operator, Value, Value>
+	constexpr decltype(auto) invoke_enum_operator(Enum e, Value v, Operator o) noexcept(std::is_nothrow_invocable_r_v<Value, Operator, Value, Value>) { return o(static_cast<Value>(static_cast<std::underlying_type_t<Enum>>(e)), v); }
+
+	template<typename Operator, typename Value, typename Enum>
+		requires std::is_enum_v<Enum> &&
+		         std::is_convertible_v<std::underlying_type_t<Enum>, Value> &&
+		         std::is_convertible_v<Value, std::underlying_type_t<Enum>> &&
+		         std::is_invocable_r_v<Value, Operator, Value, Value>
+	constexpr decltype(auto) invoke_enum_operator(Value v, Enum e, Operator o) noexcept(std::is_nothrow_invocable_r_v<Value, Operator, Value, Value>) { return o(v, static_cast<Value>(static_cast<std::underlying_type_t<Enum>>(e))); }
+
+	template<bool All = true, typename Value, typename... Enums>
+		requires(std::is_enum_v<Enums> && ...) && (std::is_convertible_v<std::underlying_type_t<Enums>, Value> && ...)
+	constexpr bool is_enum_flag_contains(Value v, Enums ... enums) noexcept
+	{
+		if constexpr (All)
+		{
+			return (invoke_enum_operator(
+						v,
+						enums,
+						[](const Value lhs, const Value rhs) constexpr noexcept { return (lhs & rhs) != 0; }) &&
+				...);
+		}
+		else
+		{
+			return (invoke_enum_operator(
+						v,
+						enums,
+						[](const Value lhs, const Value rhs) constexpr noexcept { return (lhs & rhs) != 0; }) ||
+				...);
+		}
+	}
 }
 
 #endif // GAL_LANG_UTILS_ENUM_UTILS_HPP

@@ -2046,6 +2046,7 @@ namespace gal::ast
 
 		auto& local = local_map_[name.name];
 
+		// todo: maybe something wrong about ast_local::shadow?
 		local = allocator_.new_object<ast_local>(name.name, name.loc, local, function_stack_.size() - 1, function_stack_.back().loop_depth, annotation);
 
 		local_stack_.push_back(local);
