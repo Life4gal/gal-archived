@@ -15,7 +15,7 @@ set(
 
 set(
 		GAL_PATCH_VERSION
-		9
+		12
 )
 
 set(

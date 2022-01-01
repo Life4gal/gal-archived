@@ -1,6 +1,7 @@
 #include <compiler/bytecode_builder.hpp>
 #include <utils/macro.hpp>
 #include <utils/format.hpp>
+#include <algorithm>
 
 namespace gal::compiler
 {
@@ -780,6 +781,7 @@ namespace gal::compiler
 
 		for (const auto& c: constants_)
 		{
+			// todo: std::visit with a variant hold the same type more than once
 			c.visit(
 					[this, &str]<typename T>(T&& value)
 					{
@@ -1374,23 +1376,83 @@ namespace gal::compiler
 
 		functions_[current_function_].debug_name_index = index;
 
-		if (dump_handler_)
-		{
-			functions_[current_function_].dump_name = name;
-		}
+		if (dump_handler_) { functions_[current_function_].dump_name = name; }
 	}
 
-	void bytecode_builder::set_debug_line(const int line)
-	{
-		debug_line_ = line;
-	}
+	void bytecode_builder::set_debug_line(const int line) { debug_line_ = line; }
 
-	void bytecode_builder::push_debug_local(const string_ref_type name, const std::uint8_t reg, const std::uint32_t begin_pc, const std::uint32_t end_pc)
+	void bytecode_builder::push_debug_local(const string_ref_type name, const register_type reg, const debug_pc_type begin_pc, const debug_pc_type end_pc)
 	{
 		const auto index = add_string_table_entry(name);
 
 		debug_locals_.emplace_back(index, reg, begin_pc, end_pc);
 	}
 
+	void bytecode_builder::push_debug_upvalue(const string_ref_type name)
+	{
+		const auto index = add_string_table_entry(name);
 
+		debug_upvalues_.emplace_back(index);
+	}
+
+	constexpr bytecode_builder::debug_pc_type bytecode_builder::get_debug_pc() const noexcept { return static_cast<debug_pc_type>(instructions_.size()); }
+
+	void bytecode_builder::finalize()
+	{
+		gal_assert(bytecode_.empty());
+
+		write_byte(bytecode_, bytecode_tag::version);
+
+		write_string_table(bytecode_);
+
+		write_var_int(bytecode_, static_cast<index_type>(functions_.size()));
+
+		for (const auto& function: functions_) { bytecode_.append(function.data); }
+
+		gal_assert(main_function_ < functions_.size());
+		write_var_int(bytecode_, main_function_);
+	}
+
+	void bytecode_builder::set_dump_source(const std::string& source)
+	{
+		dump_source_.clear();
+
+		std::string::size_type pos = 0;
+		while (pos != std::string::npos)
+		{
+			if (const auto next = source.find('\n', pos);
+				next == std::string::npos)
+			{
+				dump_source_.emplace_back(source.substr(pos));
+				pos = next;
+			}
+			else
+			{
+				dump_source_.emplace_back(source.substr(pos, next - pos));
+				pos = next + 1;
+			}
+
+			if (not dump_source_.back().empty() && dump_source_.back().back() == '\r') { dump_source_.back().pop_back(); }
+		}
+	}
+
+	std::string bytecode_builder::dump_everything() const
+	{
+		std::string result;
+
+		for (decltype(functions_.size()) i = 0; i < functions_.size(); ++i)
+		{
+			const auto& function = functions_[i];
+
+			std_format::format_to(
+					std::back_inserter(result),
+					"Functions[{}]: {}\n",
+					i,
+					not function.dump_name.empty() ? function.dump_name : "UNKNOWN");
+
+			result.append(function.dump).push_back('\n');
+		}
+
+		return result;
+	}
 }

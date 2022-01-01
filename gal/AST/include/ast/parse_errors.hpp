@@ -7,6 +7,8 @@
 #include <vector>
 #include <exception>
 #include <utils/point.hpp>
+#include <utils/format.hpp>
+#include <utils/assert.hpp>
 
 namespace gal::ast
 {
@@ -39,7 +41,7 @@ namespace gal::ast
 	public:
 		explicit parse_errors(parse_errors_container_type errors)
 			: errors_{std::move(errors)},
-			  message_{errors_.size() == 1 ? errors_.front().what_error() : std_format::format("Total {} parse error happened", errors_.size())} { gal_assert(not errors_.empty(), "At least one error needs to occur!"); }
+			  message_{errors_.size() == 1 ? errors_.front().what_error() : std_format::format("Total {} error happened", errors_.size())} { gal_assert(not errors_.empty(), "At least one error needs to occur!"); }
 
 		[[nodiscard]] constexpr const std::string& what_error() const noexcept { return message_; }
 

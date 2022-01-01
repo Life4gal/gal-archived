@@ -8,6 +8,7 @@ set(
 
 		src/bytecode_builder.cpp
 		src/compiler.cpp
+		src/compile.cpp
 )
 
 add_library(

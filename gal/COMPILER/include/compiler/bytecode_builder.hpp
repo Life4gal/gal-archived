@@ -7,10 +7,8 @@
 #include <compiler/operand_codes.hpp>
 #include <utils/hash_container.hpp>
 #include <utils/hash.hpp>
-#include <utils/string_utils.hpp>
 #include <utils/assert.hpp>
 #include <string>
-#include <string_view>
 #include <array>
 #include <vector>
 #include <variant>
@@ -43,6 +41,8 @@ namespace gal::compiler
 		using string_ref_type = std::string_view;
 		using label_type = std::size_t;
 		using label_offset_type = std::make_signed_t<label_type>;
+		using debug_pc_type = index_type;
+		using register_type = operand_abc_underlying_type;
 
 		constexpr static index_type max_constant_size = 1 << 23;
 		constexpr static index_type max_closure_size = 1 << 15;
@@ -52,6 +52,7 @@ namespace gal::compiler
 		{
 			constexpr static auto key_max_size = 32;
 
+			// todo
 			std::array<std::int32_t, key_max_size> keys;
 			decltype(keys.size()) length;
 		};
@@ -152,9 +153,9 @@ namespace gal::compiler
 		{
 			index_type name;
 
-			std::uint8_t reg;
-			std::uint32_t begin_pc;
-			std::uint32_t end_pc;
+			register_type reg;
+			debug_pc_type begin_pc;
+			debug_pc_type end_pc;
 		};
 
 		struct debug_upvalue
@@ -254,38 +255,55 @@ namespace gal::compiler
 
 		void set_debug_function_name(string_ref_type name);
 		void set_debug_line(int line);
-		void push_debug_local(string_ref_type name, std::uint8_t reg, std::uint32_t begin_pc, std::uint32_t end_pc);
+		void push_debug_local(string_ref_type name, register_type reg, debug_pc_type begin_pc, debug_pc_type end_pc);
 		void push_debug_upvalue(string_ref_type name);
-		std::uint32_t get_debug_pc() const;
+		[[nodiscard]] constexpr debug_pc_type get_debug_pc() const noexcept;
 
 		void finalize();
 
+		constexpr void set_dump_flags(std::underlying_type_t<dump_flags> flags)
+		{
+			dump_flags_ = flags;
+			dump_handler_ = &bytecode_builder::dump_current_function;
+		}
+
 		void set_dump_source(const std::string& source);
 
-		const std::string& get_bytecode() const noexcept
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR const std::string& get_bytecode() const noexcept
 		{
 			gal_assert(not bytecode_.empty(), "did you forget to call finalize?");
 			return bytecode_;
 		}
 
-		std::string dump_function(function_id_type id) const;
-		std::string dump_everything() const;
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR std::string dump_function(const function_id_type id) const
+		{
+			gal_assert(id < static_cast<function_id_type>(functions_.size()));
 
-		constexpr static function_id_type get_import_id(const function_id_type id0) noexcept
+			return functions_[id].dump;
+		}
+
+		[[nodiscard]] std::string dump_everything() const;
+
+		GAL_ASSERT_CONSTEXPR static function_id_type get_import_id(const function_id_type id0) noexcept
 		{
 			gal_assert(id0 < 1024);
 
-			return (1 << 30) | (id0 << 20);
+			return (static_cast<function_id_type>(1) << 30) | (id0 << 20);
 		}
 
-		constexpr static function_id_type get_import_id(const function_id_type id0, const function_id_type id1) noexcept
+		GAL_ASSERT_CONSTEXPR static function_id_type get_import_id(const function_id_type id0, const function_id_type id1) noexcept
 		{
 			gal_assert((id0 | id1) < 1024);
 
-			return (2 << 30) | (id0 << 20) | (id1 << 10);
+			return (static_cast<function_id_type>(2) << 30) | (id0 << 20) | (id1 << 10);
 		}
 
-		constexpr static function_id_type get_import_id(const function_id_type id0, const function_id_type id1, const function_id_type id2) noexcept { return (3 << 30) | (id0 << 20) || (id1 << 10) | (id2); }
+		GAL_ASSERT_CONSTEXPR static function_id_type get_import_id(const function_id_type id0, const function_id_type id1, const function_id_type id2) noexcept
+		{
+			gal_assert((id0 | id1 | id2) < 1024);
+
+			return (static_cast<function_id_type>(3) << 30) | (id0 << 20) || (id1 << 10) | (id2);
+		}
 	};
 }
 
