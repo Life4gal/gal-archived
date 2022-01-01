@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_COMPILER_COMPILE_HPP
-#define GAL_LANG_COMPILER_COMPILE_HPP
+#ifndef GAL_LANG_COMPILE_HPP
+#define GAL_LANG_COMPILE_HPP
 
 #ifdef __cplusplus
 extern "C"
@@ -43,4 +43,4 @@ char* gal_compile(const char* source, size_t size, gal_compile_options* options,
 }
 #endif
 
-#endif // GAL_LANG_COMPILER_COMPILE_HPP
+#endif // GAL_LANG_COMPILE_HPP

@@ -1,11 +1,14 @@
 project(
-		gal-COMPILER
+		gal-CORE
 		LANGUAGES CXX
 )
 
 set(
 		${PROJECT_NAME}_SOURCE
 
+		src/ast.cpp
+		src/lexer.cpp
+		src/parser.cpp
 		src/bytecode_builder.cpp
 		src/compiler.cpp
 		src/compile.cpp
@@ -18,7 +21,7 @@ add_library(
 )
 
 add_library(
-		gal::COMPILER
+		gal::CORE
 		ALIAS
 		${PROJECT_NAME}
 )
@@ -47,7 +50,6 @@ target_link_libraries(
 			${PROJECT_NAME}
 			PRIVATE
 			gal::UTILS
-			gal::AST
 )
 
 include(${GAL_MODULE_PATH}/config_build_type.cmake)

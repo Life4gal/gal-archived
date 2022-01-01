@@ -9,9 +9,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(
 		${PROJECT_NAME}_SOURCE
 		
-		src/test_point.cpp
-		src/test_string_utils.cpp
-		src/test_string_pool.cpp
+		test_utils/test_point.cpp
+		test_utils/test_string_utils.cpp
+		test_utils/test_string_pool.cpp
 )
 
 add_executable(
@@ -39,7 +39,7 @@ target_link_libraries(
 		${PROJECT_NAME}
 		PRIVATE
 		gal::UTILS
-		gal::AST
+		gal::CORE
 		gtest_main
 )
 

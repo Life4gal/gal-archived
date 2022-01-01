@@ -1,9 +1,8 @@
-#include <compiler/compile.h>
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-#include <compiler/compile.h>
+#include <compile.h>
 #ifdef __cplusplus
 }
 #endif
