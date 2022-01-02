@@ -12,7 +12,7 @@ namespace gal::compiler
 		#define CHECK_REG(value) gal_assert((value) < function.max_stack_size)
 		#define CHECK_REG_RANGE(value, count) gal_assert((value) + (count) <= function.max_stack_size)
 		#define CHECK_UPVALUE(value) gal_assert((value) < function.num_upvalues)
-		#define CHECK_CONSTANT_TYPE(index, type) gal_assert(static_cast<decltype(constants_.size())>((index)) < constants_.size() && std::holds_alternative<type>(constants_[static_cast<decltype(constants_.size())>((index))].data))
+		#define CHECK_CONSTANT_TYPE(index_, type_index) gal_assert(static_cast<decltype(constants_.size())>((index_)) < constants_.size() && constants_[static_cast<decltype(constants_.size())>((index_))].data.index() == (type_index))
 		#define CHECK_CONSTANT(index) gal_assert(static_cast<decltype(constants_.size())>((index)) < constants_.size())
 		#define CHECK_JUMP(value) gal_assert((i + 1 + (value)) < instructions_.size() && is_instruction_valid[i + 1 + (value)] )
 
@@ -75,7 +75,7 @@ namespace gal::compiler
 				case set_global:
 				{
 					CHECK_REG(instruction_to_a(instruction));
-					CHECK_CONSTANT_TYPE(instructions_[i + 1], constant::string_type);
+					CHECK_CONSTANT_TYPE(instructions_[i + 1], constant::string_index);
 					break;
 				}
 				case load_upvalue:
@@ -93,7 +93,7 @@ namespace gal::compiler
 				case load_import:
 				{
 					CHECK_REG(instruction_to_a(instruction));
-					CHECK_CONSTANT_TYPE(instruction_to_d(instruction), constant::import_type);
+					CHECK_CONSTANT_TYPE(instruction_to_d(instruction), constant::import_index);
 					break;
 				}
 				case load_table:
@@ -109,7 +109,7 @@ namespace gal::compiler
 				{
 					CHECK_REG(instruction_to_a(instruction));
 					CHECK_REG(instruction_to_b(instruction));
-					CHECK_CONSTANT_TYPE(instructions_[i + 1], constant::string_type);
+					CHECK_CONSTANT_TYPE(instructions_[i + 1], constant::string_index);
 					break;
 				}
 				case load_table_number_key:
@@ -138,7 +138,7 @@ namespace gal::compiler
 				{
 					CHECK_REG(instruction_to_a(instruction));
 					CHECK_REG(instruction_to_b(instruction));
-					CHECK_CONSTANT_TYPE(instructions_[i + 1], constant::string_type);
+					CHECK_CONSTANT_TYPE(instructions_[i + 1], constant::string_index);
 					gal_assert(instruction_to_operand<false>(instructions_[i + 2]) == call);
 					break;
 				}
@@ -195,11 +195,6 @@ namespace gal::compiler
 				case divide:
 				case modulus:
 				case pow:
-				case bitwise_and:
-				case bitwise_or:
-				case bitwise_xor:
-				case bitwise_left_shift:
-				case bitwise_right_shift:
 				{
 					CHECK_REG(instruction_to_a(instruction));
 					CHECK_REG(instruction_to_b(instruction));
@@ -212,15 +207,10 @@ namespace gal::compiler
 				case divide_key:
 				case modulus_key:
 				case pow_key:
-				case bitwise_and_key:
-				case bitwise_or_key:
-				case bitwise_xor_key:
-				case bitwise_left_shift_key:
-				case bitwise_right_shift_key:
 				{
 					CHECK_REG(instruction_to_a(instruction));
 					CHECK_REG(instruction_to_b(instruction));
-					CHECK_CONSTANT_TYPE(instruction_to_c(instruction), constant::number_type);
+					CHECK_CONSTANT_TYPE(instruction_to_c(instruction), constant::number_index);
 					break;
 				}
 				case logical_and:
@@ -242,7 +232,6 @@ namespace gal::compiler
 				case unary_plus:
 				case unary_minus:
 				case unary_not:
-				case unary_bitwise_not:
 				{
 					CHECK_REG(instruction_to_a(instruction));
 					CHECK_REG(instruction_to_b(instruction));
@@ -256,7 +245,7 @@ namespace gal::compiler
 				case copy_table:
 				{
 					CHECK_REG(instruction_to_a(instruction));
-					CHECK_CONSTANT_TYPE(instruction_to_d(instruction), constant::table_type);
+					CHECK_CONSTANT_TYPE(instruction_to_d(instruction), constant::table_index);
 					break;
 				}
 				case set_list:
@@ -303,7 +292,7 @@ namespace gal::compiler
 				case copy_closure:
 				{
 					CHECK_REG(instruction_to_a(instruction));
-					CHECK_CONSTANT_TYPE(instruction_to_d(instruction), constant::closure_type);
+					CHECK_CONSTANT_TYPE(instruction_to_d(instruction), constant::closure_index);
 					const auto proto = constants_[instruction_to_d(instruction)].get<constant::closure_index>();
 					gal_assert(proto < functions_.size());
 					const auto num_upvalues = functions_[proto].num_upvalues;
@@ -389,7 +378,7 @@ namespace gal::compiler
 				default:
 				{
 					UNREACHABLE();
-					gal_assert(false, "Unsupported operand!");
+					// gal_assert(false, "Unsupported operand!");
 				}
 			}
 
@@ -599,22 +588,12 @@ namespace gal::compiler
 			case divide:
 			case modulus:
 			case pow:
-			case bitwise_and:
-			case bitwise_or:
-			case bitwise_xor:
-			case bitwise_left_shift:
-			case bitwise_right_shift:
 			case plus_key:
 			case minus_key:
 			case multiply_key:
 			case divide_key:
 			case modulus_key:
 			case pow_key:
-			case bitwise_and_key:
-			case bitwise_or_key:
-			case bitwise_xor_key:
-			case bitwise_left_shift_key:
-			case bitwise_right_shift_key:
 			case logical_and:
 			case logical_or:
 			case logical_and_key:
@@ -622,7 +601,6 @@ namespace gal::compiler
 			case unary_plus:
 			case unary_minus:
 			case unary_not:
-			case unary_bitwise_not:
 			case fastcall:
 			case fastcall_1:
 			{
@@ -713,7 +691,7 @@ namespace gal::compiler
 			default:
 			{
 				UNREACHABLE();
-				gal_assert(false, "Unsupported operand!");
+				// gal_assert(false, "Unsupported operand!");
 			}
 		}
 
@@ -781,50 +759,88 @@ namespace gal::compiler
 
 		for (const auto& c: constants_)
 		{
-			// todo: std::visit with a variant hold the same type more than once
-			c.visit(
-					[this, &str]<typename T>(T&& value)
-					{
-						using type = T;
-						if constexpr (std::is_same_v<type, constant::null_type>) { write_byte(str, bytecode_tag::null); }
-						else if constexpr (std::is_same_v<type, constant::boolean_type>)
-						{
-							write_byte(str, bytecode_tag::boolean);
-							write_byte(str, value);
-						}
-						else if constexpr (std::is_same_v<type, constant::number_type>)
-						{
-							write_byte(str, bytecode_tag::number);
-							write_double(str, value);
-						}
-						else if constexpr (std::is_same_v<type, constant::string_type>)
-						{
-							write_byte(str, bytecode_tag::string);
-							write_var_int(str, value);
-						}
-						else if constexpr (std::is_same_v<type, constant::import_type>)
-						{
-							write_byte(str, bytecode_tag::import);
-							write_int(str, value);
-						}
-						else if constexpr (std::is_same_v<type, constant::table_type>)
-						{
-							const auto& shape = table_shapes_[value];
-							write_byte(str, bytecode_tag::table);
-							write_var_int(str, shape.length);
-							for (decltype(shape.length) i = 0; i < shape.length; ++i) { write_var_int(str, shape.key[i]); }
-						}
-						else if constexpr (std::is_same_v<type, constant::closure_type>)
-						{
-							write_byte(str, bytecode_tag::closure);
-							write_var_int(str, value);
-						}
-						else
-						{
-							UNREACHABLE();
-							gal_assert(false, "non-exhaustive visitor!");
-						}
-					});
+			// std::visit with a variant hold the same type more than once
+			// c.visit(
+			// 		[this, &str]<typename T>(T&& value)
+			// 		{
+			// 			using type = T;
+			// 			if constexpr (std::is_same_v<type, constant::null_type>) { write_byte(str, bytecode_tag::null); }
+			// 			else if constexpr (std::is_same_v<type, constant::boolean_type>)
+			// 			{
+			// 				write_byte(str, bytecode_tag::boolean);
+			// 				write_byte(str, value);
+			// 			}
+			// 			else if constexpr (std::is_same_v<type, constant::number_type>)
+			// 			{
+			// 				write_byte(str, bytecode_tag::number);
+			// 				write_double(str, value);
+			// 			}
+			// 			else if constexpr (std::is_same_v<type, constant::string_type>)
+			// 			{
+			// 				write_byte(str, bytecode_tag::string);
+			// 				write_var_int(str, value);
+			// 			}
+			// 			else if constexpr (std::is_same_v<type, constant::import_type>)
+			// 			{
+			// 				write_byte(str, bytecode_tag::import);
+			// 				write_int(str, value);
+			// 			}
+			// 			else if constexpr (std::is_same_v<type, constant::table_type>)
+			// 			{
+			// 				const auto& shape = table_shapes_[value];
+			// 				write_byte(str, bytecode_tag::table);
+			// 				write_var_int(str, shape.length);
+			// 				for (decltype(shape.length) i = 0; i < shape.length; ++i) { write_var_int(str, shape.keys[i]); }
+			// 			}
+			// 			else if constexpr (std::is_same_v<type, constant::closure_type>)
+			// 			{
+			// 				write_byte(str, bytecode_tag::closure);
+			// 				write_var_int(str, value);
+			// 			}
+			// 			else
+			// 			{
+			// 				UNREACHABLE();
+			// 				// gal_assert(false, "non-exhaustive visitor!");
+			// 			}
+			// 		});
+			if (c.get_if<constant::null_index>()) { write_byte(str, bytecode_tag::null); }
+			else if (const auto* b = c.get_if<constant::boolean_index>(); b)
+			{
+				write_byte(str, bytecode_tag::boolean);
+				write_byte(str, *b);
+			}
+			else if (const auto* n = c.get_if<constant::number_index>(); n)
+			{
+				write_byte(str, bytecode_tag::number);
+				write_double(str, *n);
+			}
+			else if (const auto* s = c.get_if<constant::string_index>(); s)
+			{
+				write_byte(str, bytecode_tag::string);
+				write_var_int(str, *s);
+			}
+			else if (const auto* i = c.get_if<constant::import_index>(); i)
+			{
+				write_byte(str, bytecode_tag::import);
+				write_int(str, *i);
+			}
+			else if (const auto* t = c.get_if<constant::table_index>(); t)
+			{
+				const auto& [keys, length] = table_shapes_[*t];
+				write_byte(str, bytecode_tag::table);
+				write_var_int(str, static_cast<index_type>(length));
+				for (decltype(table_shape::length) j = 0; j < length; ++j) { write_var_int(str, keys[j]); }
+			}
+			else if (const auto* cl = c.get_if<constant::closure_index>(); cl)
+			{
+				write_byte(str, bytecode_tag::closure);
+				write_var_int(str, *cl);
+			}
+			else
+			{
+				UNREACHABLE();
+				// gal_assert(false, "non-exhaustive visitor!");
+			}
 		}
 
 		// child protos
@@ -966,7 +982,7 @@ namespace gal::compiler
 
 		const auto id = static_cast<signed_index_type>(constants_.size());
 
-		if (std::cmp_greater_equal(id, max_constant_size)) { return -1; }
+		if (std::cmp_greater_equal(id, max_constant_size)) { return constant_too_much_index; }
 
 		constant_map_[key] = id;
 		constants_.push_back(value);
@@ -1064,7 +1080,7 @@ namespace gal::compiler
 	{
 		const auto index = add_string_table_entry(value);
 
-		const constant key{constant::constant_type{std::in_place_index<constant::sting_index>, index}};
+		const constant key{constant::constant_type{std::in_place_index<constant::string_index>, index}};
 
 		return add_constant(key, key);
 	}
@@ -1378,8 +1394,6 @@ namespace gal::compiler
 
 		if (dump_handler_) { functions_[current_function_].dump_name = name; }
 	}
-
-	void bytecode_builder::set_debug_line(const int line) { debug_line_ = line; }
 
 	void bytecode_builder::push_debug_local(const string_ref_type name, const register_type reg, const debug_pc_type begin_pc, const debug_pc_type end_pc)
 	{

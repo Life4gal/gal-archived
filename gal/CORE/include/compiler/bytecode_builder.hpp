@@ -44,6 +44,8 @@ namespace gal::compiler
 		using debug_pc_type = index_type;
 		using register_type = operand_abc_underlying_type;
 
+		constexpr static signed_index_type constant_too_much_index = -1;
+
 		constexpr static index_type max_constant_size = 1 << 23;
 		constexpr static index_type max_closure_size = 1 << 15;
 		constexpr static int max_jump_distance = 1 << 23;
@@ -55,6 +57,8 @@ namespace gal::compiler
 			// todo
 			std::array<std::int32_t, key_max_size> keys;
 			decltype(keys.size()) length;
+
+			[[nodiscard]] friend constexpr bool operator==(const table_shape& lhs, const table_shape& rhs) noexcept { return lhs.length == rhs.length && std::memcmp(lhs.keys.data(), rhs.keys.data(), lhs.length) == 0; }
 		};
 
 		enum class dump_flags : std::uint16_t
@@ -65,7 +69,6 @@ namespace gal::compiler
 			locals = 1 << 3,
 		};
 
-	private:
 		struct table_shape_hasher
 		{
 			constexpr std::size_t operator()(const table_shape& t) const noexcept { return utils::hash(t.keys); }
@@ -97,7 +100,7 @@ namespace gal::compiler
 			constexpr static std::size_t null_index = 0;
 			constexpr static std::size_t boolean_index = 1;
 			constexpr static std::size_t number_index = 2;
-			constexpr static std::size_t sting_index = 3;
+			constexpr static std::size_t string_index = 3;
 			constexpr static std::size_t import_index = 4;
 			constexpr static std::size_t table_index = 5;
 			constexpr static std::size_t closure_index = 6;
@@ -116,24 +119,27 @@ namespace gal::compiler
 
 			template<std::size_t Index>
 				requires(null_index <= Index && Index <= closure_index)
-			[[nodiscard]] constexpr decltype(auto) get_if() noexcept { return std::get_if<Index>(data); }
+			[[nodiscard]] constexpr auto get_if() noexcept { return std::get_if<Index>(&data); }
 
 			template<std::size_t Index>
 				requires(null_index <= Index && Index <= closure_index)
-			[[nodiscard]] constexpr decltype(auto) get_if() const noexcept { return std::get_if<Index>(data); }
+			[[nodiscard]] constexpr auto get_if() const noexcept { return std::get_if<Index>(&data); }
 
-			template<typename Visitor>
-			constexpr decltype(auto) visit(Visitor visitor) { return std::visit(visitor, data); }
-
-			template<typename Visitor>
-			constexpr decltype(auto) visit(Visitor visitor) const { return std::visit(visitor, data); }
+			/*
+			 * @brief Unfortunately, we have duplicate types and are not allowed to use visit (because the correct match cannot be obtained), so we can only check by ourselves.
+			 */
+			// template<typename Visitor>
+			// constexpr decltype(auto) visit(Visitor visitor) { return std::visit(visitor, data); }
+			// template<typename Visitor>
+			// constexpr decltype(auto) visit(Visitor visitor) const { return std::visit(visitor, data); }
 		};
 
 		struct constant_hasher
 		{
-			constexpr std::size_t operator()(const constant& c) const noexcept { return std::hash<decltype(constant::data)>{}(c.data); }
+			[[nodiscard]] std::size_t operator()(const constant& c) const noexcept { return std::hash<decltype(constant::data)>{}(c.data); }
 		};
 
+	private:
 		struct function
 		{
 			std::string data;
@@ -254,7 +260,7 @@ namespace gal::compiler
 		void expand_jumps();
 
 		void set_debug_function_name(string_ref_type name);
-		void set_debug_line(int line);
+		void set_debug_line(const int line) noexcept { debug_line_ = line; }
 		void push_debug_local(string_ref_type name, register_type reg, debug_pc_type begin_pc, debug_pc_type end_pc);
 		void push_debug_upvalue(string_ref_type name);
 		[[nodiscard]] constexpr debug_pc_type get_debug_pc() const noexcept;

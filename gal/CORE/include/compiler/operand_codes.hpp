@@ -225,12 +225,6 @@ namespace gal::compiler
 		divide,
 		modulus,
 		pow,
-		// todo: builtin bit operands
-		bitwise_and,
-		bitwise_or,
-		bitwise_xor,
-		bitwise_left_shift,
-		bitwise_right_shift,
 
 		// compute arithmetic operation between the source register and a constant and put the result into target register
 		// A: target register
@@ -242,12 +236,6 @@ namespace gal::compiler
 		divide_key,
 		modulus_key,
 		pow_key,
-		// todo: builtin bit operands
-		bitwise_and_key,
-		bitwise_or_key,
-		bitwise_xor_key,
-		bitwise_left_shift_key,
-		bitwise_right_shift_key,
 
 		// perform `and` or `or` operation (selecting first or second register based on whether the first one is truth) and put the result into target register
 		// A: target register
@@ -267,11 +255,9 @@ namespace gal::compiler
 		// A: target register
 		// B: source register
 		// C: none
-		// todo: builtin bit operands
 		unary_plus,
 		unary_minus,
 		unary_not,
-		unary_bitwise_not,
 
 		// create table in target register
 		// A: target register
@@ -430,6 +416,17 @@ namespace gal::compiler
 		// assert
 		assert,
 
+		// type()
+		type,
+
+		// typeof()
+		typeof,
+
+		// raw*
+		raw_set,
+		raw_get,
+		raw_equal,
+
 		// math
 		math_abs,
 		math_acos,
@@ -464,9 +461,9 @@ namespace gal::compiler
 		// bits
 		bits_arshift,
 		bits_and,
-		bits_not,
 		bits_or,
 		bits_xor,
+		bits_not,
 		bits_test,
 		bits_extract,
 		bits_lrotate,
@@ -477,16 +474,11 @@ namespace gal::compiler
 		bits_countlz,
 		bits_countrz,
 
-		// typeof()
-		typeof,
-
 		// string.
+		string_byte,
+		string_char,
+		string_len,
 		string_sub,
-
-		// raw*
-		raw_set,
-		raw_get,
-		raw_equal,
 
 		// table
 		table_insert,
@@ -658,22 +650,12 @@ namespace gal::compiler
 			case divide: { return "divide"; }
 			case modulus: { return "modulus"; }
 			case pow: { return "pow"; }
-			case bitwise_and: { return "bitwise_and"; }
-			case bitwise_or: { return "bitwise_or"; }
-			case bitwise_xor: { return "bitwise_xor"; }
-			case bitwise_left_shift: { return "bitwise_left_shift"; }
-			case bitwise_right_shift: { return "bitwise_right_shift"; }
 			case plus_key: { return "plus_key"; }
 			case minus_key: { return "minus_key"; }
 			case multiply_key: { return "multiply_key"; }
 			case divide_key: { return "divide_key"; }
 			case modulus_key: { return "modulus_key"; }
 			case pow_key: { return "pow_key"; }
-			case bitwise_and_key: { return "bitwise_and_key"; }
-			case bitwise_or_key: { return "bitwise_or_key"; }
-			case bitwise_xor_key: { return "bitwise_xor_key"; }
-			case bitwise_left_shift_key: { return "bitwise_left_shift_key"; }
-			case bitwise_right_shift_key: { return "bitwise_right_shift_key"; }
 			case logical_and: { return "logical_and"; }
 			case logical_or: { return "logical_or"; }
 			case logical_and_key: { return "logical_and_key"; }
@@ -681,7 +663,6 @@ namespace gal::compiler
 			case unary_plus: { return "unary_plus"; }
 			case unary_minus: { return "unary_minus"; }
 			case unary_not: { return "unary_not"; }
-			case unary_bitwise_not: { return "unary_bitwise_not"; }
 			case new_table: { return "new_table"; }
 			case copy_table: { return "copy_table"; }
 			case set_list: { return "set_list"; }
@@ -708,7 +689,7 @@ namespace gal::compiler
 			default:
 			{
 				UNREACHABLE();
-				gal_assert(false, "Unsupported operand!");
+				// gal_assert(false, "Unsupported operand!");
 			}
 		}
 	}
@@ -723,7 +704,7 @@ namespace gal::compiler
 			case upvalue: { return "upvalue"; }
 		}
 		UNREACHABLE();
-		gal_assert(false, "Unsupported capture type!");
+		// gal_assert(false, "Unsupported capture type!");
 	}
 
 	template<typename T>

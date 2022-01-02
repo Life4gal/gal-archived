@@ -84,7 +84,11 @@ namespace gal::ast
 		constexpr ast_visitor(ast_visitor&&) = default;
 		constexpr ast_visitor& operator=(ast_visitor&&) = default;
 
-		virtual bool visit(ast_node&) { return true; }
+		virtual bool visit(ast_node& node)
+		{
+			(void)node;
+			return true;
+		}
 	};
 
 	using ast_rtti_index_type = int;
@@ -154,6 +158,8 @@ namespace gal::ast
 		[[nodiscard]] constexpr utils::location get_location() const noexcept { return loc_; }
 
 		constexpr void reset_location_begin(const utils::position new_begin) noexcept { loc_.begin = new_begin; }
+
+		[[nodiscard]] constexpr bool need_coverage() const noexcept;
 	};
 
 	class ast_expression : public ast_node
@@ -205,7 +211,13 @@ namespace gal::ast
 		constexpr void set_semicolon(const bool has) noexcept { has_semicolon_ = has; }
 
 		[[nodiscard]] constexpr bool has_statement_follow() const noexcept;
+
+		[[nodiscard]] constexpr bool all_control_path_has_return() const noexcept;
+
+		[[nodiscard]] constexpr bool is_break_statement() const noexcept;
 	};
+
+	class ast_statement_continue;
 
 	class ast_statement_block final : public ast_statement
 	{
@@ -223,6 +235,18 @@ namespace gal::ast
 			  body_{body} {}
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { for (const auto& statement: body_) { statement->visit(visitor); } } }
+
+		[[nodiscard]] constexpr auto* get_body(const block_body_type::size_type index) noexcept { return body_[index]; }
+
+		[[nodiscard]] constexpr const auto* get_body(const block_body_type::size_type index) const noexcept { return body_[index]; }
+
+		[[nodiscard]] constexpr bool empty() const noexcept { return body_.empty(); }
+
+		[[nodiscard]] constexpr auto get_body_size() const noexcept { return body_.size(); }
+
+		[[nodiscard]] constexpr ast_statement_continue* get_continue_part() noexcept;
+
+		[[nodiscard]] constexpr const ast_statement_continue* get_continue_part() const noexcept;
 	};
 
 	class ast_statement_error final : public ast_statement
@@ -605,6 +629,10 @@ namespace gal::ast
 			  expression_{expression} {}
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { expression_->visit(visitor); } }
+
+		[[nodiscard]] constexpr auto* get_expression() noexcept { return expression_; }
+
+		[[nodiscard]] constexpr const auto* get_expression() const noexcept { return expression_; }
 	};
 
 	class ast_expression_constant_null final : public ast_expression
@@ -632,7 +660,7 @@ namespace gal::ast
 
 		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
 
-		[[nodiscard]] auto get() const noexcept { return value_; }
+		[[nodiscard]] constexpr auto get() const noexcept { return value_; }
 	};
 
 	class ast_expression_constant_number final : public ast_expression
@@ -649,7 +677,7 @@ namespace gal::ast
 
 		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
 
-		[[nodiscard]] auto get() const noexcept { return value_; }
+		[[nodiscard]] constexpr auto get() const noexcept { return value_; }
 	};
 
 	class ast_expression_constant_string final : public ast_expression
@@ -665,6 +693,8 @@ namespace gal::ast
 			  value_{value} {}
 
 		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
+
+		[[nodiscard]] constexpr auto get() const noexcept { return value_; }
 	};
 
 	class ast_expression_local final : public ast_expression
@@ -704,7 +734,7 @@ namespace gal::ast
 
 		void visit(ast_visitor& visitor) override { visitor.visit(*this); }
 
-		[[nodiscard]] const ast_name& get_name() const noexcept { return name_; }
+		[[nodiscard]] constexpr ast_name get_name() const noexcept { return name_; }
 	};
 
 	class ast_expression_varargs final : public ast_expression
@@ -726,7 +756,7 @@ namespace gal::ast
 	private:
 		ast_expression* function_;
 		call_args_type args_;
-		bool is_self_;
+		bool has_self_;
 		utils::location arg_loc_;
 
 	public:
@@ -736,7 +766,7 @@ namespace gal::ast
 			: ast_expression{get_rtti_index(), loc},
 			  function_{function},
 			  args_{args},
-			  is_self_{is_self},
+			  has_self_{is_self},
 			  arg_loc_{arg_loc} {}
 
 		void visit(ast_visitor& visitor) override
@@ -748,6 +778,18 @@ namespace gal::ast
 				for (const auto& arg: args_) { arg->visit(visitor); }
 			}
 		}
+
+		[[nodiscard]] constexpr auto* get_function() noexcept { return function_; }
+
+		[[nodiscard]] constexpr const auto* get_function() const noexcept { return function_; }
+
+		[[nodiscard]] constexpr auto* get_arg(const call_args_type::size_type index) noexcept { return args_[index]; }
+
+		[[nodiscard]] constexpr const auto* get_arg(const call_args_type::size_type index) const noexcept { return args_[index]; }
+
+		[[nodiscard]] constexpr auto get_arg_size() const noexcept { return args_.size(); }
+
+		[[nodiscard]] constexpr bool has_self() const noexcept { return has_self_; }
 
 		// todo: interface
 	};
@@ -773,6 +815,11 @@ namespace gal::ast
 			  operand_{operand} {}
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { expression_->visit(visitor); } }
+
+		[[nodiscard]] constexpr ast_expression* get_expression() noexcept { return expression_; }
+		[[nodiscard]] constexpr const ast_expression* get_expression() const noexcept { return expression_; }
+
+		[[nodiscard]] constexpr ast_name get_index() const noexcept { return index_; }
 
 		// todo: interface
 	};
@@ -804,7 +851,11 @@ namespace gal::ast
 			}
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_expression() noexcept { return expression_; }
+		[[nodiscard]] constexpr const auto* get_expression() const noexcept { return expression_; }
+
+		[[nodiscard]] constexpr auto* get_index() noexcept { return index_; }
+		[[nodiscard]] constexpr const auto* get_index() const noexcept { return index_; }
 	};
 
 	class ast_expression_function final : public ast_expression
@@ -879,6 +930,28 @@ namespace gal::ast
 			}
 		}
 
+		[[nodiscard]] constexpr bool has_self() const noexcept { return self_; }
+
+		[[nodiscard]] constexpr auto* get_self() noexcept { return self_; }
+
+		[[nodiscard]] constexpr const auto* get_self() const noexcept { return self_; }
+
+		[[nodiscard]] constexpr auto* get_arg(const args_locals_type::size_type index) noexcept { return args_[index]; }
+
+		[[nodiscard]] constexpr const auto* get_arg(const args_locals_type::size_type index) const noexcept { return args_[index]; }
+
+		[[nodiscard]] constexpr auto get_arg_size() const noexcept { return args_.size(); }
+
+		[[nodiscard]] constexpr bool is_vararg() const noexcept { return vararg_loc_.has_value(); }
+
+		[[nodiscard]] constexpr auto* get_body() noexcept { return body_; }
+
+		[[nodiscard]] constexpr const auto* get_body() const noexcept { return body_; }
+
+		[[nodiscard]] constexpr auto get_function_depth() const noexcept { return function_depth_; }
+
+		[[nodiscard]] constexpr auto get_debug_name() const noexcept { return debug_name_; }
+
 		// todo: interface
 	};
 
@@ -925,6 +998,14 @@ namespace gal::ast
 			}
 		}
 
+		[[nodiscard]] constexpr auto empty() const noexcept { return items_.empty(); }
+
+		[[nodiscard]] constexpr auto get_item_size() const noexcept { return items_.size(); }
+
+		[[nodiscard]] constexpr item& get_item(const items_type::size_type index) noexcept { return items_[index]; }
+
+		[[nodiscard]] constexpr const item& get_item(const items_type::size_type index) const noexcept { return items_[index]; }
+
 		// todo: interface
 	};
 
@@ -943,8 +1024,6 @@ namespace gal::ast
 			unary_minus,
 			// !
 			unary_not,
-			// ~
-			unary_bitwise_not,
 			// todo: more unary operand ?
 		};
 
@@ -969,13 +1048,16 @@ namespace gal::ast
 				case operand_type::unary_plus: { return "+"; }
 				case operand_type::unary_minus: { return "-"; }
 				case operand_type::unary_not: { return "not"; }
-				case operand_type::unary_bitwise_not: { return "~"; }
 			}
 
 			UNREACHABLE();
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr operand_type get_operand() const noexcept { return operand_; }
+
+		[[nodiscard]] constexpr auto* get_expression() noexcept { return expression_; }
+
+		[[nodiscard]] constexpr const auto* get_expression() const noexcept { return expression_; }
 	};
 
 	class ast_expression_binary final : public ast_expression
@@ -999,16 +1081,6 @@ namespace gal::ast
 			binary_modulus,
 			// **
 			binary_pow,
-			// &
-			binary_bitwise_and,
-			// |
-			binary_bitwise_or,
-			// ^
-			binary_bitwise_xor,
-			// <<
-			binary_bitwise_left_shift,
-			// >>
-			binary_bitwise_right_shift,
 			// and
 			binary_logical_and,
 			// or
@@ -1056,11 +1128,6 @@ namespace gal::ast
 					{binary_divide, {10, 10}},
 					{binary_modulus, {10, 10}},
 					{binary_pow, {12, 11}},
-					{binary_bitwise_and, {5, 5}},
-					{binary_bitwise_or, {3, 3}},
-					{binary_bitwise_xor, {4, 4}},
-					{binary_bitwise_left_shift, {8, 8}},
-					{binary_bitwise_right_shift, {8, 8}},
 					{binary_logical_and, {2, 2}}, // second lowest
 					{binary_logical_or, {1, 1}},  // lowest
 					{binary_equal, {6, 6}},       // equality
@@ -1112,9 +1179,6 @@ namespace gal::ast
 				case operand_type::binary_divide: { return "/"; }
 				case operand_type::binary_modulus: { return "%"; }
 				case operand_type::binary_pow: { return "**"; }
-				case operand_type::binary_bitwise_and: { return "&"; }
-				case operand_type::binary_bitwise_or: { return "|"; }
-				case operand_type::binary_bitwise_xor: { return "^"; }
 				case operand_type::binary_logical_and: { return "and"; }
 				case operand_type::binary_logical_or: { return "or"; }
 				case operand_type::binary_equal: { return "=="; }
@@ -1128,7 +1192,15 @@ namespace gal::ast
 			UNREACHABLE();
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr operand_type get_operand() const noexcept { return operand_; }
+
+		[[nodiscard]] constexpr auto* get_lhs_expression() noexcept { return lhs_; }
+
+		[[nodiscard]] constexpr const auto* get_lhs_expression() const noexcept { return lhs_; }
+
+		[[nodiscard]] constexpr auto* get_rhs_expression() noexcept { return rhs_; }
+
+		[[nodiscard]] constexpr const auto* get_rhs_expression() const noexcept { return rhs_; }
 	};
 
 	class ast_expression_type_assertion final : public ast_expression
@@ -1154,7 +1226,13 @@ namespace gal::ast
 			}
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_expression() noexcept { return expression_; }
+
+		[[nodiscard]] constexpr const auto* get_expression() const noexcept { return expression_; }
+
+		[[nodiscard]] constexpr auto* get_annotation() noexcept { return annotation_; }
+
+		[[nodiscard]] constexpr const auto* get_annotation() const noexcept { return annotation_; }
 	};
 
 	class ast_expression_if_else final : public ast_expression
@@ -1194,7 +1272,17 @@ namespace gal::ast
 			}
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_condition() noexcept { return condition_; }
+
+		[[nodiscard]] constexpr const auto* get_condition() const noexcept { return condition_; }
+
+		[[nodiscard]] constexpr auto* get_true_expression() noexcept { return true_expression_; }
+
+		[[nodiscard]] constexpr const auto* get_true_expression() const noexcept { return true_expression_; }
+
+		[[nodiscard]] constexpr auto* get_false_expression() noexcept { return false_expression_; }
+
+		[[nodiscard]] constexpr const auto* get_false_expression() const noexcept { return false_expression_; }
 	};
 
 	class ast_statement_if final : public ast_statement
@@ -1240,9 +1328,19 @@ namespace gal::ast
 			}
 		}
 
-		[[nodiscard]] constexpr bool has_end() const noexcept { return has_end_; }
+		[[nodiscard]] constexpr auto* get_condition() noexcept { return condition_; }
 
-		// todo: interface
+		[[nodiscard]] constexpr const auto* get_condition() const noexcept { return condition_; }
+
+		[[nodiscard]] constexpr auto* get_then_body() noexcept { return then_body_; }
+
+		[[nodiscard]] constexpr const auto* get_then_body() const noexcept { return then_body_; }
+
+		[[nodiscard]] constexpr auto* get_else_body() noexcept { return else_body_; }
+
+		[[nodiscard]] constexpr const auto* get_else_body() const noexcept { return else_body_; }
+
+		[[nodiscard]] constexpr bool has_end() const noexcept { return has_end_; }
 	};
 
 	class ast_statement_while final : public ast_statement
@@ -1468,7 +1566,9 @@ namespace gal::ast
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { expression_->visit(visitor); } }
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_expression() noexcept { return expression_; }
+
+		[[nodiscard]] constexpr const auto* get_expression() const noexcept { return expression_; }
 	};
 
 	class ast_statement_local final : public ast_statement
@@ -1505,7 +1605,19 @@ namespace gal::ast
 			}
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_var(const var_locals_type::size_type index) noexcept { return vars_[index]; }
+
+		[[nodiscard]] constexpr const auto* get_var(const var_locals_type::size_type index) const noexcept { return vars_[index]; }
+
+		[[nodiscard]] constexpr auto* get_value(const value_expressions_type::size_type index) noexcept { return values_[index]; }
+
+		[[nodiscard]] constexpr const auto* get_value(const value_expressions_type::size_type index) const noexcept { return values_[index]; }
+
+		[[nodiscard]] constexpr bool empty_var() const noexcept { return vars_.empty(); }
+		[[nodiscard]] constexpr bool empty_value() const noexcept { return values_.empty(); }
+
+		[[nodiscard]] constexpr auto get_var_size() const noexcept { return vars_.size(); }
+		[[nodiscard]] constexpr auto get_value_size() const noexcept { return values_.size(); }
 	};
 
 	class ast_statement_assign final : public ast_statement
@@ -1535,6 +1647,18 @@ namespace gal::ast
 				for (const auto& value: values_) { value->visit(visitor); }
 			}
 		}
+
+		[[nodiscard]] constexpr auto* get_var(const var_expressions_type::size_type index) noexcept { return vars_[index]; }
+
+		[[nodiscard]] constexpr const auto* get_var(const var_expressions_type::size_type index) const noexcept { return vars_[index]; }
+
+		[[nodiscard]] constexpr auto* get_value(const value_expressions_type::size_type index) noexcept { return values_[index]; }
+
+		[[nodiscard]] constexpr const auto* get_value(const value_expressions_type::size_type index) const noexcept { return values_[index]; }
+
+		[[nodiscard]] constexpr auto get_var_size() const noexcept { return vars_.size(); }
+		[[nodiscard]] constexpr auto get_value_size() const noexcept { return values_.size(); }
+
 
 		// todo: interface
 	};
@@ -1567,7 +1691,15 @@ namespace gal::ast
 			}
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_var() noexcept { return var_; }
+
+		[[nodiscard]] constexpr const auto* get_var() const noexcept { return var_; }
+
+		[[nodiscard]] constexpr auto* get_value() noexcept { return value_; }
+
+		[[nodiscard]] constexpr const auto* get_value() const noexcept { return value_; }
+
+		[[nodiscard]] constexpr operand_type get_operand() const noexcept { return operand_; }
 	};
 
 	class ast_statement_function final : public ast_statement
@@ -1593,7 +1725,13 @@ namespace gal::ast
 			}
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_name() noexcept { return name_; }
+
+		[[nodiscard]] constexpr const auto* get_name() const noexcept { return name_; }
+
+		[[nodiscard]] constexpr auto* get_function() noexcept { return function_; }
+
+		[[nodiscard]] constexpr const auto* get_function() const noexcept { return function_; }
 	};
 
 	class ast_statement_function_local final : public ast_statement
@@ -1612,7 +1750,13 @@ namespace gal::ast
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { function_->visit(visitor); } }
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_name() noexcept { return name_; }
+
+		[[nodiscard]] constexpr const auto* get_name() const noexcept { return name_; }
+
+		[[nodiscard]] constexpr auto* get_function() noexcept { return function_; }
+
+		[[nodiscard]] constexpr const auto* get_function() const noexcept { return function_; }
 	};
 
 	class ast_statement_type_alias final : public ast_statement
@@ -1747,9 +1891,37 @@ namespace gal::ast
 		// todo: interface
 	};
 
+	constexpr bool ast_node::need_coverage() const noexcept { return not this->is<ast_statement_block>() && not this->is<ast_statement_type_alias>(); }
+
 	constexpr bool ast_expression::is_lvalue() const noexcept { return this->is<ast_expression_local>() || this->is<ast_expression_global>() || this->is<ast_expression_index_name>() || this->is<ast_expression_index_expression>(); }
 
 	constexpr bool ast_statement::has_statement_follow() const noexcept { return not this->is<ast_statement_break>() && not this->is<ast_statement_continue>() && not this->is<ast_statement_return>(); }
+
+	constexpr bool ast_statement::all_control_path_has_return() const noexcept
+	{
+		if (auto* block = this->as<ast_statement_block>(); block) { return not block->empty() && block->get_body(block->get_body_size() - 1)->all_control_path_has_return(); }
+		if (this->is<ast_statement_return>()) { return true; }
+		if (auto* i = this->as<ast_statement_if>(); i) { return i->get_else_body() && i->get_then_body()->all_control_path_has_return() && i->get_else_body()->all_control_path_has_return(); }
+		return false;
+	}
+
+	constexpr bool ast_statement::is_break_statement() const noexcept
+	{
+		if (const auto* block = this->as<ast_statement_block>(); block) { return block->get_body_size() == 1 && block->get_body(0)->is<ast_statement_break>(); }
+		return this->is<ast_statement_break>();
+	}
+
+	constexpr ast_statement_continue* ast_statement_block::get_continue_part() noexcept
+	{
+		if (get_body_size() == 1) { return get_body(0)->as<ast_statement_continue>(); }
+		return nullptr;
+	}
+
+	constexpr const ast_statement_continue* ast_statement_block::get_continue_part() const noexcept
+	{
+		if (get_body_size() == 1) { return get_body(0)->as<ast_statement_continue>(); }
+		return nullptr;
+	}
 }
 
 #endif // GAL_LANG_AST_AST_HPP

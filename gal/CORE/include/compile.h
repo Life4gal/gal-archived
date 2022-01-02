@@ -8,7 +8,7 @@ extern "C"
 {
 #endif
 
-#include<stddef.h>
+
 
 typedef struct gal_compile_options_tag
 {
@@ -26,10 +26,6 @@ typedef struct gal_compile_options_tag
 	// 1 - statement coverage
 	// 2 - statement and expression coverage (verbose)
 	int			 coverage_level;// default=0
-
-	// global builtin to construct vectors; disabled by default
-	const char*	 vector_lib;
-	const char*	 vector_ctor;
 
 	// null-terminated array of globals that are mutable; disables the import optimization for fields accessed through these
 	const char** mutable_globals;

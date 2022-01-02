@@ -64,16 +64,6 @@ namespace gal::ast
 			modulus_assign,
 			// **=
 			pow_assign,
-			// &=
-			bitwise_and_assign,
-			// |=
-			bitwise_or_assign,
-			// ^=
-			bitwise_xor_assign,
-			// <<=
-			bitwise_left_shift_assign,
-			// >>=
-			bitwise_right_shift_assign,
 			// ::
 			double_colon,
 			// ->
@@ -329,16 +319,6 @@ namespace gal::ast
 						do_consume();
 						return do_return(token_type::less_equal);
 					}
-					else if (next_c == get_less_than_symbol())
-					{
-						do_consume();
-						if (const auto next_next_c = getter(1); next_next_c == get_assignment_symbol())
-						{
-							do_consume();
-							return do_return(token_type::bitwise_left_shift_assign);
-						}
-						return do_return(token_type::bitwise_left_shift);
-					}
 					return do_return_cast(c);
 				}
 				case get_greater_than_symbol():
@@ -348,16 +328,6 @@ namespace gal::ast
 					{
 						do_consume();
 						return do_return(token_type::greater_equal);
-					}
-					else if (next_c == get_greater_than_symbol())
-					{
-						do_consume();
-						if (const auto next_next_c = getter(2); next_next_c == get_assignment_symbol())
-						{
-							do_consume();
-							return do_return(token_type::bitwise_right_shift_assign);
-						}
-						return do_return(token_type::bitwise_right_shift);
 					}
 					return do_return_cast(c);
 				}
@@ -403,36 +373,6 @@ namespace gal::ast
 					{
 						do_consume();
 						return do_return(token_type::modulus_assign);
-					}
-					return do_return_cast(c);
-				}
-				case get_bitwise_and_symbol():
-				{
-					do_consume();
-					if (const auto next_c = getter(1); next_c == get_assignment_symbol())
-					{
-						do_consume();
-						return do_return(token_type::bitwise_and_assign);
-					}
-					return do_return_cast(c);
-				}
-				case get_bitwise_or_symbol():
-				{
-					do_consume();
-					if (const auto next_c = getter(1); next_c == get_assignment_symbol())
-					{
-						do_consume();
-						return do_return(token_type::bitwise_or_assign);
-					}
-					return do_return_cast(c);
-				}
-				case get_bitwise_xor_symbol():
-				{
-					do_consume();
-					if (const auto next_c = getter(1); next_c == get_assignment_symbol())
-					{
-						do_consume();
-						return do_return(token_type::bitwise_xor_assign);
 					}
 					return do_return_cast(c);
 				}
@@ -573,7 +513,6 @@ namespace gal::ast
 			if (scalar == get_not_symbol()) { return unary_not; }
 			if (scalar == get_plus_symbol()) { return unary_plus; }
 			if (scalar == get_minus_symbol()) { return unary_minus; }
-			if (scalar == get_bitwise_not_symbol()) { return unary_bitwise_not; }
 			return std::nullopt;
 		}
 
@@ -595,8 +534,6 @@ namespace gal::ast
 			switch (type_)// NOLINT(clang-diagnostic-switch-enum)
 			{
 				case token_type::pow: { return binary_pow; }
-				case token_type::bitwise_left_shift: { return binary_bitwise_left_shift; }
-				case token_type::bitwise_right_shift: { return binary_bitwise_right_shift; }
 				case token_type::keyword_and: { return binary_logical_and; }
 				case token_type::keyword_or: { return binary_logical_or; }
 				case token_type::equal: { return binary_equal; }
@@ -612,9 +549,6 @@ namespace gal::ast
 			if (scalar == get_multiply_symbol()) { return binary_multiply; }
 			if (scalar == get_divide_symbol()) { return binary_divide; }
 			if (scalar == get_modulus_symbol()) { return binary_modulus; }
-			if (scalar == get_bitwise_and_symbol()) { return binary_bitwise_and; }
-			if (scalar == get_bitwise_or_symbol()) { return binary_bitwise_or; }
-			if (scalar == get_bitwise_xor_symbol()) { return binary_bitwise_xor; }
 			if (scalar == get_less_than_symbol()) { return binary_less_than; }
 			if (scalar == get_greater_than_symbol()) { return binary_greater_than; }
 
@@ -644,11 +578,6 @@ namespace gal::ast
 				case token_type::divide_assign: { return binary_divide; }
 				case token_type::modulus_assign: { return binary_modulus; }
 				case token_type::pow_assign: { return binary_pow; }
-				case token_type::bitwise_and_assign: { return binary_bitwise_and; }
-				case token_type::bitwise_or_assign: { return binary_bitwise_or; }
-				case token_type::bitwise_xor_assign: { return binary_bitwise_xor; }
-				case token_type::bitwise_left_shift_assign: { return binary_bitwise_left_shift; }
-				case token_type::bitwise_right_shift_assign: { return binary_bitwise_right_shift; }
 				default: { return std::nullopt; }
 			}
 		}
@@ -671,11 +600,6 @@ namespace gal::ast
 				case token_type::divide_assign: { return "'/='"; }
 				case token_type::modulus_assign: { return "'%='"; }
 				case token_type::pow_assign: { return "'**='"; }
-				case token_type::bitwise_and_assign: { return "'&='"; }
-				case token_type::bitwise_or_assign: { return "'|='"; }
-				case token_type::bitwise_xor_assign: { return "'^='"; }
-				case token_type::bitwise_left_shift_assign: { return "'<<='"; }
-				case token_type::bitwise_right_shift_assign: { return "'>>='"; }
 				case token_type::raw_string:
 				case token_type::quoted_string:
 				case token_type::number:
