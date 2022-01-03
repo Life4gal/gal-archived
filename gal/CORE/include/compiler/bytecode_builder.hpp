@@ -71,7 +71,7 @@ namespace gal::compiler
 
 		struct table_shape_hasher
 		{
-			constexpr std::size_t operator()(const table_shape& t) const noexcept { return utils::hash(t.keys); }
+			constexpr std::size_t operator()(const table_shape& t) const noexcept { return utils::fnv1a_hash(t.keys); }
 		};
 
 		struct constant

@@ -821,7 +821,11 @@ namespace gal::ast
 
 		[[nodiscard]] constexpr ast_name get_index() const noexcept { return index_; }
 
-		// todo: interface
+		[[nodiscard]] constexpr utils::location get_index_location() const noexcept { return index_loc_; }
+
+		[[nodiscard]] constexpr utils::position get_operand_position() const noexcept { return operand_pos_; }
+
+		[[nodiscard]] constexpr char get_operand() const noexcept { return operand_; }
 	};
 
 	class ast_expression_index_expression final : public ast_expression
@@ -1201,6 +1205,8 @@ namespace gal::ast
 		[[nodiscard]] constexpr auto* get_rhs_expression() noexcept { return rhs_; }
 
 		[[nodiscard]] constexpr const auto* get_rhs_expression() const noexcept { return rhs_; }
+
+		constexpr void swap_lhs_and_rhs() noexcept { std::ranges::swap(lhs_, rhs_); }
 	};
 
 	class ast_expression_type_assertion final : public ast_expression

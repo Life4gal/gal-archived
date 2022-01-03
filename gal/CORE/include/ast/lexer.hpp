@@ -13,6 +13,7 @@
 #include <utils/hash_container.hpp>
 #include <utils/string_pool.hpp>
 #include <utils/string_utils.hpp>
+#include <utils/hash.hpp>
 
 #include <ast/ast.hpp>
 #include <ast/allocator.hpp>
@@ -677,17 +678,7 @@ namespace gal::ast
 		private:
 			[[nodiscard]] constexpr std::size_t operator()(const name_type name) const noexcept
 			{
-				// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
-				constexpr std::uint64_t hash_init{14695981039346656037ull};
-				constexpr std::uint64_t hash_prime{1099511628211ull};
-
-				auto hash = hash_init;
-				for (const auto c: name)
-				{
-					hash ^= c;
-					hash *= hash_prime;
-				}
-				return hash;
+				return utils::fnv1a_hash(name);
 			}
 
 		public:

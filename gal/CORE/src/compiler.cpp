@@ -1,6 +1,7 @@
 #include <compiler/compiler.hpp>
 #include <variant>
 #include <utils/hash_container.hpp>
+#include <utils/hash.hpp>
 #include <ast/parser.hpp>
 #include <compiler/bytecode_builder.hpp>
 
@@ -249,6 +250,9 @@ namespace gal::compiler
 		std::vector<ast::ast_local*> upvalues_;
 		std::vector<loop_jump_result> loop_jumps_;
 		std::vector<loop_result> loops_;
+
+		bool use_get_function_environment_;
+		bool use_set_function_environment_;
 
 	public:
 		class assignment_visitor final : public ast::ast_visitor
@@ -756,7 +760,9 @@ namespace gal::compiler
 			: bytecode_{bytecode},
 			  options_{options},
 			  stack_size_{0},
-			  register_top_{0} {}
+			  register_top_{0},
+			  use_get_function_environment_{false},
+			  use_set_function_environment_{false} {}
 
 		[[nodiscard]] register_type get_local(const ast::ast_local* local) const
 		{
@@ -920,19 +926,256 @@ namespace gal::compiler
 			const auto needed = std::ranges::max(static_cast<register_size_type>(1 + call->has_self() + call->get_arg_size()), target_count);
 
 			// Optimization: if target points to the top of the stack, we can start the call at previous_top - 1 and won't need MOVE at the end
-			auto reg = static_cast<register_type>(target_top ? new_registers(call, needed - target_count) - target_count : new_registers(call, needed));
+			const auto registers = static_cast<register_type>(target_top ? new_registers(call, needed - target_count) - target_count : new_registers(call, needed));
 
 			register_type self_reg = 0;
 
-			// todo
-			(void)multiple_return;
-			(void)reg;
-			(void)self_reg;
+			builtin_method::method_id_type method_id = builtin_method::invalid_method_id;
+
+			if (options_.optimization_level >= 1) { method_id = get_builtin_method_id(get_builtin(call->get_function())); }
+
+			gal_assert(method_id >= builtin_method::invalid_method_id);
+
+			if (call->has_self())
+			{
+				auto* index_name = call->get_function()->as<ast::ast_expression_index_name>();
+				gal_assert(index_name);
+
+				// Optimization: use local register directly in NAMED_CALL if possible
+				if (auto* expression = index_name->get_expression(); is_expression_local_register(expression)) { self_reg = get_local(expression->as<ast::ast_expression_local>()->get_local()); }
+				else
+				{
+					// Note: to be able to compile very deeply nested self call chains (object@method1()@method2()@...), we need to be able to do this in
+					// finite stack space NAMED_CALL will happily move object from registers to registers+1 but we need to compute it into registers so that
+					// compile_expression_temp_top does not increase stack usage for every recursive call
+					self_reg = registers;
+
+					compile_expression_temp_top(expression, self_reg);
+				}
+			}
+			else if (method_id == builtin_method::invalid_method_id) { compile_expression_temp_top(call->get_function(), registers); }
+
+			// Note: if the last argument is expression_vararg or expression_call, we need to route that directly to the called function preserving the # of args
+			bool multiple_call = false;
+			bool skip_args = false;
+
+			if (not call->has_self() && method_id != builtin_method::invalid_method_id && call->get_arg_size() >= 1 && call->get_arg_size() <= 2)
+			{
+				const auto* last = call->get_arg(call->get_arg_size() - 1);
+				skip_args = not last->is<ast::ast_expression_call>() && not last->is<ast::ast_expression_varargs>();
+			}
+
+			if (not skip_args)
+			{
+				for (decltype(call->get_arg_size()) i = 0; i < call->get_arg_size(); ++i)
+				{
+					const auto t = static_cast<register_type>(registers + 1 + call->has_self() + i);
+
+					if (i + 1 == call->get_arg_size()) { multiple_call = compile_expression_temp_multiple_return(call->get_arg(i), t); }
+					else { compile_expression_temp_top(call->get_arg(i), t); }
+				}
+			}
+
+			set_debug_line<true>(call->get_function());
+
+			if (call->has_self())
+			{
+				auto* index_name = call->get_function()->as<ast::ast_expression_index_name>();
+				gal_assert(index_name);
+
+				set_debug_line(index_name->get_index_location());
+
+				const auto name = index_name->get_index();
+				const auto id = bytecode_.add_constant_string(name);
+				if (id == bytecode_builder::constant_too_much_index)
+				{
+					throw compile_error{index_name->get_location(),
+					                    std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+				}
+				bytecode_.emit_operand_abc(operands::named_call, registers, self_reg, static_cast<operand_abc_underlying_type>(utils::short_string_hash(name)));
+				bytecode_.emit_operand_aux(id);
+			}
+			else if (method_id != builtin_method::invalid_method_id)
+			{
+				label_type fastcall_label;
+
+				if (skip_args)
+				{
+					auto operand = call->get_arg_size() == 1 ? operands::fastcall_1 : operands::fastcall_2;
+
+					register_type args[2]{};
+					for (decltype(call->get_arg_size()) i = 0; i < call->get_arg_size(); ++i)
+					{
+						if (i != 0)
+						{
+							if (const auto id = get_constant_index(call->get_arg(i));
+								id != bytecode_builder::constant_too_much_index)
+							{
+								operand = operands::fastcall_2_key;
+								args[i] = static_cast<operand_abc_underlying_type>(id);
+								break;
+							}
+						}
+
+						if (is_expression_local_register(call->get_arg(i))) { args[i] = get_local(call->get_arg(i)->as<ast::ast_expression_local>()->get_local()); }
+						else
+						{
+							args[i] = static_cast<operand_abc_underlying_type>(registers + 1 + i);
+							compile_expression_temp_top(call->get_arg(i), args[i]);
+						}
+					}
+
+					fastcall_label = bytecode_.emit_label();
+					bytecode_.emit_operand_abc(operand, method_id, args[0], 0);
+					if (operand != operands::fastcall_1) { bytecode_.emit_operand_aux(args[1]); }
+
+					// Set up a traditional stack for the subsequent CALL.
+					// Note, as with other instructions that immediately follow FASTCALL, these are normally not executed and are used as a fallback for
+					// these FASTCALL variants.
+					for (decltype(call->get_arg_size()) i = 0; i < call->get_arg_size(); ++i)
+					{
+						const auto t = static_cast<register_type>(registers + 1 + i);
+
+						if (i != 0 && operand == operands::fastcall_2_key)
+						{
+							emit_load_key(t, args[i]);
+							break;
+						}
+
+						if (args[i] != t) { bytecode_.emit_operand_abc(operands::move, t, args[i], 0); }
+					}
+				}
+				else
+				{
+					fastcall_label = bytecode_.emit_label();
+					bytecode_.emit_operand_abc(operands::fastcall, method_id, 0, 0);
+				}
+
+				// note, these instructions are normally not executed and are used as a fallback for FASTCALL
+				// we can't use temp_top variant here because we need to make sure the arguments we already computed aren't overwritten
+				compile_expression_temp(call->get_function(), registers);
+
+				// FASTCALL will skip over the instructions needed to compute function and jump over CALL which must immediately follow the instruction
+				// sequence after FASTCALL
+				if (const auto call_label = bytecode_.emit_label();
+					not bytecode_.patch_skip_c(fastcall_label, call_label))
+				{
+					throw compile_error{call->get_function()->get_location(),
+					                    std_format::format("Exceeded jump distance limit: {}; simplify the code to compile", bytecode_builder::max_jump_distance)};
+				}
+			}
+
+			bytecode_.emit_operand_abc(
+					operands::call,
+					registers,
+					multiple_call ? 0 : static_cast<operand_abc_underlying_type>(1 + call->has_self() + call->get_arg_size()),
+					multiple_return ? 0 : static_cast<operand_abc_underlying_type>(target_count + 1));
+
+			// if we didn't output results directly to target, we need to move them
+			if (not target_top)
+			{
+				for (register_size_type i = 0; i < target_count; ++i)
+				{
+					bytecode_.emit_operand_abc(
+							operands::move,
+							static_cast<operand_abc_underlying_type>(target + i),
+							static_cast<operand_abc_underlying_type>(registers + i),
+							0);
+				}
+			}
 		}
 
-		bool should_share_closure(ast::ast_expression_function* function);
+		bool should_share_closure(const ast::ast_expression_function* function)
+		{
+			const auto it = functions_.find(function);
 
-		void compile_expression_function(ast::ast_expression_function* function, register_type target);
+			if (it == functions_.end()) { return false; }
+
+			for (const auto* upvalue: it->second.upvalues)
+			{
+				const auto local = locals_.find(upvalue);
+				gal_assert(local != locals_.end());
+
+				if (local->second.written) { return false; }
+
+				// it's technically safe to share closures whenever all upvalues are immutable
+				// this is because of a runtime equality check in COPY_CLOSURE.
+				// however, this results in frequent de-optimization and increases the set of reachable objects, making some temporary objects permanent
+				// instead we apply a heuristic: we share closures if they refer to top-level upvalues, or closures that refer to top-level upvalues
+				// this will only de-optimize (outside of function environment changes) if top level code is executed twice with different results.
+				if (upvalue->function_depth != 0 || upvalue->loop_depth != 0)
+				{
+					if (not local->second.function) { return false; }
+
+					if (local->second.function != function && not should_share_closure(local->second.function)) { return false; }
+				}
+			}
+
+			return true;
+		}
+
+		void compile_expression_function(const ast::ast_expression_function* function, const register_type target)
+		{
+			const auto it = functions_.find(function);
+			gal_assert(it != functions_.end());
+
+			// when the closure has upvalues we'll use this to create the closure at runtime
+			// when the closure has no upvalues, we use constant closures that technically do not rely on the child function list
+			// however, it's still important to add the child function because debugger relies on the function hierarchy when setting breakpoints
+			const auto child_id = bytecode_.add_child_function(it->second.id);
+			if (child_id == bytecode_builder::constant_too_much_index)
+			{
+				throw compile_error{function->get_location(),
+				                    std_format::format("Exceeded closure limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+			}
+
+			bool shared = false;
+
+			// Optimization: when closure has no upvalues, or upvalues are safe to share, instead of allocating it every time we can share closure
+			// objects (this breaks assumptions about function identity which can lead to set_function_environment not working as expected,
+			// so we disable this when it is used)
+			if (options_.optimization_level >= 1 && should_share_closure(function) && not use_set_function_environment_)
+			{
+				if (const auto id = bytecode_.add_constant_closure(it->second.id);
+					id != bytecode_builder::constant_too_much_index && id <= std::numeric_limits<operand_d_underlying_type>::max())
+				{
+					bytecode_.emit_operand_ad(operands::copy_closure, target, static_cast<operand_d_underlying_type>(id));
+					shared = true;
+				}
+			}
+
+			if (not shared) { bytecode_.emit_operand_ad(operands::new_closure, target, static_cast<operand_d_underlying_type>(child_id)); }
+
+			for (auto* upvalue: it->second.upvalues)
+			{
+				gal_assert(upvalue->function_depth < function->get_function_depth());
+
+				const auto local = locals_.find(upvalue);
+				gal_assert(local != locals_.end());
+
+				const bool immutable = not local->second.written;
+
+				if (upvalue->function_depth == function->get_function_depth() - 1)
+				{
+					// get local variable
+					bytecode_.emit_operand_abc(
+							operands::capture,
+							static_cast<operand_abc_underlying_type>(immutable ? capture_type::value : capture_type::reference),
+							get_local(upvalue),
+							0);
+				}
+				else
+				{
+					// get upvalue from parent frame
+					// note: this will add upvalue to the current upvalue list if necessary
+					bytecode_.emit_operand_abc(
+							operands::capture,
+							static_cast<operand_abc_underlying_type>(capture_type::upvalue),
+							get_upvalue(upvalue),
+							0);
+				}
+			}
+		}
 
 	private:
 		[[nodiscard]] auto get_constant(const ast::ast_expression* node) { return constants_.find(node); }
@@ -1022,7 +1265,49 @@ namespace gal::compiler
 			return id;
 		}
 
-		label_type compile_compare_jump(ast::ast_expression_binary* expression_binary, bool use_not = false);
+		[[nodiscard]] label_type compile_compare_jump(ast::ast_expression_binary* expression_binary, bool use_not = false)
+		{
+			scoped_register scoped{*this};
+
+			auto operand = binary_operand_to_jump_operands(expression_binary->get_operand(), use_not);
+
+			const bool equal = utils::is_any_enum_of(operand, operands::jump_if_equal, operands::jump_if_not_equal);
+
+			bool operand_is_constant = is_constant(expression_binary->get_rhs_expression());
+			if (equal && not operand_is_constant)
+			{
+				operand_is_constant = is_constant(expression_binary->get_lhs_expression());
+				if (operand_is_constant) { expression_binary->swap_lhs_and_rhs(); }
+			}
+
+			const auto lhs = compile_expression_auto(expression_binary->get_lhs_expression());
+			bytecode_builder::signed_index_type rhs;
+
+			if (equal && operand_is_constant)
+			{
+				if (operand == operands::jump_if_equal) { operand = operands::jump_if_equal_key; }
+				else if (operand == operands::jump_if_not_equal) { operand = operands::jump_if_not_equal_key; }
+
+				rhs = get_constant_index(expression_binary->get_rhs_expression());
+				gal_assert(rhs != bytecode_builder::constant_too_much_index);
+			}
+			else { rhs = compile_expression_auto(expression_binary->get_rhs_expression()); }
+
+			const auto jump_label = bytecode_.emit_label();
+
+			if (utils::is_any_enum_of(expression_binary->get_operand(), ast::ast_expression_binary::operand_type::binary_greater_than, ast::ast_expression_binary::operand_type::binary_greater_equal))
+			{
+				bytecode_.emit_operand_ad(operand, static_cast<operand_abc_underlying_type>(rhs), 0);
+				bytecode_.emit_operand_aux(lhs);
+			}
+			else
+			{
+				bytecode_.emit_operand_ad(operand, lhs, 0);
+				bytecode_.emit_operand_aux(rhs);
+			}
+
+			return jump_label;
+		}
 
 		// compile expression to target temp register
 		// if the expression (or not expression if only_truth is false) is truth, jump via skip_jump
