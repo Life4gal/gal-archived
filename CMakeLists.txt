@@ -15,7 +15,7 @@ set(
 
 set(
 		GAL_PATCH_VERSION
-		1
+		13
 )
 
 set(
@@ -38,7 +38,6 @@ set(GAL_3RDPARTY_PATH ${GAL_GLOBAL_SOURCE_PATH}/3rd-party)
 
 option(BUILD_GAL_AS_SHARED "build ${PROJECT_NAME} as a shared module.(otherwise, as a static module)" OFF)
 option(BUILD_GAL_TEST_CASES "build ${PROJECT_NAME} test cases" ON)
-option(BUILD_GAL_FMTLIB_PUBLIC "let fmtlib as a public module of ${PROJECT_NAME}.(if std::format is not support)" ON)
 
 add_subdirectory(gal)
 

@@ -1,4 +1,7 @@
-project(galTest)
+project(
+		gal-TEST
+		LANGUAGES CXX
+)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -8,7 +11,10 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(
 		${PROJECT_NAME}_SOURCE
-		src/test_allocator.cpp
+		
+		test_utils/test_point.cpp
+		test_utils/test_string_utils.cpp
+		test_utils/test_string_pool.cpp
 )
 
 add_executable(
@@ -16,18 +22,27 @@ add_executable(
 		${${PROJECT_NAME}_SOURCE}
 )
 
-target_compile_features(
-		${PROJECT_NAME}
-		PRIVATE
-		cxx_std_20
-)
+if(MSVC)
+	target_compile_features(
+			${PROJECT_NAME}
+			PRIVATE
+			cxx_std_23
+	)
+else()
+	target_compile_features(
+			${PROJECT_NAME}
+			PRIVATE
+			cxx_std_20
+	)
+endif(MSVC)
 
 include(${GAL_3RDPARTY_PATH}/google-test.cmake)
 
 target_link_libraries(
 		${PROJECT_NAME}
 		PRIVATE
-		gal
+		gal::UTILS
+		gal::CORE
 		gtest_main
 )
 
