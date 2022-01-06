@@ -44,7 +44,7 @@ namespace gal::compiler
 		using debug_pc_type = index_type;
 		using register_type = operand_abc_underlying_type;
 
-		constexpr static signed_index_type constant_too_much_index = -1;
+		constexpr static signed_index_type constant_too_many_index = -1;
 
 		constexpr static index_type max_constant_size = 1 << 23;
 		constexpr static index_type max_closure_size = 1 << 15;
@@ -55,10 +55,17 @@ namespace gal::compiler
 			constexpr static auto key_max_size = 32;
 
 			// todo
-			std::array<std::int32_t, key_max_size> keys;
+			using data_type = std::int32_t;
+			std::array<data_type, key_max_size> keys;
 			decltype(keys.size()) length;
 
 			[[nodiscard]] friend constexpr bool operator==(const table_shape& lhs, const table_shape& rhs) noexcept { return lhs.length == rhs.length && std::memcmp(lhs.keys.data(), rhs.keys.data(), lhs.length) == 0; }
+
+			GAL_ASSERT_CONSTEXPR void append(const data_type data) noexcept
+			{
+				gal_assert(length + 1 < key_max_size);
+				keys[length++] = data;
+			}
 		};
 
 		enum class dump_flags : std::uint16_t

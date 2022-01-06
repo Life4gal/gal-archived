@@ -195,12 +195,12 @@ namespace gal::compiler
 		jump_back,
 
 		// jumps to target offset if register is not null/false
-		// A: none
+		// A: source register
 		// D: jump offset (-32768~32767: signed 16 bits, 0 means nop, aka do not jump)
 		jump_if,
 
 		// jumps to target offset if register is null/false
-		// A: none
+		// A: source register
 		// D: jump offset (-32768~32767: signed 16 bits, 0 means nop, aka do not jump)
 		jump_if_not,
 

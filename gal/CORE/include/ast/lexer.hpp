@@ -676,10 +676,7 @@ namespace gal::ast
 		struct entry_hasher
 		{
 		private:
-			[[nodiscard]] constexpr std::size_t operator()(const name_type name) const noexcept
-			{
-				return utils::fnv1a_hash(name);
-			}
+			[[nodiscard]] constexpr std::size_t operator()(const name_type name) const noexcept { return utils::fnv1a_hash(name); }
 
 		public:
 			using is_transparent = int;

@@ -9,6 +9,7 @@
 #include <optional>
 #include <variant>
 #include <span>
+#include <algorithm>
 
 #include <utils/point.hpp>
 #include <utils/concept.hpp>
@@ -1010,7 +1011,20 @@ namespace gal::ast
 
 		[[nodiscard]] constexpr const item& get_item(const items_type::size_type index) const noexcept { return items_[index]; }
 
-		// todo: interface
+		[[nodiscard]] constexpr auto count_type(const item_type type) const { return std::ranges::count(items_, type, [](const auto& item) { return item.type; }); }
+
+		template<typename Callable>
+			requires std::is_invocable_v<Callable, item_type>
+		constexpr void count_type(Callable callable) const
+		{
+			std::ranges::for_each(items_,
+			                      callable,
+			                      [](const auto& item) { return item.type; });
+		}
+
+		template<typename Callable>
+			requires std::is_invocable_v<Callable, const ast_expression*>
+		constexpr void count_key(Callable callable) const { std::ranges::for_each(items_, callable, [](const auto& item) { return item.key; }); }
 	};
 
 	class ast_expression_unary final : public ast_expression

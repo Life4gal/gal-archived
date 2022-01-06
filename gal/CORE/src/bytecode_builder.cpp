@@ -982,7 +982,7 @@ namespace gal::compiler
 
 		const auto id = static_cast<signed_index_type>(constants_.size());
 
-		if (std::cmp_greater_equal(id, max_constant_size)) { return constant_too_much_index; }
+		if (std::cmp_greater_equal(id, max_constant_size)) { return constant_too_many_index; }
 
 		constant_map_[key] = id;
 		constants_.push_back(value);

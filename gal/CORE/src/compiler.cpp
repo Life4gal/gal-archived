@@ -241,7 +241,8 @@ namespace gal::compiler
 		utils::hash_map<ast::ast_local*, local_result> locals_;
 		utils::hash_map<ast::ast_name, global_result> globals_;
 		utils::hash_map<ast::ast_expression*, constant_result> constants_;
-		utils::hash_map<ast::ast_expression_table*, std::pair<std::size_t, std::size_t>> predicted_table_size_;
+		// table <=> hash_size x array_size
+		utils::hash_map<ast::ast_expression_table*, std::pair<std::size_t, operand_aux_underlying_type>> predicted_table_size_;
 
 		stack_size_type stack_size_;
 		register_size_type register_top_;
@@ -987,7 +988,7 @@ namespace gal::compiler
 
 				const auto name = index_name->get_index();
 				const auto id = bytecode_.add_constant_string(name);
-				if (id == bytecode_builder::constant_too_much_index)
+				if (id == bytecode_builder::constant_too_many_index)
 				{
 					throw compile_error{index_name->get_location(),
 					                    std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
@@ -1009,7 +1010,7 @@ namespace gal::compiler
 						if (i != 0)
 						{
 							if (const auto id = get_constant_index(call->get_arg(i));
-								id != bytecode_builder::constant_too_much_index)
+								id != bytecode_builder::constant_too_many_index)
 							{
 								operand = operands::fastcall_2_key;
 								args[i] = static_cast<operand_abc_underlying_type>(id);
@@ -1091,27 +1092,27 @@ namespace gal::compiler
 
 			if (it == functions_.end()) { return false; }
 
-			for (const auto* upvalue: it->second.upvalues)
-			{
-				const auto local = locals_.find(upvalue);
-				gal_assert(local != locals_.end());
+			return std::ranges::all_of(
+					it->second.upvalues,
+					[&](const auto* upvalue)
+					{
+						const auto local = locals_.find(upvalue);
+						gal_assert(local != locals_.end());
 
-				if (local->second.written) { return false; }
+						if (local->second.written) { return false; }
 
-				// it's technically safe to share closures whenever all upvalues are immutable
-				// this is because of a runtime equality check in COPY_CLOSURE.
-				// however, this results in frequent de-optimization and increases the set of reachable objects, making some temporary objects permanent
-				// instead we apply a heuristic: we share closures if they refer to top-level upvalues, or closures that refer to top-level upvalues
-				// this will only de-optimize (outside of function environment changes) if top level code is executed twice with different results.
-				if (upvalue->function_depth != 0 || upvalue->loop_depth != 0)
-				{
-					if (not local->second.function) { return false; }
+						// it's technically safe to share closures whenever all upvalues are immutable
+						// this is because of a runtime equality check in COPY_CLOSURE.
+						// however, this results in frequent de-optimization and increases the set of reachable objects, making some temporary objects permanent
+						// instead we apply a heuristic: we share closures if they refer to top-level upvalues, or closures that refer to top-level upvalues
+						// this will only de-optimize (outside of function environment changes) if top level code is executed twice with different results.
+						if (upvalue->function_depth != 0 || upvalue->loop_depth != 0)
+						{
+							if (not local->second.function) { return false; }
 
-					if (local->second.function != function && not should_share_closure(local->second.function)) { return false; }
-				}
-			}
-
-			return true;
+							if (local->second.function != function && not should_share_closure(local->second.function)) { return false; }
+						}
+					});
 		}
 
 		void compile_expression_function(const ast::ast_expression_function* function, const register_type target)
@@ -1123,7 +1124,7 @@ namespace gal::compiler
 			// when the closure has no upvalues, we use constant closures that technically do not rely on the child function list
 			// however, it's still important to add the child function because debugger relies on the function hierarchy when setting breakpoints
 			const auto child_id = bytecode_.add_child_function(it->second.id);
-			if (child_id == bytecode_builder::constant_too_much_index)
+			if (child_id == bytecode_builder::constant_too_many_index)
 			{
 				throw compile_error{function->get_location(),
 				                    std_format::format("Exceeded closure limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
@@ -1137,7 +1138,7 @@ namespace gal::compiler
 			if (options_.optimization_level >= 1 && should_share_closure(function) && not use_set_function_environment_)
 			{
 				if (const auto id = bytecode_.add_constant_closure(it->second.id);
-					id != bytecode_builder::constant_too_much_index && id <= std::numeric_limits<operand_d_underlying_type>::max())
+					id != bytecode_builder::constant_too_many_index && id <= std::numeric_limits<operand_d_underlying_type>::max())
 				{
 					bytecode_.emit_operand_ad(operands::copy_closure, target, static_cast<operand_d_underlying_type>(id));
 					shared = true;
@@ -1217,8 +1218,8 @@ namespace gal::compiler
 				if (auto* number = it->second.get_if<constant_result::number_type>(); number)
 				{
 					const auto id = bytecode_.add_constant_number(*number);
-					gal_assert(id >= bytecode_builder::constant_too_much_index);
-					if (id == bytecode_builder::constant_too_much_index)
+					gal_assert(id >= bytecode_builder::constant_too_many_index);
+					if (id == bytecode_builder::constant_too_many_index)
 					{
 						throw compile_error{
 								node->get_location(),
@@ -1229,14 +1230,14 @@ namespace gal::compiler
 				}
 			}
 
-			return bytecode_builder::constant_too_much_index;
+			return bytecode_builder::constant_too_many_index;
 		}
 
 		bytecode_builder::signed_index_type get_constant_index(const ast::ast_expression* node) const
 		{
 			const auto it = get_valid_constant(node);
 
-			if (it == constants_.end()) { return bytecode_builder::constant_too_much_index; }
+			if (it == constants_.end()) { return bytecode_builder::constant_too_many_index; }
 
 			const auto id = it->second.visit(
 					[this]<typename T>(T&& data)
@@ -1250,12 +1251,12 @@ namespace gal::compiler
 						{
 							UNREACHABLE();
 							gal_assert(false, "Unexpected constant type!");
-							return bytecode_builder::constant_too_much_index;
+							return bytecode_builder::constant_too_many_index;
 						}
 					});
 
-			gal_assert(id >= bytecode_builder::constant_too_much_index);
-			if (id == bytecode_builder::constant_too_much_index)
+			gal_assert(id >= bytecode_builder::constant_too_many_index);
+			if (id == bytecode_builder::constant_too_many_index)
 			{
 				throw compile_error{
 						node->get_location(),
@@ -1289,7 +1290,7 @@ namespace gal::compiler
 				else if (operand == operands::jump_if_not_equal) { operand = operands::jump_if_not_equal_key; }
 
 				rhs = get_constant_index(expression_binary->get_rhs_expression());
-				gal_assert(rhs != bytecode_builder::constant_too_much_index);
+				gal_assert(rhs != bytecode_builder::constant_too_many_index);
 			}
 			else { rhs = compile_expression_auto(expression_binary->get_rhs_expression()); }
 
@@ -1313,20 +1314,512 @@ namespace gal::compiler
 		// if the expression (or not expression if only_truth is false) is truth, jump via skip_jump
 		// if the expression (or not expression if only_truth is false) is falsy, fall through (target isn't guaranteed to be updated in this case)
 		// if target is omitted, then the jump behavior is the same - skip_jump or fallthrough depending on the truthfulness of the expression
-		void compile_condition_value(ast::ast_expression* node, const register_type* target, const std::vector<label_type>& skip_jump, const bool only_truth);
+		void compile_condition_value(ast::ast_expression* node, const register_type* target, std::vector<label_type>& skip_jump, const bool only_truth)
+		{
+			// Optimization: we don't need to compute constant values
+
+			if (const auto it = constants_.find(node); it != constants_.end() && it->second.is_valid())
+			{
+				// note that we only need to compute the value if it's truth; otherwise we cal fall through
+				if (it->second.operator bool() == only_truth)
+				{
+					if (target) { compile_expression_temp(node, *target); }
+
+					skip_jump.push_back(bytecode_.emit_label());
+					bytecode_.emit_operand_ad(operands::jump, 0, 0);
+				}
+				return;
+			}
+
+			if (auto* expression_binary = node->as<ast::ast_expression_binary>(); expression_binary)
+			{
+				switch (const auto operand = expression_binary->get_operand())// NOLINT(clang-diagnostic-switch-enum)
+				{
+						using enum ast::ast_expression_binary::operand_type;
+					case binary_logical_and:
+					case binary_logical_or:
+					{
+						// disambiguation: there's 4 cases (we only need truth or falsy results based on only_truth)
+						// only_truth = true : a and b transforms to a ? b : do-not-care
+						// only_truth = true : a or b transforms to a ? a : a
+						// only_truth = false : a and b transforms to !a ? a : b
+						// only_truth = false : a or b transforms to !a ? b : do-not-care
+						if ((operand == binary_logical_and) == only_truth)
+						{
+							// we need to compile the left hand side, and skip to "do-not-care" (aka fallthrough of the entire statement) if it's not the same as
+							// only_truth if it's the same then the result of the expression is the right hand side because of this, we *never* care about the
+							// result of the left hand side
+							std::vector<label_type> else_jump;
+							compile_condition_value(expression_binary->get_lhs_expression(), nullptr, else_jump, not only_truth);
+
+							// fallthrough indicates that we need to compute & return the right hand side
+							// we use compile_condition_value again to process any extra and/or statements directly
+							compile_condition_value(expression_binary->get_rhs_expression(), target, skip_jump, only_truth);
+
+							patch_jumps(expression_binary, else_jump, bytecode_.emit_label());
+						}
+						else
+						{
+							// we need to compute the left hand side first; note that we will jump to skip_jump if we know the answer
+							compile_condition_value(expression_binary->get_lhs_expression(), target, skip_jump, only_truth);
+
+							// we will fall through if computing the left hand didn't give us an "interesting" result
+							// we still use compile_condition_value to recursively optimize any and/or/compare statements
+							compile_condition_value(expression_binary->get_rhs_expression(), target, skip_jump, only_truth);
+						}
+						return;
+					}
+					case binary_equal:
+					case binary_not_equal:
+					case binary_less_than:
+					case binary_less_equal:
+					case binary_greater_than:
+					case binary_greater_equal:
+					{
+						if (target)
+						{
+							// since target is a temp register, we'll initialize it to 1, and then jump if the comparison is true
+							// if the comparison is false, we'll fallthrough and target will still be 1 but target has unspecified value for falsy results
+							// when we only care about falsy values instead of truth values, the process is the same but with flipped conditionals
+							bytecode_.emit_operand_abc(operands::load_boolean, *target, only_truth ? 1 : 0, 0);
+						}
+
+						skip_jump.push_back(compile_compare_jump(expression_binary, not only_truth));
+						return;
+					}
+					default:
+					{
+						// fall-through to default path below
+					}
+				}
+			}
+
+			if (auto* expression_unary = node->as<ast::ast_expression_unary>(); expression_unary)
+			{
+				// if we *do* need to compute the target, we'd have to inject "not" operands on every return path
+				// this is possible but cumbersome; so for now we only optimize not expression when we *do not* need the value
+				if (not target && expression_unary->get_operand() == ast::ast_expression_unary::operand_type::unary_not)
+				{
+					compile_condition_value(expression_unary->get_expression(), target, skip_jump, not only_truth);
+					return;
+				}
+			}
+
+			if (auto* expression_group = node->as<ast::ast_expression_group>(); expression_group)
+			{
+				compile_condition_value(expression_group->get_expression(), target, skip_jump, only_truth);
+				return;
+			}
+
+			scoped_register scoped{*this};
+			register_type reg;
+
+			if (target)
+			{
+				reg = *target;
+				compile_expression_temp(node, reg);
+			}
+			else { reg = compile_expression_auto(node); }
+
+			skip_jump.push_back(bytecode_.emit_label());
+			bytecode_.emit_operand_ad(only_truth ? operands::jump_if : operands::jump_if_not, reg, 0);
+		}
 
 		// checks if compiling the expression as a condition value generates code that's faster than using compile_expression
-		[[nodiscard]] bool is_condition_fast(ast::ast_expression* node);
+		[[nodiscard]] bool is_condition_fast(const ast::ast_expression* node)
+		{
+			if (const auto it = constants_.find(node); it != constants_.end() && it->second.is_valid()) { return true; }
 
-		void compile_expression_logical(ast::ast_expression_binary* expression, register_type target, bool temp_target);
+			if (const auto* expression_binary = node->as<ast::ast_expression_binary>(); expression_binary)
+			{
+				switch (expression_binary->get_operand())// NOLINT(clang-diagnostic-switch-enum)
+				{
+						using enum ast::ast_expression_binary::operand_type;
+					case binary_logical_and:
+					case binary_logical_or:
 
-		void compile_expression_unary(ast::ast_expression_unary* expression, register_type target);
+					case binary_equal:
+					case binary_not_equal:
+					case binary_less_than:
+					case binary_less_equal:
+					case binary_greater_than:
+					case binary_greater_equal: { return true; }
 
-		void compile_expression_binary(ast::ast_expression_binary* expression, register_type target, bool temp_target);
+					default: { return false; }
+				}
+			}
 
-		void compile_expression_if_else(ast::ast_expression_if_else* expression, register_type target, bool temp_target);
+			if (const auto* expression_group = node->as<ast::ast_expression_group>(); expression_group) { return is_condition_fast(expression_group->get_expression()); }
 
-		void compile_expression_table(ast::ast_expression_table* expression, register_type target, bool temp_target);
+			return false;
+		}
+
+		void compile_expression_logical(ast::ast_expression_binary* expression, const register_type target, const bool temp_target)
+		{
+			scoped_register scoped{*this};
+
+			const bool is_and = expression->get_operand() == ast::ast_expression_binary::operand_type::binary_logical_and;
+
+			// Optimization: when left hand side is a constant, we can emit left hand side or right hand side
+			if (const auto it = constants_.find(expression->get_lhs_expression());
+				it != constants_.end() && it->second.is_valid())
+			{
+				compile_expression(is_and == it->second.operator bool() ? expression->get_rhs_expression() : expression->get_lhs_expression(), target, temp_target);
+				return;
+			}
+
+			// Note: two optimizations below can lead to inefficient code generation when the left hand side is a condition
+			if (not is_condition_fast(expression->get_lhs_expression()))
+			{
+				// Optimization: when right hand side is a local variable, we can use LOGICAL_AND/LOGICAL_OR
+				if (is_expression_local_register(expression->get_rhs_expression()))
+				{
+					bytecode_.emit_operand_abc(
+							is_and ? operands::logical_and : operands::logical_or,
+							target,
+							compile_expression_auto(expression->get_lhs_expression()),
+							get_local(expression->get_rhs_expression()->as<ast::ast_expression_local>()->get_local())
+							);
+					return;
+				}
+
+				// Optimization: when right hand side is a constant, we can use LOGICAL_ND_KEY/LOGICAL_OR_KEY
+				if (const auto index = get_constant_index(expression->get_rhs_expression());
+					index <= std::numeric_limits<operand_abc_underlying_type>::max())
+				{
+					bytecode_.emit_operand_abc(
+							is_and ? operands::logical_and_key : operands::logical_or_key,
+							target,
+							compile_expression_auto(expression->get_lhs_expression()),
+							static_cast<operand_abc_underlying_type>(index));
+					return;
+				}
+			}
+
+			// Optimization: if target is a temp register, we can clobber it which allows us to compute the result directly into it
+			// If it's not a temp register, then something like `a = a > 1 or a + 2` may clobber `a` while evaluating left hand side, and `a+2` will break
+			const auto reg = temp_target ? target : new_registers(expression, 1);
+
+			std::vector<label_type> skip_jump;
+			compile_condition_value(expression->get_lhs_expression(), &reg, skip_jump, not is_and);
+
+			compile_expression_temp(expression->get_rhs_expression(), reg);
+
+			patch_jumps(expression, skip_jump, bytecode_.emit_label());
+
+			if (target != reg) { bytecode_.emit_operand_abc(operands::move, target, reg, 0); }
+		}
+
+		void compile_expression_unary(ast::ast_expression_unary* expression, const register_type target)
+		{
+			scoped_register scoped{*this};
+
+			bytecode_.emit_operand_abc(
+					unary_operand_to_operands(expression->get_operand()),
+					target,
+					compile_expression_auto(expression->get_expression()),
+					0);
+		}
+
+		void compile_expression_binary(ast::ast_expression_binary* expression, const register_type target, const bool temp_target)
+		{
+			scoped_register scoped{*this};
+
+			switch (expression->get_operand())
+			{
+					using enum ast::ast_expression_binary::operand_type;
+				case binary_plus:
+				case binary_minus:
+				case binary_multiply:
+				case binary_divide:
+				case binary_modulus:
+				case binary_pow:
+				{
+					if (const auto right = get_constant_number(expression->get_rhs_expression());
+						right <= std::numeric_limits<operand_abc_underlying_type>::max())
+					{
+						bytecode_.emit_operand_abc(
+								binary_operand_to_operands(expression->get_operand(), true),
+								target,
+								compile_expression_auto(expression->get_lhs_expression()),
+								static_cast<operand_abc_underlying_type>(right));
+					}
+					else
+					{
+						bytecode_.emit_operand_abc(
+								binary_operand_to_operands(expression->get_operand()),
+								target,
+								compile_expression_auto(expression->get_lhs_expression()),
+								compile_expression_auto(expression->get_rhs_expression()));
+					}
+					break;
+				}
+				case binary_equal:
+				case binary_not_equal:
+				case binary_less_than:
+				case binary_less_equal:
+				case binary_greater_than:
+				case binary_greater_equal:
+				{
+					const auto jump_label = compile_compare_jump(expression);
+
+					// note: this skips over the next LOAD_BOOLEAN instruction because of "1" in the C slot
+					bytecode_.emit_operand_abc(operands::load_boolean, target, 0, 1);
+
+					const auto then_label = bytecode_.emit_label();
+
+					bytecode_.emit_operand_abc(operands::load_boolean, target, 1, 0);
+
+					patch_jump(expression, jump_label, then_label);
+					break;
+				}
+				case binary_logical_and:
+				case binary_logical_or:
+				{
+					compile_expression_logical(expression, target, temp_target);
+					break;
+				}
+				default: // NOLINT(clang-diagnostic-covered-switch-default)
+				{
+					UNREACHABLE();
+					gal_assert(false, "Unexpected binary operation!");
+				}
+			}
+		}
+
+		void compile_expression_if_else(ast::ast_expression_if_else* expression, const register_type target, const bool temp_target)
+		{
+			if (auto* condition = expression->get_condition();
+				is_constant(condition))
+			{
+				compile_expression(
+						is_constant_true(condition) ? expression->get_true_expression() : expression->get_false_expression(),
+						target,
+						temp_target);
+			}
+			else
+			{
+				std::vector<label_type> else_jump;
+				compile_condition_value(condition, nullptr, else_jump, false);
+				compile_expression(expression->get_true_expression(), target, temp_target);
+
+				// Jump over else expression evaluation
+				const auto then_label = bytecode_.emit_label();
+				bytecode_.emit_operand_ad(operands::jump, 0, 0);
+
+				const auto else_label = bytecode_.emit_label();
+				compile_expression(expression->get_false_expression(), target, temp_target);
+				const auto end_label = bytecode_.emit_label();
+
+				patch_jumps(expression, else_jump, else_label);
+				patch_jump(expression, then_label, end_label);
+			}
+		}
+
+		void compile_expression_table(ast::ast_expression_table* expression, register_type target, bool temp_target)
+		{
+			auto encode_hash_size = [](const auto hash_size) -> operand_abc_underlying_type
+			{
+				std::size_t hash_size_log2 = 0;
+				while (static_cast<std::size_t>(1) << hash_size_log2 < hash_size) { ++hash_size_log2; }
+
+				return hash_size == 0 ? 0 : static_cast<operand_abc_underlying_type>(hash_size_log2 + 1);
+			};
+
+			// Optimization: if the table is empty, we can compute it directly into the target
+			if (expression->empty())
+			{
+				const auto [hash_size, array_size] = predicted_table_size_[expression];
+
+				bytecode_.emit_operand_abc(
+						operands::new_table,
+						target,
+						encode_hash_size(hash_size),
+						0);
+				bytecode_.emit_operand_aux(array_size);
+				return;
+			}
+
+			operand_aux_underlying_type array_size = 0;
+			operand_aux_underlying_type hash_size = 0;
+			operand_aux_underlying_type record_size = 0;
+
+			expression->count_type(
+					[&array_size, &hash_size, &record_size](const auto type)
+					{
+						using enum ast::ast_expression_table::item_type;
+						if (type == list) { ++array_size; }
+						else
+						{
+							++hash_size;
+							if (type == record) { ++record_size; }
+						}
+					});
+
+			operand_aux_underlying_type index_size = 0;
+
+			// Optimization: allocate sequential explicitly specified numeric indices ([1]) as arrays
+			if (array_size == 0 && hash_size != 0)
+			{
+				expression->count_key(
+						[&index_size](const auto* key)
+						{
+							const auto* c = key->template as<ast::ast_expression_constant_number>();
+							index_size += c && static_cast<decltype(index_size)>(c->get()) == (index_size + 1);
+						});
+			}
+
+			// we only perform the optimization if we do not have any other []-keys
+			// technically it's "safe" to do this even if we have other keys, but doing
+			// so changes iteration order and may break existing code
+			if (hash_size == record_size + index_size) { hash_size = record_size; }
+			else { index_size = 0; }
+
+			scoped_register scoped{*this};
+
+			// Optimization: if target is a temp register, we can clobber it which allows us to compute the result directly into it
+			const auto reg = temp_target ? target : new_registers(expression, 1);
+
+			// Optimization: when all items are record fields, use template tables to compile expression
+			if (
+				array_size == 0 &&
+				index_size == 0 &&
+				record_size != 0 &&
+				hash_size == record_size &&
+				record_size <= bytecode_builder::table_shape::key_max_size
+			)
+			{
+				bytecode_builder::table_shape shape{};
+
+				for (decltype(expression->get_item_size()) i = 0; i < expression->get_item_size(); ++i)
+				{
+					const auto& item = expression->get_item(i);
+					gal_assert(item.type == ast::ast_expression_table::item_type::record);
+
+					const auto* key = item.key->as<ast::ast_expression_constant_string>();
+					gal_assert(key);
+
+					if (const auto id = bytecode_.add_constant_string(key->get());
+						id == bytecode_builder::constant_too_many_index)
+					{
+						[[unlikely]]
+								throw compile_error{key->get_location(), std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+					}
+					else { shape.append(id); }
+				}
+
+				if (const auto id = bytecode_.add_constant_table(shape);
+					id == bytecode_builder::constant_too_many_index) { [[unlikely]] throw compile_error{expression->get_location(), std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)}; }
+				else if (id <= std::numeric_limits<operand_d_underlying_type>::max()) { bytecode_.emit_operand_ad(operands::copy_table, reg, static_cast<operand_d_underlying_type>(id)); }
+				else
+				{
+					bytecode_.emit_operand_abc(operands::new_table, reg, encode_hash_size(hash_size), 0);
+					bytecode_.emit_operand_aux(0);
+				}
+			}
+			else
+			{
+				// Optimization: instead of allocating one extra element when the last element of the table literal is ..., let SET_LIST allocate the
+				// correct amount of storage
+				const auto* last = not expression->empty() ? &expression->get_item(expression->get_item_size() - 1) : nullptr;
+
+				const bool trailing_varargs = last && last->type == ast::ast_expression_table::item_type::list && last->value->is<ast::ast_expression_varargs>();
+				gal_assert(not trailing_varargs || array_size > 0);
+
+				bytecode_.emit_operand_abc(operands::new_table, reg, encode_hash_size(hash_size), 0);
+				bytecode_.emit_operand_aux(array_size - trailing_varargs + index_size);
+			}
+
+			const auto array_chunk_size = std::ranges::min(static_cast<register_size_type>(16), array_size);
+			const auto array_chunk_reg = new_registers(expression, array_chunk_size);
+			register_size_type array_chunk_current = 0;
+
+			operand_aux_underlying_type array_index = 1;
+			bool multiple_return = false;
+
+			for (decltype(expression->get_item_size()) i = 0; i < expression->get_item_size(); ++i)
+			{
+				const auto& [type, key, value] = expression->get_item(i);
+
+				// some key/value pairs don't require us to compile the expressions, so we need to setup the line info here
+				set_debug_line(value);
+
+				if (options_.coverage_level >= 2) { bytecode_.emit_operand_abc(operands::coverage, 0, 0, 0); }
+
+				// flush array chunk on overflow or before hash keys to maintain insertion order
+				if (array_chunk_current != 0 && (key || array_chunk_current == array_chunk_size))
+				{
+					bytecode_.emit_operand_abc(operands::set_list, reg, array_chunk_reg, static_cast<operand_abc_underlying_type>(array_chunk_current + 1));
+					bytecode_.emit_operand_aux(array_index);
+					array_index += array_chunk_current;
+					array_chunk_current = 0;
+				}
+
+				// items with a key are set one by one via SET_TABLE/SET_TABLE_STRING_KEY
+				if (key)
+				{
+					scoped_register scoped_inner{*this};
+
+					// Optimization: use SET_TABLE_STRING_KEY/SET_TABLE_NUMBER for literal keys, this happens often as part of usual table construction syntax
+					if (const auto* cs = key->as<ast::ast_expression_constant_string>(); cs)
+					{
+						if (const auto id = bytecode_.add_constant_string(cs->get());
+							id == bytecode_builder::constant_too_many_index)
+						{
+							[[unlikely]]
+									throw compile_error{key->get_location(), std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+						}
+						else
+						{
+							const auto v = compile_expression_auto(value);
+
+							bytecode_.emit_operand_abc(operands::set_table_string_key, v, reg, static_cast<operand_abc_underlying_type>(utils::short_string_hash(cs->get())));
+							bytecode_.emit_operand_aux(static_cast<operand_aux_underlying_type>(id));
+						}
+					}
+					else if (const auto* cn = key->as<ast::ast_expression_constant_number>();
+						cn && cn->get() >= 1 && cn->get() <= std::numeric_limits<operand_abc_underlying_type>::max() + 1 && std::trunc(cn->get()) == cn->get())
+					{
+						bytecode_.emit_operand_abc(
+								operands::set_table_number_key,
+								compile_expression_auto(value),
+								reg,
+								static_cast<operand_abc_underlying_type>(cn->get() - 1));
+					}
+					else
+					{
+						bytecode_.emit_operand_abc(
+								operands::set_table,
+								compile_expression_auto(value),
+								reg,
+								compile_expression_auto(key));
+					}
+				}
+				else
+				{
+					// items without a key are set using SET_LIST so that we can initialize large arrays quickly
+					const auto temp = static_cast<register_type>(array_chunk_reg + array_chunk_current);
+
+					if (i + 1 == expression->get_item_size()) { multiple_return = compile_expression_temp_multiple_return(value, temp); }
+					else { compile_expression_temp_top(value, temp); }
+
+					++array_chunk_current;
+				}
+			}
+
+			// flush last array chunk; note that this needs multiple return handling if the last expression was multiple return
+			if (array_chunk_current)
+			{
+				bytecode_.emit_operand_abc(
+						operands::set_list,
+						reg,
+						array_chunk_reg,
+						multiple_return ? 0 : static_cast<operand_abc_underlying_type>(array_chunk_current + 1));
+				bytecode_.emit_operand_aux(array_index);
+			}
+
+			if (target != reg) { bytecode_.emit_operand_abc(operands::move, target, reg, 0); }
+		}
 
 		[[nodiscard]] bool importable(const ast::ast_expression_global* expression)
 		{
@@ -1342,25 +1835,419 @@ namespace gal::compiler
 			return options_.optimization_level >= 1 && (it == globals_.end() || (not it->second.written && not it->second.writable));
 		}
 
-		void compile_expression_index_name(ast::ast_expression_index_name* expression, register_type target);
+		void compile_expression_index_name(ast::ast_expression_index_name* expression, const register_type target)
+		{
+			// normally compile_expression sets up line info, but compile_expression_index_name can be called directly
+			set_debug_line(expression);
 
-		void compile_expression_index_expression(ast::ast_expression_index_expression* expression, register_type target);
+			// Optimization: index chains that start from global variables can be compiled into LOAD_IMPORT statement
+			ast::ast_expression_global* import_root;
+			ast::ast_expression_index_name* import1;
+			ast::ast_expression_index_name* import2 = nullptr;
 
-		void compile_expression_global(ast::ast_expression_global* expression, register_type target);
+			if (auto* index = expression->get_expression()->as<ast::ast_expression_index_name>(); index)
+			{
+				import_root = index->get_expression()->as<ast::ast_expression_global>();
+				import1 = index;
+				import2 = expression;
+			}
+			else
+			{
+				import_root = expression->get_expression()->as<ast::ast_expression_global>();
+				import1 = expression;
+			}
 
-		void compile_expression_constant(ast::ast_expression* node, const constant_result& c, register_type target);
+			if (import_root && importable_chain(import_root))
+			{
+				const auto id0 = bytecode_.add_constant_string(import_root->get_name());
+				const auto id1 = bytecode_.add_constant_string(import1->get_index());
+				const auto id2 = import2 ? bytecode_.add_constant_string(import2->get_index()) : bytecode_builder::constant_too_many_index;
+				gal_assert(id0 >= bytecode_builder::constant_too_many_index &&
+				           id1 >= bytecode_builder::constant_too_many_index &&
+				           id2 >= bytecode_builder::constant_too_many_index);
 
-		void compile_expression(ast::ast_expression* node, register_type target, bool temp_target = false);
+				if (
+					id0 == bytecode_builder::constant_too_many_index ||
+					id1 == bytecode_builder::constant_too_many_index ||
+					(import2 && id2 == bytecode_builder::constant_too_many_index)
+				)
+				{
+					[[unlikely]]
+							throw compile_error{
+									expression->get_location(),
+									std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+				}
 
-		void compile_expression_temp(ast::ast_expression* node, register_type target) { compile_expression(node, target, true); }
+				// Note: LOAD_IMPORT encoding is limited to 10 bits per object id component
+				if (id0 < (1 << 10) && id1 < (1 << 10) && id2 < (1 << 10))
+				{
+					const auto aux = import2 ? bytecode_builder::get_import_id(id0, id1, id2) : bytecode_builder::get_import_id(id0, id1);
+					const auto index = bytecode_.add_import(aux);
+					gal_assert(index >= bytecode_builder::constant_too_many_index);
 
-		register_type compile_expression_auto(ast::ast_expression* node);
+					if (index != bytecode_builder::constant_too_many_index && index <= std::numeric_limits<operand_d_underlying_type>::max())
+					{
+						bytecode_.emit_operand_ad(operands::load_import, target, static_cast<operand_d_underlying_type>(index));
+						bytecode_.emit_operand_aux(aux);
+						return;
+					}
+				}
+			}
+
+			scoped_register scoped{*this};
+
+			const auto reg = compile_expression_auto(expression->get_expression());
+
+			set_debug_line(expression->get_index_location());
+
+			if (const auto id = bytecode_.add_constant_string(expression->get_index());
+				id == bytecode_builder::constant_too_many_index)
+			{
+				[[unlikely]]
+						throw compile_error{
+								expression->get_location(),
+								std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+			}
+			else
+			{
+				bytecode_.emit_operand_abc(
+						operands::load_table_string_key,
+						target,
+						reg,
+						static_cast<operand_abc_underlying_type>(utils::short_string_hash(expression->get_index())));
+				bytecode_.emit_operand_aux(id);
+			}
+		}
+
+		void compile_expression_index_expression(ast::ast_expression_index_expression* expression, const register_type target)
+		{
+			scoped_register scoped{*this};
+
+			if (const auto it = constants_.find(expression->get_index()); it != constants_.end())
+			{
+				if (const auto* number = it->second.get_if<constant_result::number_type>();
+					number && std::trunc(*number) == *number && *number >= 1 && *number <= std::numeric_limits<operand_abc_underlying_type>::max() + 1)
+				{
+					bytecode_.emit_operand_abc(
+							operands::load_table_number_key,
+							target,
+							compile_expression_auto(expression->get_expression()),
+							static_cast<operand_abc_underlying_type>(*number - 1));
+					return;
+				}
+
+				if (const auto* string = it->second.get_if<constant_result::string_type>();
+					string)
+				{
+					if (const auto id = bytecode_.add_constant_string(*string);
+						id == bytecode_builder::constant_too_many_index)
+					{
+						throw compile_error{
+								expression->get_location(),
+								std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+					}
+					else
+					{
+						bytecode_.emit_operand_abc(
+								operands::load_table_string_key,
+								target,
+								compile_expression_auto(expression->get_expression()),
+								static_cast<operand_abc_underlying_type>(utils::short_string_hash(*string)));
+						bytecode_.emit_operand_aux(id);
+					}
+					return;
+				}
+			}
+
+			bytecode_.emit_operand_abc(
+					operands::load_table,
+					target,
+					compile_expression_auto(expression->get_expression()),
+					compile_expression_auto(expression->get_index()));
+		}
+
+		void compile_expression_global(const ast::ast_expression_global* expression, register_type target)
+		{
+			if (const auto id = bytecode_.add_constant_string(expression->get_name());
+				id == bytecode_builder::constant_too_many_index)
+			{
+				[[unlikely]] throw compile_error{
+						expression->get_location(),
+						std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+			}
+			else
+			{
+				// Optimization: builtin globals can be retrieved using LOAD_IMPORT
+				if (importable(expression))
+				{
+					// Note: LOAD_IMPORT encoding is limited to 10 bits per object id component
+					if (id < (1 << 10))
+					{
+						const auto aux = bytecode_builder::get_import_id(id);
+						const auto index = bytecode_.add_import(aux);
+						gal_assert(index >= bytecode_builder::constant_too_many_index);
+
+						if (index != bytecode_builder::constant_too_many_index && index <= std::numeric_limits<operand_d_underlying_type>::max())
+						{
+							bytecode_.emit_operand_ad(operands::load_import, target, static_cast<operand_d_underlying_type>(index));
+							bytecode_.emit_operand_aux(aux);
+							return;
+						}
+					}
+				}
+
+				bytecode_.emit_operand_abc(
+						operands::load_global,
+						target,
+						0,
+						static_cast<operand_abc_underlying_type>(utils::short_string_hash(expression->get_name())));
+				bytecode_.emit_operand_aux(id);
+			}
+		}
+
+		void compile_expression_constant(const ast::ast_expression* node, const constant_result& c, const register_type target)
+		{
+			c.visit(
+					[&]<typename T>(T&& data)
+					{
+						if constexpr (std::is_same_v<T, constant_result::null_type>) { bytecode_.emit_operand_abc(operands::load_null, target, 0, 0); }
+						else if constexpr (std::is_same_v<T, constant_result::boolean_type>) { bytecode_.emit_operand_abc(operands::load_boolean, target, data, 0); }
+						else if constexpr (std::is_same_v<T, constant_result::number_type>)
+						{
+							if (data >= std::numeric_limits<operand_d_underlying_type>::min() &&
+							    data <= std::numeric_limits<operand_d_underlying_type>::max() &&
+							    std::trunc(data) == data &&
+							    not(std::trunc(data) == 0.0 && std::signbit(data)))
+							{
+								// short number encoding: does not require a table entry lookup
+								bytecode_.emit_operand_ad(operands::load_number, target, static_cast<operand_d_underlying_type>(data));
+							}
+							else
+							{
+								// long number encoding: use generic constant path
+								if (const auto id = bytecode_.add_constant_number(data);
+									id == bytecode_builder::constant_too_many_index)
+								{
+									[[unlikely]] throw compile_error{
+											node->get_location(),
+											std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+								}
+								else { emit_load_key(target, id); }
+							}
+						}
+						else if constexpr (std::is_same_v<T, constant_result::string_type>)
+						{
+							if (const auto id = bytecode_.add_constant_string(data);
+								id == bytecode_builder::constant_too_many_index)
+							{
+								[[unlikely]] throw compile_error{
+										node->get_location(),
+										std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+							}
+							else { emit_load_key(target, id); }
+						}
+						else
+						{
+							UNREACHABLE();
+							gal_assert(false, "Unexpected constant type");
+						}
+					});
+		}
+
+		void compile_expression(ast::ast_expression* node, const register_type target, const bool temp_target = false)
+		{
+			set_debug_line(node);
+
+			if (options_.coverage_level >= 2 && node->need_coverage()) { bytecode_.emit_operand_abc(operands::coverage, 0, 0, 0); }
+
+			// Optimization: if expression has a constant value, we can emit it directly
+			if (const auto it = constants_.find(node); it != constants_.end())
+			{
+				if (it->second.is_valid())
+				{
+					compile_expression_constant(node, it->second, target);
+					return;
+				}
+			}
+
+			if (auto* group = node->as<ast::ast_expression_group>(); group)
+			{
+				compile_expression(group->get_expression(), target, temp_target);
+				return;
+			}
+
+			if (node->is<ast::ast_expression_constant_null>())
+			{
+				bytecode_.emit_operand_abc(operands::load_null, target, 0, 0);
+				return;
+			}
+
+			if (const auto* b = node->as<ast::ast_expression_constant_boolean>(); b)
+			{
+				bytecode_.emit_operand_abc(operands::load_boolean, target, b->get(), 0);
+				return;
+			}
+
+			if (const auto* n = node->as<ast::ast_expression_constant_number>(); n)
+			{
+				if (const auto id = bytecode_.add_constant_number(n->get());
+					id == bytecode_builder::constant_too_many_index)
+				{
+					[[unlikely]] throw compile_error{
+							node->get_location(),
+							std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+				}
+				else
+				{
+					emit_load_key(target, id);
+					return;
+				}
+			}
+
+			if (const auto* s = node->as<ast::ast_expression_constant_string>(); s)
+			{
+				if (const auto id = bytecode_.add_constant_string(s->get());
+					id == bytecode_builder::constant_too_many_index)
+				{
+					[[unlikely]] throw compile_error{
+							node->get_location(),
+							std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+				}
+				else
+				{
+					emit_load_key(target, id);
+					return;
+				}
+			}
+
+			if (const auto* l = node->as<ast::ast_expression_local>(); l)
+			{
+				if (l->is_upvalue()) { bytecode_.emit_operand_abc(operands::load_upvalue, target, get_upvalue(l->get_local()), 0); }
+				else { bytecode_.emit_operand_abc(operands::move, target, get_local(l->get_local()), 0); }
+				return;
+			}
+
+			if (const auto* g = node->as<ast::ast_expression_global>(); g)
+			{
+				compile_expression_global(g, target);
+				return;
+			}
+
+			if (const auto* v = node->as<ast::ast_expression_varargs>(); v)
+			{
+				compile_expression_varargs(v, target, 1);
+				return;
+			}
+
+			if (auto* c = node->as<ast::ast_expression_call>(); c)
+			{
+				// Optimization: when targeting temporary registers, we can compile call in a special mode that does not require extra register moves
+				compile_expression_call(c, target, 1, temp_target && target == register_top_ - 1);
+				return;
+			}
+
+			if (auto* n = node->as<ast::ast_expression_index_name>(); n)
+			{
+				compile_expression_index_name(n, target);
+				return;
+			}
+
+			if (auto* e = node->as<ast::ast_expression_index_expression>(); e)
+			{
+				compile_expression_index_expression(e, target);
+				return;
+			}
+
+			if (const auto* f = node->as<ast::ast_expression_function>(); f)
+			{
+				compile_expression_function(f, target);
+				return;
+			}
+
+			if (auto* t = node->as<ast::ast_expression_table>(); t)
+			{
+				compile_expression_table(t, target, temp_target);
+				return;
+			}
+
+			if (auto* u = node->as<ast::ast_expression_unary>(); u)
+			{
+				compile_expression_unary(u, target);
+				return;
+			}
+
+			if (auto* b = node->as<ast::ast_expression_binary>(); b)
+			{
+				compile_expression_binary(b, target, temp_target);
+				return;
+			}
+
+			if (auto* a = node->as<ast::ast_expression_type_assertion>(); a)
+			{
+				compile_expression(a->get_expression(), target, temp_target);
+				return;
+			}
+
+			UNREACHABLE();
+			gal_assert(false, "Unknown expression type!");
+		}
+
+		void compile_expression_temp(ast::ast_expression* node, const register_type target) { compile_expression(node, target, true); }
+
+		register_type compile_expression_auto(ast::ast_expression* node)
+		{
+			// Optimization: directly return locals instead of copying them to a temporary
+			if (is_expression_local_register(node)) { return get_local(node->as<ast::ast_expression_local>()->get_local()); }
+
+			// note: the register is owned by the parent scope
+			const auto reg = new_registers(node, 1);
+
+			compile_expression_temp(node, reg);
+
+			return reg;
+		}
 
 		// initializes target..target+target_count-1 range using expressions from the list
 		// if list has fewer expressions, and last expression is a call, we assume the call returns the rest of the values
 		// if list has fewer expressions, and last expression isn't a call, we fill the rest with null
 		// assumes target register range can be clobbered and is at the top of the register space
-		void compile_expression_list_top(ast::ast_array<ast::ast_expression*> list, register_type target, register_size_type target_count);
+		void compile_expression_list_top(const ast::ast_array<ast::ast_expression*> list, const register_type target, const register_size_type target_count)
+		{
+			// we assume that target range is at the top of the register space and can be clobbered
+			// this is what allows us to compile the last call expression - if it is a call - using target_top = true
+			gal_assert(target + target_count == register_top_);
+
+			if (list.size() == target_count) { for (decltype(list.size()) i = 0; i < list.size(); ++i) { compile_expression_temp(list[i], static_cast<register_type>(target + i)); } }
+			else if (list.size() > target_count)
+			{
+				for (decltype(list.size()) i = 0; i < target_count; ++i) { compile_expression_temp(list[i], static_cast<register_type>(target + i)); }
+
+				// compute expressions with values that go nowhere; this is required to run side-effecting code if any
+				for (decltype(list.size()) i = target_count; i < list.size(); ++i)
+				{
+					scoped_register scoped{*this};
+					compile_expression_auto(list[i]);
+				}
+			}
+			else if (not list.empty())
+			{
+				for (decltype(list.size()) i = 0; i < list.size() - 1; ++i) { compile_expression_temp(list[i], static_cast<register_type>(target + i)); }
+
+				auto* last = list.back();
+				const auto temp = static_cast<register_type>(target + list.size() - 1);
+				const auto temp_count = static_cast<register_size_type>(target_count - (list.size() - 1));
+
+				if (auto* c = last->as<ast::ast_expression_call>(); c) { compile_expression_call(c, temp, temp_count, true); }
+				else if (auto* v = last->as<ast::ast_expression_varargs>(); v) { compile_expression_varargs(v, temp, temp_count); }
+				else
+				{
+					compile_expression_temp(last, temp);
+
+					for (decltype(list.size()) i = list.size(); i < target_count; ++i) { bytecode_.emit_operand_abc(operands::load_null, static_cast<operand_abc_underlying_type>(target + i), 0, 0); }
+				}
+			}
+			else { for (decltype(list.size()) i = 0; i < target_count; ++i) { bytecode_.emit_operand_abc(operands::load_null, static_cast<operand_abc_underlying_type>(target + i), 0, 0); } }
+		}
 
 		left_value compile_lvalue(ast::ast_expression* node, scoped_register& scoped);
 
@@ -1395,9 +2282,7 @@ namespace gal::compiler
 
 			for (decltype(statement_local->get_var_size()) i = 0; i < statement_local->get_var_size(); ++i)
 			{
-				const auto it = locals_.find(statement_local->get_var(i));
-
-				if (it == locals_.end() || not it->second.constant.is_valid()) { return false; }
+				if (const auto it = locals_.find(statement_local->get_var(i)); it == locals_.end() || not it->second.constant.is_valid()) { return false; }
 			}
 
 			return true;
@@ -1413,7 +2298,7 @@ namespace gal::compiler
 
 		void compile_statement_assign(ast::ast_statement_assign* statement_assign);
 
-		void compile_statement_compound_assgin(ast::ast_statement_compound_assign* statement_compound_assign);
+		void compile_statement_compound_assign(ast::ast_statement_compound_assign* statement_compound_assign);
 
 		void compile_statement_function(ast::ast_statement_function* statement_function);
 
@@ -1532,7 +2417,7 @@ namespace gal::compiler
 
 			if (auto* ca = node->as<ast::ast_statement_compound_assign>(); ca)
 			{
-				compile_statement_compound_assgin(ca);
+				compile_statement_compound_assign(ca);
 				return;
 			}
 
