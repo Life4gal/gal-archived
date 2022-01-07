@@ -288,6 +288,12 @@ namespace gal::compiler
 			return bytecode_;
 		}
 
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR auto&& move_bytecode() noexcept
+		{
+			gal_assert(not bytecode_.empty(), "did you forget to call finalize?");
+			return std::move(bytecode_);
+		}
+
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR std::string dump_function(const function_id_type id) const
 		{
 			gal_assert(id < static_cast<function_id_type>(functions_.size()));

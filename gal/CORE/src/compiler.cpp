@@ -1,12 +1,18 @@
 #include <compiler/compiler.hpp>
 #include <variant>
+#include <bitset>
 #include <utils/hash_container.hpp>
 #include <utils/hash.hpp>
 #include <ast/parser.hpp>
 #include <compiler/bytecode_builder.hpp>
+#include <ast/lexer.hpp>
+#include <compiler/builtin_name.hpp>
+#include <ast/parse_errors.hpp>
 
 namespace gal::compiler
 {
+	using compile_error = ast::parse_error;
+
 	[[nodiscard]] constexpr operands unary_operand_to_operands(const ast::ast_expression_unary::operand_type operand) noexcept
 	{
 		switch (operand)
@@ -15,18 +21,15 @@ namespace gal::compiler
 			case unary_plus: { return operands::unary_plus; }
 			case unary_minus: { return operands::unary_minus; }
 			case unary_not: { return operands::unary_not; }
-			default: // NOLINT(clang-diagnostic-covered-switch-default)
-			{
-				UNREACHABLE();
-				gal_assert(false, "Unexpected unary operation!");
-				return operands::nop;
-			}
 		}
+
+		gal_assert(false, "Unexpected unary operation!");
+		return operands::nop;
 	}
 
 	[[nodiscard]] constexpr operands binary_operand_to_operands(const ast::ast_expression_binary::operand_type operand, const bool use_key = false) noexcept
 	{
-		switch (operand)// NOLINT(clang-diagnostic-switch-enum)
+		switch (operand)
 		{
 				using enum ast::ast_expression_binary::operand_type;
 			case binary_plus: { return use_key ? operands::plus_key : operands::plus; }
@@ -35,18 +38,27 @@ namespace gal::compiler
 			case binary_divide: { return use_key ? operands::divide_key : operands::divide; }
 			case binary_modulus: { return use_key ? operands::modulus_key : operands::modulus; }
 			case binary_pow: { return use_key ? operands::pow_key : operands::pow; }
-			default:
+			case binary_logical_and:
+			case binary_logical_or:
+			case binary_equal:
+			case binary_not_equal:
+			case binary_less_than:
+			case binary_less_equal:
+			case binary_greater_than:
+			case binary_greater_equal:
 			{
-				UNREACHABLE();
 				gal_assert(false, "Unexpected binary operation!");
 				return operands::nop;
 			}
 		}
+
+		gal_assert(false, "Impossible happened!");
+		return operands::nop;
 	}
 
 	[[nodiscard]] constexpr operands binary_operand_to_jump_operands(const ast::ast_expression_binary::operand_type operand, const bool use_not = false) noexcept
 	{
-		switch (operand)// NOLINT(clang-diagnostic-switch-enum)
+		switch (operand)
 		{
 				using enum ast::ast_expression_binary::operand_type;
 			case binary_equal: { return use_not ? operands::jump_if_not_equal : operands::jump_if_equal; }
@@ -55,13 +67,22 @@ namespace gal::compiler
 			case binary_greater_than: { return use_not ? operands::jump_if_not_less_than : operands::jump_if_less_than; }
 			case binary_less_equal:
 			case binary_greater_equal: { return use_not ? operands::jump_if_not_less_equal : operands::jump_if_less_equal; }
-			default:
+			case binary_plus:
+			case binary_minus:
+			case binary_multiply:
+			case binary_divide:
+			case binary_modulus:
+			case binary_pow:
+			case binary_logical_and:
+			case binary_logical_or:
 			{
-				UNREACHABLE();
 				gal_assert(false, "Unexpected binary operation!");
 				return operands::nop;
 			}
 		}
+
+		gal_assert(false, "Impossible happened!");
+		return operands::nop;
 	}
 
 	class compiler
@@ -167,11 +188,13 @@ namespace gal::compiler
 			};
 
 			value_type type;
+
 			register_type reg;// register for local (local) or table (index*)
 			register_type upvalue;
 			register_type index; // register for index in Index_expression
 			register_type number;// index-1 (0-255) in Index_number
 			bytecode_builder::string_ref_type name;
+
 			utils::location loc;
 		};
 
@@ -252,10 +275,10 @@ namespace gal::compiler
 		std::vector<loop_jump_result> loop_jumps_;
 		std::vector<loop_result> loops_;
 
-		bool use_get_function_environment_;
-		bool use_set_function_environment_;
-
 	public:
+		bool use_get_function_environment;
+		bool use_set_function_environment;
+
 		class assignment_visitor final : public ast::ast_visitor
 		{
 		public:
@@ -373,7 +396,6 @@ namespace gal::compiler
 				}
 
 				UNREACHABLE();
-				gal_assert(false);
 			}
 		};
 
@@ -406,12 +428,11 @@ namespace gal::compiler
 						if (arg.is_valid()) { return {arg.operator bool()}; }
 						return constant_result::invalid_constant();
 					}
-					default: // NOLINT(clang-diagnostic-covered-switch-default)
-					{
-						UNREACHABLE();
-						gal_assert(false, "Unexpected unary operands!");
-					}
 				}
+
+				UNREACHABLE();
+				gal_assert(false, "Impossible happened!");
+				return constant_result::invalid_constant();
 			}
 
 			[[nodiscard]] constant_result analyze_binary(const ast::ast_expression_binary::operand_type operand, const constant_result& lhs, const constant_result& rhs) const
@@ -435,7 +456,7 @@ namespace gal::compiler
 									* rhs_number = rhs.get_if<constant_result::number_type>();
 							lhs_number && rhs_number)
 						{
-							switch (operand)// NOLINT(clang-diagnostic-switch-enum)
+							switch (operand)
 							{
 								case binary_plus: { return {*lhs_number + *rhs_number}; }
 								case binary_minus: { return {*lhs_number - *rhs_number}; }
@@ -447,7 +468,10 @@ namespace gal::compiler
 								case binary_less_equal: { return {*lhs_number <= *rhs_number}; }
 								case binary_greater_than: { return {*lhs_number > *rhs_number}; }
 								case binary_greater_equal: { return {*lhs_number >= *rhs_number}; }
-								default:
+								case binary_logical_and:
+								case binary_logical_or:
+								case binary_equal:
+								case binary_not_equal:
 								{
 									UNREACHABLE();
 									gal_assert(false, "Impossible happened!");
@@ -468,13 +492,10 @@ namespace gal::compiler
 					}
 					case binary_equal: { return {lhs == rhs}; }
 					case binary_not_equal: { return {!(lhs == rhs)}; }
-					default: // NOLINT(clang-diagnostic-covered-switch-default)
-					{
-						UNREACHABLE();
-						gal_assert(false, "Unexpected binary operands!");
-					}
 				}
 
+				UNREACHABLE();
+				gal_assert(false, "Impossible happened!");
 				return constant_result::invalid_constant();
 			}
 
@@ -630,7 +651,6 @@ namespace gal::compiler
 					return false;
 				}
 
-				UNREACHABLE();
 				gal_assert(false, "Not supported node type!");
 				return false;
 			}
@@ -645,6 +665,7 @@ namespace gal::compiler
 			compiler& self_;
 			functions_type functions_;
 
+		public:
 			constexpr function_visitor(compiler& self, functions_type functions)
 				: self_{self},
 				  functions_{functions} {}
@@ -669,7 +690,6 @@ namespace gal::compiler
 					return true;
 				}
 
-				UNREACHABLE();
 				gal_assert(false, "Not supported node type!");
 				return false;
 			}
@@ -712,7 +732,6 @@ namespace gal::compiler
 					return false;
 				}
 
-				UNREACHABLE();
 				gal_assert(false, "Not supported node type!");
 				return false;
 			}
@@ -747,7 +766,6 @@ namespace gal::compiler
 					return false;
 				}
 
-				UNREACHABLE();
 				gal_assert(false, "Not supported node type!");
 				return false;
 			}
@@ -762,8 +780,8 @@ namespace gal::compiler
 			  options_{options},
 			  stack_size_{0},
 			  register_top_{0},
-			  use_get_function_environment_{false},
-			  use_set_function_environment_{false} {}
+			  use_get_function_environment{false},
+			  use_set_function_environment{false} {}
 
 		[[nodiscard]] register_type get_local(const ast::ast_local* local) const
 		{
@@ -1112,6 +1130,8 @@ namespace gal::compiler
 
 							if (local->second.function != function && not should_share_closure(local->second.function)) { return false; }
 						}
+
+						return true;
 					});
 		}
 
@@ -1135,7 +1155,7 @@ namespace gal::compiler
 			// Optimization: when closure has no upvalues, or upvalues are safe to share, instead of allocating it every time we can share closure
 			// objects (this breaks assumptions about function identity which can lead to set_function_environment not working as expected,
 			// so we disable this when it is used)
-			if (options_.optimization_level >= 1 && should_share_closure(function) && not use_set_function_environment_)
+			if (options_.optimization_level >= 1 && should_share_closure(function) && not use_set_function_environment)
 			{
 				if (const auto id = bytecode_.add_constant_closure(it->second.id);
 					id != bytecode_builder::constant_too_many_index && id <= std::numeric_limits<operand_d_underlying_type>::max())
@@ -1249,7 +1269,6 @@ namespace gal::compiler
 						else if constexpr (std::is_same_v<T, constant_result::string_type>) { return bytecode_.add_constant_string(data); }
 						else
 						{
-							UNREACHABLE();
 							gal_assert(false, "Unexpected constant type!");
 							return bytecode_builder::constant_too_many_index;
 						}
@@ -1578,11 +1597,6 @@ namespace gal::compiler
 				{
 					compile_expression_logical(expression, target, temp_target);
 					break;
-				}
-				default: // NOLINT(clang-diagnostic-covered-switch-default)
-				{
-					UNREACHABLE();
-					gal_assert(false, "Unexpected binary operation!");
 				}
 			}
 		}
@@ -2048,7 +2062,6 @@ namespace gal::compiler
 						}
 						else
 						{
-							UNREACHABLE();
 							gal_assert(false, "Unexpected constant type");
 						}
 					});
@@ -2188,7 +2201,6 @@ namespace gal::compiler
 				return;
 			}
 
-			UNREACHABLE();
 			gal_assert(false, "Unknown expression type!");
 		}
 
@@ -2249,11 +2261,187 @@ namespace gal::compiler
 			else { for (decltype(list.size()) i = 0; i < target_count; ++i) { bytecode_.emit_operand_abc(operands::load_null, static_cast<operand_abc_underlying_type>(target + i), 0, 0); } }
 		}
 
-		left_value compile_lvalue(ast::ast_expression* node, scoped_register& scoped);
+		left_value compile_lvalue(ast::ast_expression* node)
+		{
+			set_debug_line(node);
 
-		void compile_lvalue_usage(const left_value& lv, register_type reg, bool set);
+			if (auto* l = node->as<ast::ast_expression_local>(); l)
+			{
+				if (l->is_upvalue())
+				{
+					return {
+							.type = left_value::value_type::upvalue,
+							.reg = 0,
+							.upvalue = get_upvalue(l->get_local()),
+							.index = 0,
+							.number = 0,
+							.name = "",
+							.loc = l->get_location()};
+				}
 
-		void compile_assignment(const left_value& lv, register_type source) { compile_lvalue_usage(lv, source, true); }
+				return {
+						.type = left_value::value_type::local,
+						.reg = get_local(l->get_local()),
+						.upvalue = 0,
+						.index = 0,
+						.number = 0,
+						.name = "",
+						.loc = l->get_location()};
+			}
+
+			if (auto* g = node->as<ast::ast_expression_global>(); g)
+			{
+				return {
+						.type = left_value::value_type::global,
+						.reg = 0,
+						.upvalue = 0,
+						.index = 0,
+						.number = 0,
+						.name = g->get_name(),
+						.loc = g->get_location()};
+			}
+
+			if (auto* n = node->as<ast::ast_expression_index_name>(); n)
+			{
+				return {
+						.type = left_value::value_type::index_name,
+						.reg = compile_expression_auto(n->get_expression()),
+						.upvalue = 0,
+						.index = 0,
+						.number = 0,
+						.name = n->get_index(),
+						.loc = n->get_location()};
+			}
+
+			if (auto* e = node->as<ast::ast_expression_index_expression>(); e)
+			{
+				if (const auto it = constants_.find(e->get_index());
+					it != constants_.end())
+				{
+					if (auto* number = it->second.get_if<constant_result::number_type>();
+						number &&
+						*number >= 1 && *number <= std::numeric_limits<operand_abc_underlying_type>::max() + 1 &&
+						std::trunc(*number) == *number)
+					{
+						return {
+								.type = left_value::value_type::index_number,
+								.reg = compile_expression_auto(e->get_expression()),
+								.upvalue = 0,
+								.index = 0,
+								.number = static_cast<register_type>(*number - 1),
+								.name = "",
+								.loc = e->get_location()};
+					}
+
+					if (auto* string = it->second.get_if<constant_result::string_type>(); string)
+					{
+						return {
+								.type = left_value::value_type::index_name,
+								.reg = compile_expression_auto(e->get_expression()),
+								.upvalue = 0,
+								.index = 0,
+								.number = 0,
+								.name = *string,
+								.loc = e->get_location()};
+					}
+				}
+
+				return {
+						.type = left_value::value_type::index_expression,
+						.reg = compile_expression_auto(e->get_expression()),
+						.upvalue = 0,
+						.index = compile_expression_auto(e->get_index()),
+						.number = 0,
+						.name = "",
+						.loc = e->get_location()};
+			}
+
+			gal_assert(false, "Unknown assignment expression!");
+			return {};
+		}
+
+		void compile_lvalue_usage(const left_value& lv, const register_type reg, const bool set) const
+		{
+			switch (lv.type)
+			{
+					using enum left_value::value_type;
+				case local:
+				{
+					if (set) { bytecode_.emit_operand_abc(operands::move, lv.reg, reg, 0); }
+					else { bytecode_.emit_operand_abc(operands::move, reg, lv.reg, 0); }
+					break;
+				}
+				case upvalue:
+				{
+					bytecode_.emit_operand_abc(
+							set ? operands::set_upvalue : operands::load_upvalue,
+							reg,
+							lv.reg,
+							0);
+					break;
+				}
+				case global:
+				{
+					if (const auto id = bytecode_.add_constant_string(lv.name);
+						id == bytecode_builder::constant_too_many_index)
+					{
+						[[unlikely]] throw compile_error{
+								lv.loc,
+								std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+					}
+					else
+					{
+						bytecode_.emit_operand_abc(
+								set ? operands::set_global : operands::load_global,
+								reg,
+								0,
+								static_cast<operand_abc_underlying_type>(utils::short_string_hash(lv.name)));
+						bytecode_.emit_operand_aux(id);
+					}
+					break;
+				}
+				case index_name:
+				{
+					if (const auto id = bytecode_.add_constant_string(lv.name);
+						id == bytecode_builder::constant_too_many_index)
+					{
+						[[unlikely]] throw compile_error{
+								lv.loc,
+								std_format::format("Exceeded constant limit: {}; simplify the code to compile", bytecode_builder::max_constant_size)};
+					}
+					else
+					{
+						bytecode_.emit_operand_abc(
+								set ? operands::set_table_string_key : operands::load_table_string_key,
+								reg,
+								lv.reg,
+								static_cast<operand_abc_underlying_type>(utils::short_string_hash(lv.name)));
+						bytecode_.emit_operand_aux(id);
+					}
+					break;
+				}
+				case index_number:
+				{
+					bytecode_.emit_operand_abc(
+							set ? operands::set_table_number_key : operands::load_table_number_key,
+							reg,
+							lv.reg,
+							lv.number);
+					break;
+				}
+				case index_expression:
+				{
+					bytecode_.emit_operand_abc(
+							set ? operands::set_table : operands::load_table,
+							reg,
+							lv.reg,
+							lv.index);
+					break;
+				}
+			}
+		}
+
+		void compile_assignment(const left_value& lv, const register_type source) const { compile_lvalue_usage(lv, source, true); }
 
 		[[nodiscard]] bool is_expression_local_register(ast::ast_expression* expression) const
 		{
@@ -2267,40 +2455,580 @@ namespace gal::compiler
 			}
 		}
 
-		void compile_statement_if(ast::ast_statement_if* statement_if);
+		void compile_statement_if(ast::ast_statement_if* statement_if)
+		{
+			// Optimization: condition is always false => we only need the else body
+			if (is_constant_false(statement_if->get_condition()))
+			{
+				if (auto* e = statement_if->get_else_body(); e) { compile_statement(e); }
+				return;
+			}
 
-		void compile_statement_while(ast::ast_statement_while* statement_while);
+			// Optimization: body is a "break" statement with no "else" => we can directly break out of the loop in "then" case
+			if (not statement_if->get_else_body() &&
+			    statement_if->get_then_body()->is_break_statement() &&
+			    not are_locals_captured(loops_.back().local_offset))
+			{
+				// fallthrough = continue with the loop as usual
+				std::vector<label_type> else_jump;
+				compile_condition_value(
+						statement_if->get_condition(),
+						nullptr,
+						else_jump,
+						true);
 
-		void compile_statement_repeat(ast::ast_statement_repeat* statement_repeat);
+				std::ranges::for_each(
+						else_jump,
+						[this](const auto jump) { loop_jumps_.emplace_back(loop_jump_result::jump_type::jump_break, jump); });
+				return;
+			}
 
-		void compile_statement_return(ast::ast_statement_return* statement_return);
+			// Optimization: body is a "continue" statement with no "else" => we can directly continue in "then" case
+			if (auto* statement_continue = statement_if->get_then_body()->get_continue_part();
+				not statement_if->get_else_body() &&
+				statement_continue &&
+				not are_locals_captured(loops_.back().local_offset))
+			{
+				if (auto* c = loops_.back().until_condition; c) { validate_continue_until(statement_continue, c); }
+
+				// fallthrough = proceed with the loop body as usual
+				std::vector<label_type> else_jump;
+				compile_condition_value(statement_if->get_condition(), nullptr, else_jump, true);
+
+				std::ranges::for_each(
+						else_jump,
+						[this](const auto jump) { loop_jumps_.emplace_back(loop_jump_result::jump_type::jump_continue, jump); });
+				return;
+			}
+
+			std::vector<label_type> else_jump;
+			compile_condition_value(statement_if->get_condition(), nullptr, else_jump, false);
+
+			compile_statement(statement_if->get_then_body());
+
+			if (statement_if->get_else_body() && not else_jump.empty())
+			{
+				// we don't need to skip past "else" body if "then" ends with return
+				// this is important because, if "else" also ends with return, we may *not* have any statement to skip to!
+				if (statement_if->get_then_body()->all_control_path_has_return())
+				{
+					const auto else_label = bytecode_.emit_label();
+
+					compile_statement(statement_if->get_else_body());
+
+					patch_jumps(statement_if, else_jump, else_label);
+				}
+				else
+				{
+					const auto then_label = bytecode_.emit_label();
+
+					bytecode_.emit_operand_ad(operands::jump, 0, 0);
+
+					const auto else_label = bytecode_.emit_label();
+
+					compile_statement(statement_if->get_else_body());
+
+					const auto end_label = bytecode_.emit_label();
+
+					patch_jumps(statement_if, else_jump, else_label);
+					patch_jump(statement_if, then_label, end_label);
+				}
+			}
+			else { patch_jumps(statement_if, else_jump, bytecode_.emit_label()); }
+		}
+
+		void compile_statement_while(ast::ast_statement_while* statement_while)
+		{
+			// Optimization: condition is always false => there's no loop!
+			if (is_constant_false(statement_while->get_condition())) { return; }
+
+			const auto previous_jumps = loop_jumps_.size();
+			const auto previous_locals = local_stack_.size();
+
+			loops_.emplace_back(previous_locals, nullptr);
+
+			const auto loop_label = bytecode_.emit_label();
+
+			std::vector<label_type> else_jump;
+			compile_condition_value(statement_while->get_condition(), nullptr, else_jump, false);
+
+			compile_statement(statement_while->get_body());
+
+			const auto continue_label = bytecode_.emit_label();
+
+			const auto back_label = bytecode_.emit_label();
+
+			set_debug_line(statement_while->get_condition());
+
+			// Note: this is using JUMP_BACK, not JUMP, since JUMP_BACK is interruptible
+			// and we want all loops to have at least one interruptible instruction
+			bytecode_.emit_operand_ad(operands::jump_back, 0, 0);
+
+			const auto end_label = bytecode_.emit_label();
+
+			patch_jump(statement_while, back_label, loop_label);
+			patch_jumps(statement_while, else_jump, end_label);
+
+			patch_loop_jumps(statement_while, previous_jumps, end_label, continue_label);
+			loop_jumps_.resize(previous_jumps);
+
+			loops_.pop_back();
+		}
+
+		void compile_statement_repeat(ast::ast_statement_repeat* statement_repeat)
+		{
+			scoped_register scoped{*this};
+
+			const auto previous_jumps = loop_jumps_.size();
+			const auto previous_locals = local_stack_.size();
+
+			loops_.emplace_back(previous_locals, statement_repeat->get_condition());
+
+			const auto loop_label = bytecode_.emit_label();
+
+			// note: we "inline" compile_statement_block here so that we can close/pop locals after evaluating condition
+			// this is necessary because condition *can access* locals declared inside the repeat..until body
+			auto* body = statement_repeat->get_body();
+
+			for (decltype(body->get_body_size()) i = 0; i < body->get_body_size(); ++i) { compile_statement(body->get_body(i)); }
+
+			const auto continue_label = bytecode_.emit_label();
+
+			set_debug_line(statement_repeat->get_condition());
+
+			label_type end_label;
+			if (is_constant_true(statement_repeat->get_condition()))
+			{
+				close_locals(previous_locals);
+				end_label = bytecode_.emit_label();
+			}
+			else
+			{
+				std::vector<label_type> skip_jump;
+				compile_condition_value(statement_repeat->get_condition(), nullptr, skip_jump, true);
+
+				// we close locals *after* we compute loop conditionals because during computation of condition
+				// it is (in theory) possible that user code mutates them
+				close_locals(previous_locals);
+
+				const auto back_label = bytecode_.emit_label();
+
+				// Note: this is using JUMP_BACK, not JUMP, since JUMP_BACK is interruptible
+				// and we want all loops to have at least one interruptible instruction
+				bytecode_.emit_operand_ad(operands::jump_back, 0, 0);
+
+				const auto skip_label = bytecode_.emit_label();
+
+				// we need to close locals *again* after the loop ends because the first close_locals would be jumped over on the last iteration
+				close_locals(previous_locals);
+
+				end_label = bytecode_.emit_label();
+
+				patch_jump(statement_repeat, back_label, loop_label);
+				patch_jumps(statement_repeat, skip_jump, skip_label);
+			}
+
+			pop_locals(previous_locals);
+
+			patch_loop_jumps(statement_repeat, previous_jumps, end_label, continue_label);
+			loop_jumps_.resize(previous_jumps);
+
+			loops_.pop_back();
+		}
+
+		void compile_statement_return(ast::ast_statement_return* statement_return)
+		{
+			scoped_register scoped{*this};
+
+			register_type temp = 0;
+			bool multiple_return = false;
+
+			// Optimization: return local value directly instead of copying it into a temporary
+			if (statement_return->get_list_size() == 1 && is_expression_local_register(statement_return->get_list(0)))
+			{
+				auto* local = statement_return->get_list(0)->as<ast::ast_expression_local>();
+				gal_assert(local);
+
+				temp = get_local(local->get_local());
+			}
+			else if (not statement_return->empty())
+			{
+				temp = new_registers(statement_return, static_cast<register_size_type>(statement_return->get_list_size()));
+
+				// Note: if the last element is a function call or a vararg specifier, then we need to somehow return all values that that call returned
+				for (decltype(statement_return->get_list_size()) i = 0; i < statement_return->get_list_size(); ++i)
+				{
+					const auto target = static_cast<register_type>(temp + i);
+
+					if (i + 1 == statement_return->get_list_size()) { multiple_return = compile_expression_temp_multiple_return(statement_return->get_list(i), target); }
+					else { compile_expression_temp_top(statement_return->get_list(i), target); }
+				}
+			}
+
+			close_locals(0);
+
+			bytecode_.emit_operand_abc(
+					operands::call_return,
+					temp,
+					multiple_return ? 0 : static_cast<operand_abc_underlying_type>(statement_return->get_list_size() + 1),
+					0);
+		}
 
 		[[nodiscard]] bool are_locals_redundant(const ast::ast_statement_local* statement_local) const
 		{
 			// Extract expressions may have side effects
 			if (statement_local->get_value_size() > statement_local->get_var_size()) { return false; }
 
-			for (decltype(statement_local->get_var_size()) i = 0; i < statement_local->get_var_size(); ++i)
-			{
-				if (const auto it = locals_.find(statement_local->get_var(i)); it == locals_.end() || not it->second.constant.is_valid()) { return false; }
-			}
+			for (decltype(statement_local->get_var_size()) i = 0; i < statement_local->get_var_size(); ++i) { if (const auto it = locals_.find(statement_local->get_var(i)); it == locals_.end() || not it->second.constant.is_valid()) { return false; } }
 
 			return true;
 		}
 
-		void compile_statement_local(ast::ast_statement_local* statement_local);
+		void compile_statement_local(ast::ast_statement_local* statement_local)
+		{
+			// Optimization: we do not need to allocate and assign const locals, since their uses will be constant-folded
+			if (options_.optimization_level >= 1 && options_.debug_level <= 1 && are_locals_redundant(statement_local)) { return; }
 
-		void compile_statement_for(ast::ast_statement_for* statement_for);
+			// note: new_registers in this case allocates into parent block register - note that we do not have scoped_register here
+			const auto vars = new_registers(statement_local, static_cast<register_size_type>(statement_local->get_var_size()));
 
-		void compile_statement_for_in(ast::ast_statement_for_in* statement_for_in);
+			compile_expression_list_top(statement_local->get_value_list(), vars, static_cast<register_size_type>(statement_local->get_var_size()));
 
-		void resolve_assignment_conflicts(ast::ast_statement* node, std::vector<left_value>& vars);
+			for (decltype(statement_local->get_var_size()) i = 0; i < statement_local->get_var_size(); ++i) { push_local(statement_local->get_var(i), static_cast<register_type>(vars + i)); }
+		}
 
-		void compile_statement_assign(ast::ast_statement_assign* statement_assign);
+		void compile_statement_for(ast::ast_statement_for* statement_for)
+		{
+			scoped_register scoped{*this};
 
-		void compile_statement_compound_assign(ast::ast_statement_compound_assign* statement_compound_assign);
+			const auto previous_locals = local_stack_.size();
+			const auto previous_jumps = loop_jumps_.size();
 
-		void compile_statement_function(ast::ast_statement_function* statement_function);
+			loops_.emplace_back(previous_locals, nullptr);
+
+			// register layout: limit, step, index
+			const auto reg = new_registers(statement_for, 3);
+
+			// if the iteration index is assigned from within the loop, we need to protect the internal index from the assignment
+			// to do that, we will copy the index into an actual local variable on each iteration
+			// this makes sure the code inside the loop ca not interfere with the iteration process
+			// (other than modifying the table we are iterating through)
+			auto var_reg = reg + 2;
+
+			if (const auto it = locals_.find(statement_for->get_var());
+				it != locals_.end() && it->second.written) { var_reg = new_registers(statement_for, 1); }
+
+			compile_expression_temp(statement_for->get_begin(), static_cast<register_type>(reg + 2));
+			compile_expression_temp(statement_for->get_end(), static_cast<register_type>(reg + 0));
+
+			if (auto* step = statement_for->get_step(); step) { compile_expression_temp(step, static_cast<register_type>(reg + 1)); }
+			else { bytecode_.emit_operand_abc(operands::load_number, static_cast<operand_abc_underlying_type>(reg + 1), 1, 0); }
+
+			const auto for_label = bytecode_.emit_label();
+
+			bytecode_.emit_operand_ad(operands::for_numeric_loop_prepare, reg, 0);
+
+			const auto loop_label = bytecode_.emit_label();
+
+			if (var_reg != reg + 2) { bytecode_.emit_operand_abc(operands::move, static_cast<operand_abc_underlying_type>(var_reg), static_cast<operand_abc_underlying_type>(reg + 2), 0); }
+
+			push_local(statement_for->get_var(), static_cast<register_type>(var_reg));
+
+			compile_statement(statement_for->get_body());
+
+			close_locals(previous_locals);
+			pop_locals(previous_locals);
+
+			set_debug_line(statement_for);
+
+			const auto continue_label = bytecode_.emit_label();
+
+			const auto back_label = bytecode_.emit_label();
+
+			bytecode_.emit_operand_ad(operands::for_numeric_loop, reg, 0);
+
+			const auto end_label = bytecode_.emit_label();
+
+			patch_jump(statement_for, for_label, end_label);
+			patch_jump(statement_for, back_label, loop_label);
+
+			patch_loop_jumps(statement_for, previous_jumps, end_label, continue_label);
+			loop_jumps_.resize(previous_jumps);
+
+			loops_.pop_back();
+		}
+
+		void compile_statement_for_in(ast::ast_statement_for_in* statement_for_in)
+		{
+			scoped_register scoped{*this};
+
+			const auto previous_locals = local_stack_.size();
+			const auto previous_jumps = loop_jumps_.size();
+
+			loops_.emplace_back(previous_locals, nullptr);
+
+			// register layout: generator, state, index, variables...
+			const auto reg = new_registers(statement_for_in, 3);
+
+			// this puts initial values of (generator, state, index) into the loop registers
+			compile_expression_list_top(statement_for_in->get_value_list(), reg, 3);
+
+			// for the general case, we will execute a CALL for every iteration that needs to evaluate "variables... = generator(state, index)"
+			// this requires at least extra 3 stack slots after index
+			// note that these stack slots overlap with the variables so we only need to reserve them to make sure stack frame is large enough
+			reserve_registers(statement_for_in, 3);
+
+			// note that we reserve at least 2 variables; this allows our fast path to assume that we need 2 variables instead of 1 or 2
+			const auto vars = new_registers(
+					statement_for_in,
+					std::ranges::max(static_cast<register_type>(statement_for_in->get_var_size()), static_cast<register_type>(2)));
+			gal_assert(vars == reg + 3);
+
+			// Optimization: when we iterate through pairs/ipairs, we generate special bytecode that optimizes the traversal using internal iteration
+			// index. These instructions dynamically check if generator is equal to next/inext and bail out. They assume that the generator produces 2
+			// variables, which is why we allocate at least 2 above (see vars assignment)
+			auto skip_operand = operands::jump;
+			auto loop_operand = operands::for_generator_loop;
+
+			if (options_.optimization_level >= 1 && statement_for_in->get_var_size() <= 2)
+			{
+				if (statement_for_in->get_value_size() == 1 && statement_for_in->get_value(0)->is<ast::ast_expression_call>())
+				{
+					if (const auto method = get_builtin(statement_for_in->get_value(0)->as<ast::ast_expression_call>()->get_function());
+						method.is_global(builtin_generator_ipairs))
+					{
+						// for .. in ipairs(table)
+						skip_operand = operands::for_generator_loop_prepare_inext;
+						loop_operand = operands::for_generator_loop_inext;
+					}
+					else if (method.is_global(builtin_generator_pairs))
+					{
+						// for .. in pairs(table)
+						skip_operand = operands::for_generator_loop_prepare_next;
+						loop_operand = operands::for_generator_loop_next;
+					}
+				}
+				else if (statement_for_in->get_value_size() == 2)
+				{
+					if (const auto method = get_builtin(statement_for_in->get_value(0));
+						method.is_global(builtin_generator_next))
+					{
+						// for .. in next, table
+						skip_operand = operands::for_generator_loop_prepare_next;
+						loop_operand = operands::for_generator_loop_next;
+					}
+				}
+			}
+
+			// first iteration jumps into FOR_GENERATOR_LOOP instruction,
+			// but for ipairs/pairs it does extra preparation that makes the cost of an extra instruction worthwhile
+			const auto skip_label = bytecode_.emit_label();
+
+			bytecode_.emit_operand_ad(skip_operand, reg, 0);
+
+			const auto loop_label = bytecode_.emit_label();
+
+			for (decltype(statement_for_in->get_var_size()) i = 0; i < statement_for_in->get_var_size(); ++i) { push_local(statement_for_in->get_var(i), static_cast<register_type>(vars + i)); }
+
+			compile_statement(statement_for_in->get_body());
+
+			close_locals(previous_locals);
+			pop_locals(previous_locals);
+
+			set_debug_line(statement_for_in);
+
+			const auto continue_label = bytecode_.emit_label();
+
+			const auto back_label = bytecode_.emit_label();
+
+			// note: FOR_GENERATOR_LOOP needs variable count encoded in AUX field, other loop instructions assume a fixed variable count
+			if (loop_operand == operands::for_generator_loop) { bytecode_.emit_operand_aux(static_cast<operand_aux_underlying_type>(statement_for_in->get_var_size())); }
+
+			const auto end_label = bytecode_.emit_label();
+
+			patch_jump(statement_for_in, skip_label, back_label);
+			patch_jump(statement_for_in, back_label, loop_label);
+
+			patch_loop_jumps(statement_for_in, previous_jumps, end_label, continue_label);
+			loop_jumps_.resize(previous_jumps);
+
+			loops_.pop_back();
+		}
+
+		void resolve_assignment_conflicts(const ast::ast_statement* node, std::vector<left_value>& vars)
+		{
+			// reg_used[i] is true if we have assigned the register during earlier assignments
+			// reg_remap[i] is set to the register where the original (pre-assignment) copy was made
+			// note: reg_remap is uninitialized intentionally to speed small assignments up; reg_remap[i] is valid if reg_used[i]
+			std::bitset<std::numeric_limits<register_type>::max() + 1> reg_used;
+			std::array<register_type, std::numeric_limits<register_type>::max() + 1> reg_remap;// NOLINT(cppcoreguidelines-pro-type-member-init)
+
+			for (auto& lv: vars)
+			{
+				if (lv.type == left_value::value_type::local)
+				{
+					if (not reg_used[lv.reg])
+					{
+						reg_used[lv.reg] = true;
+						reg_remap[lv.reg] = lv.reg;
+					}
+				}
+				else if (
+					lv.type == left_value::value_type::index_name ||
+					lv.type == left_value::value_type::index_number ||
+					lv.type == left_value::value_type::index_expression)
+				{
+					// we are looking for assignments before this one that invalidate any of the registers involved
+					if (reg_used[lv.reg])
+					{
+						// the register may have been evacuated previously, but if it was not - move it now
+						if (reg_remap[lv.reg] == lv.reg)
+						{
+							const auto reg = new_registers(node, 1);
+							bytecode_.emit_operand_abc(operands::move, reg, lv.reg, 0);
+							reg_remap[lv.reg] = reg;
+						}
+
+						lv.reg = reg_remap[lv.reg];
+					}
+
+					if (lv.type == left_value::value_type::index_expression && reg_used[lv.reg])
+					{
+						// the register may have been evacuated previously, but if it was not - move it now
+						if (reg_remap[lv.index] == lv.index)
+						{
+							const auto reg = new_registers(node, 1);
+							bytecode_.emit_operand_abc(operands::move, reg, lv.index, 0);
+							reg_remap[lv.index] = reg;
+						}
+
+						lv.index = reg_remap[lv.index];
+					}
+				}
+			}
+		}
+
+		void compile_statement_assign(ast::ast_statement_assign* statement_assign)
+		{
+			scoped_register scoped{*this};
+
+			// Optimization: one to one assignments do not require complex conflict resolution machinery and allow us to skip temporary registers for locals
+			if (statement_assign->get_var_size() == 1 && statement_assign->get_value_size() == 1)
+			{
+				// Optimization: assign to locals directly
+				if (const auto v = compile_lvalue(statement_assign->get_var(0));
+					v.type == left_value::value_type::local) { compile_expression(statement_assign->get_value(0), v.reg); }
+				else
+				{
+					const auto reg = compile_expression_auto(statement_assign->get_value(0));
+
+					set_debug_line(statement_assign->get_var(0));
+					compile_assignment(v, reg);
+				}
+				return;
+			}
+
+			// compute all left-values: note that this does not assign anything yet but it allocates registers and computes complex expressions on the left
+			// hand side for example, in "foo[expression] = bar" expression will get evaluated here
+			std::vector<left_value> vars;
+			vars.reserve(statement_assign->get_var_size());
+
+			for (decltype(statement_assign->get_var_size()) i = 0; i < statement_assign->get_var_size(); ++i) { vars.emplace_back(compile_lvalue(statement_assign->get_var(i))); }
+
+			// perform conflict resolution: if any lvalue refers to a local reg that will be reassigned before that, we save the local variable in a
+			// temporary reg
+			resolve_assignment_conflicts(statement_assign, vars);
+
+			// compute values into temporaries
+			const auto reg = new_registers(statement_assign, static_cast<register_size_type>(statement_assign->get_var_size()));
+
+			compile_expression_list_top(statement_assign->get_value_list(), reg, static_cast<register_size_type>(statement_assign->get_var_size()));
+
+			// assign variables that have associated values; note that if we have fewer values than variables, we'll assign null
+			// because compile_expression_list_top will generate nulls
+			for (decltype(statement_assign->get_var_size()) i = 0; i < statement_assign->get_var_size(); ++i)
+			{
+				set_debug_line(statement_assign->get_var(i));
+				compile_assignment(vars[i], static_cast<register_type>(reg + i));
+			}
+		}
+
+		void compile_statement_compound_assign(ast::ast_statement_compound_assign* statement_compound_assign)
+		{
+			scoped_register scoped{*this};
+
+			const auto v = compile_lvalue(statement_compound_assign->get_var());
+
+			// Optimization: assign to locals directly
+			const auto target = (v.type == left_value::value_type::local) ? v.reg : new_registers(statement_compound_assign, 1);
+
+			switch (const auto operand = statement_compound_assign->get_operand())
+			{
+					using enum ast::ast_statement_compound_assign::operand_type;
+				case binary_plus:
+				case binary_minus:
+				case binary_multiply:
+				case binary_divide:
+				case binary_modulus:
+				case binary_pow:
+				{
+					if (v.type != left_value::value_type::local) { compile_lvalue_usage(v, target, false); }
+
+					if (const auto index = get_constant_number(statement_compound_assign->get_value());
+						index != bytecode_builder::constant_too_many_index && index <= std::numeric_limits<operand_abc_underlying_type>::max())
+					{
+						bytecode_.emit_operand_abc(
+								binary_operand_to_operands(operand, true),
+								target,
+								target,
+								static_cast<operand_abc_underlying_type>(index));
+					}
+					else
+					{
+						bytecode_.emit_operand_abc(
+								binary_operand_to_operands(operand),
+								target,
+								target,
+								compile_expression_auto(statement_compound_assign->get_value()));
+					}
+					break;
+				}
+				case ast::ast_expression_binary::operand_type::binary_logical_and:
+				case ast::ast_expression_binary::operand_type::binary_logical_or:
+				case ast::ast_expression_binary::operand_type::binary_equal:
+				case ast::ast_expression_binary::operand_type::binary_not_equal:
+				case ast::ast_expression_binary::operand_type::binary_less_than:
+				case ast::ast_expression_binary::operand_type::binary_less_equal:
+				case ast::ast_expression_binary::operand_type::binary_greater_than:
+				case ast::ast_expression_binary::operand_type::binary_greater_equal:
+				{
+					gal_assert(false, "Unexpected compound assignment operation!");
+				}
+			}
+
+			if (v.type != left_value::value_type::local) { compile_assignment(v, target); }
+		}
+
+		void compile_statement_function(ast::ast_statement_function* statement_function)
+		{
+			// Optimization: compile value expression directly into target local register
+			if (is_expression_local_register(statement_function->get_name()))
+			{
+				auto* local = statement_function->get_name()->as<ast::ast_expression_local>();
+				gal_assert(local);
+
+				compile_expression(statement_function->get_function(), get_local(local->get_local()));
+				return;
+			}
+
+			scoped_register scoped{*this};
+
+			const auto reg = new_registers(statement_function, 1);
+
+			compile_expression_temp(statement_function->get_function(), reg);
+
+			compile_assignment(compile_lvalue(statement_function->get_name()), reg);
+		}
 
 		void compile_statement(ast::ast_statement* node)
 		{
@@ -2447,7 +3175,6 @@ namespace gal::compiler
 				return;
 			}
 
-			UNREACHABLE();
 			gal_assert(false, "Unknown statement type!");
 		}
 
@@ -2577,11 +3304,6 @@ namespace gal::compiler
 					{
 						patch_jump(node, label, continue_label);
 						break;
-					}// NOLINT(clang-diagnostic-covered-switch-default)
-					default:
-					{
-						UNREACHABLE();
-						gal_assert(false, "Unknown loop jump type!");
 					}
 				}
 			}
@@ -2621,6 +3343,14 @@ namespace gal::compiler
 				if constexpr (End) { bytecode_.set_debug_line(static_cast<int>(loc.end.line + 1)); }
 				else { bytecode_.set_debug_line(static_cast<int>(loc.begin.line + 1)); }
 			}
+		}
+
+		global_result& get_global(const ast::ast_name name) { return globals_[name]; }
+
+		[[nodiscard]] global_result get_global(const ast::ast_name name) const
+		{
+			if (const auto it = globals_.find(name); it != globals_.end()) { return it->second; }
+			return {};
 		}
 
 		[[nodiscard]] builtin_method get_builtin(ast::ast_expression* node)
@@ -2731,4 +3461,93 @@ namespace gal::compiler
 			return builtin_method::invalid_method_id;
 		}
 	};
+
+	void compile_if_no_error(bytecode_builder& bytecode_builder, ast::ast_statement_block& root, const ast::ast_name_table& names, const compile_options options)
+	{
+		// todo: timer
+
+		compiler c{bytecode_builder, options};
+
+		// since access to some global objects may result in values that change over time, we block imports from non-readonly tables
+		if (const auto [name, _] = names.get(builtin_global_table_declaration);
+			not name.empty()) { c.get_global(name).writable = true; }
+
+		// this visitor traverses the AST to analyze mutability of locals/globals, filling local_result::written and global_result::written
+		compiler::assignment_visitor assignment_visitor{c};
+		root.visit(assignment_visitor);
+
+		// this visitor traverses the AST to analyze constantness of expressions, filling constants[] and local_result::constant/local_result::init
+		if (
+			options.optimization_level >= 1 &&
+			(not names.get(builtin_get_function_environment).first.empty() || not names.get(builtin_set_function_environment).first.empty())
+		)
+		{
+			compiler::function_environment_visitor function_environment_visitor{c.use_get_function_environment, c.use_set_function_environment};
+			root.visit(function_environment_visitor);
+		}
+
+		// gathers all functions with the invariant that all function references are to functions earlier in the list
+		// for example: function foo() return function() end end will result in two vector entries, [0] = anonymous and [1] = foo
+		std::vector<ast::ast_expression_function*> functions;
+		compiler::function_visitor function_visitor{c, functions};
+		root.visit(function_visitor);
+
+		for (auto* function: functions) { c.compile_function(function); }
+
+		ast::ast_expression_function main{
+				root.get_location(),
+				{},
+				{},
+				nullptr,
+				{},
+				{},
+				&root,
+				0,
+				{}};
+		const auto main_id = c.compile_function(&main);
+
+		bytecode_builder.set_main_function(main_id);
+		bytecode_builder.finalize();
+	}
+
+	void compile_if_no_error(bytecode_builder& bytecode_builder, const std::string_view source, const compile_options compile_options, const ast::parse_options parse_options)
+	{
+		ast::ast_allocator allocator{};
+		utils::string_pool<ast::ast_name::value_type, false> pool{};
+		ast::ast_name_table names{pool};
+
+		auto result = ast::parser::parse(source, names, allocator, parse_options);
+
+		if (not result.errors.empty()) { throw ast::parse_errors{std::move(result.errors)}; }
+
+		compile_if_no_error(bytecode_builder, *result.root, names, compile_options);
+	}
+
+	std::string compile(const std::string_view source, const compile_options compile_options, const ast::parse_options parse_options, bytecode_encoder* bytecode_encoder)
+	{
+		// todo: timer
+
+		ast::ast_allocator allocator{};
+		utils::string_pool<ast::ast_name::value_type, false> pool{};
+		ast::ast_name_table names{pool};
+
+		const auto result = ast::parser::parse(source, names, allocator, parse_options);
+
+		if (not result.errors.empty())
+		{
+			// Users of this function expect only a single error message
+			const auto& error = result.errors.front();
+			return std_format::format("[{}]: {}", error.where_error().begin.line + 1, error.what_error());
+		}
+
+		try
+		{
+			bytecode_builder bytecode_builder{bytecode_encoder};
+
+			compile_if_no_error(bytecode_builder, *result.root, names, compile_options);
+
+			return bytecode_builder.move_bytecode();
+		}
+		catch (compile_error& error) { return std_format::format("[{}]: {}", error.where_error().begin.line + 1, error.what_error()); }
+	}
 }

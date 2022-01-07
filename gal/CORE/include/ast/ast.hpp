@@ -1396,7 +1396,15 @@ namespace gal::ast
 			}
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_condition() noexcept { return condition_; }
+
+		[[nodiscard]] constexpr const auto* get_condition() const noexcept { return condition_; }
+
+		[[nodiscard]] constexpr auto* get_body() noexcept { return body_; }
+
+		[[nodiscard]] constexpr const auto* get_body() const noexcept { return body_; }
+
+		[[nodiscard]] constexpr bool has_end() const noexcept { return has_end_; }
 	};
 
 	class ast_statement_repeat final : public ast_statement
@@ -1425,7 +1433,15 @@ namespace gal::ast
 			}
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_condition() noexcept { return condition_; }
+
+		[[nodiscard]] constexpr const auto* get_condition() const noexcept { return condition_; }
+
+		[[nodiscard]] constexpr auto* get_body() noexcept { return body_; }
+
+		[[nodiscard]] constexpr const auto* get_body() const noexcept { return body_; }
+
+		[[nodiscard]] constexpr bool has_until() const noexcept { return has_until_; }
 	};
 
 	class ast_statement_for final : public ast_statement
@@ -1475,7 +1491,27 @@ namespace gal::ast
 			body_->visit(visitor);
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_var() noexcept { return var_; }
+
+		[[nodiscard]] constexpr const auto* get_var() const noexcept { return var_; }
+
+		[[nodiscard]] constexpr auto* get_begin() noexcept { return begin_; }
+
+		[[nodiscard]] constexpr const auto* get_begin() const noexcept { return begin_; }
+
+		[[nodiscard]] constexpr auto* get_end() noexcept { return end_; }
+
+		[[nodiscard]] constexpr const auto* get_end() const noexcept { return end_; }
+
+		[[nodiscard]] constexpr auto* get_step() noexcept { return step_; }
+
+		[[nodiscard]] constexpr const auto* get_step() const noexcept { return step_; }
+
+		[[nodiscard]] constexpr auto* get_body() noexcept { return body_; }
+
+		[[nodiscard]] constexpr const auto* get_body() const noexcept { return body_; }
+
+		[[nodiscard]] constexpr bool has_end() const noexcept { return has_end_; }
 	};
 
 	class ast_statement_for_in final : public ast_statement
@@ -1525,7 +1561,29 @@ namespace gal::ast
 			}
 		}
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_var(const var_locals_type::size_type index) noexcept { return vars_[index]; }
+
+		[[nodiscard]] constexpr const auto* get_var(const var_locals_type::size_type index) const noexcept { return vars_[index]; }
+
+		[[nodiscard]] constexpr var_locals_type get_var_list() const noexcept { return vars_; }
+
+		[[nodiscard]] constexpr auto* get_value(const value_expressions_type::size_type index) noexcept { return values_[index]; }
+
+		[[nodiscard]] constexpr const auto* get_value(const value_expressions_type::size_type index) const noexcept { return values_[index]; }
+
+		[[nodiscard]] constexpr value_expressions_type get_value_list() const noexcept { return values_; }
+
+		[[nodiscard]] constexpr bool empty_var() const noexcept { return vars_.empty(); }
+		[[nodiscard]] constexpr bool empty_value() const noexcept { return values_.empty(); }
+
+		[[nodiscard]] constexpr auto get_var_size() const noexcept { return vars_.size(); }
+		[[nodiscard]] constexpr auto get_value_size() const noexcept { return values_.size(); }
+
+		[[nodiscard]] constexpr auto* get_body() noexcept { return body_; }
+
+		[[nodiscard]] constexpr const auto* get_body() const noexcept { return body_; }
+
+		[[nodiscard]] constexpr bool has_end() const noexcept { return has_end_; }
 	};
 
 	class ast_statement_break final : public ast_statement
@@ -1569,7 +1627,13 @@ namespace gal::ast
 
 		void visit(ast_visitor& visitor) override { if (visitor.visit(*this)) { for (const auto& expression: list_) { expression->visit(visitor); } } }
 
-		// todo: interface
+		[[nodiscard]] constexpr auto* get_list(const expression_list_type::size_type index) noexcept { return list_[index]; }
+
+		[[nodiscard]] constexpr const auto* get_list(const expression_list_type::size_type index) const noexcept { return list_[index]; }
+
+		[[nodiscard]] constexpr bool empty() const noexcept { return list_.empty(); }
+
+		[[nodiscard]] constexpr auto get_list_size() const noexcept { return list_.size(); }
 	};
 
 	class ast_statement_expression final : public ast_statement
@@ -1629,9 +1693,13 @@ namespace gal::ast
 
 		[[nodiscard]] constexpr const auto* get_var(const var_locals_type::size_type index) const noexcept { return vars_[index]; }
 
+		[[nodiscard]] constexpr var_locals_type get_var_list() const noexcept { return vars_; }
+
 		[[nodiscard]] constexpr auto* get_value(const value_expressions_type::size_type index) noexcept { return values_[index]; }
 
 		[[nodiscard]] constexpr const auto* get_value(const value_expressions_type::size_type index) const noexcept { return values_[index]; }
+
+		[[nodiscard]] constexpr value_expressions_type get_value_list() const noexcept { return values_; }
 
 		[[nodiscard]] constexpr bool empty_var() const noexcept { return vars_.empty(); }
 		[[nodiscard]] constexpr bool empty_value() const noexcept { return values_.empty(); }
@@ -1672,15 +1740,19 @@ namespace gal::ast
 
 		[[nodiscard]] constexpr const auto* get_var(const var_expressions_type::size_type index) const noexcept { return vars_[index]; }
 
+		[[nodiscard]] constexpr var_expressions_type get_var_list() const noexcept { return vars_; }
+
 		[[nodiscard]] constexpr auto* get_value(const value_expressions_type::size_type index) noexcept { return values_[index]; }
 
 		[[nodiscard]] constexpr const auto* get_value(const value_expressions_type::size_type index) const noexcept { return values_[index]; }
 
+		[[nodiscard]] constexpr value_expressions_type get_value_list() const noexcept { return values_; }
+
+		[[nodiscard]] constexpr bool empty_var() const noexcept { return vars_.empty(); }
+		[[nodiscard]] constexpr bool empty_value() const noexcept { return values_.empty(); }
+
 		[[nodiscard]] constexpr auto get_var_size() const noexcept { return vars_.size(); }
 		[[nodiscard]] constexpr auto get_value_size() const noexcept { return values_.size(); }
-
-
-		// todo: interface
 	};
 
 	class ast_statement_compound_assign final : public ast_statement

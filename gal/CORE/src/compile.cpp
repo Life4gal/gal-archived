@@ -1,10 +1,7 @@
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-#include <compile.h>
-#ifdef __cplusplus
-}
-#endif
+#include <compile.hpp>
+#include <compiler/compiler.hpp>
 
-namespace gal::compiler { }
+namespace gal
+{
+	std::string compile(const std::string_view source, const compile_options option) { return compiler::compile(source, option); }
+}

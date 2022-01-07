@@ -727,7 +727,7 @@ namespace gal::ast
 			return std::make_pair(it->name, it->type);
 		}
 
-		std::pair<name_type, lexeme_point::token_type> get(const name_type name)
+		std::pair<name_type, lexeme_point::token_type> get(const name_type name) const
 		{
 			if (const auto it = data_.find(table_entry_view{name}); it != data_.end()) { return std::make_pair(it->name, it->type); }
 			return std::make_pair(name_type{}, lexeme_point::token_type::name);

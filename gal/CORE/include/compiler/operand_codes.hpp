@@ -293,19 +293,19 @@ namespace gal::compiler
 		// D: jump offset (-32768~32767: signed 16 bits)
 		// AUX: variable count (1..255: positive 8 bits only)
 		// Note that loop variables are adjusted by calling generator(state, index) and expecting it to return a tuple that's copied to the user variables
-		for_generic_loop,
+		for_generator_loop,
 
-		// for_generic_loop with 2 output variables (no AUX encoding), assuming generator is bytecode_inext
-		// for_generic_loop_prepare_inext prepares the index variable and jumps to for_generic_loop_inext
-		// for_generic_loop_inext has identical encoding and semantics to for_generic_loop (except for AUX encoding)
-		for_generic_loop_prepare_inext,
-		for_generic_loop_inext,
+		// for_generator_loop with 2 output variables (no AUX encoding), assuming generator is bytecode_inext
+		// for_generator_loop_prepare_inext prepares the index variable and jumps to for_generator_loop_inext
+		// for_generator_loop_inext has identical encoding and semantics to for_generator_loop (except for AUX encoding)
+		for_generator_loop_prepare_inext,
+		for_generator_loop_inext,
 
-		// for_generic_loop with 2 output variables (no AUX encoding), assuming generator is bytecode_next
-		// for_generic_loop_prepare_next prepares the index variable and jumps to for_generic_loop_next
-		// for_generic_loop_next has identical encoding and semantics to for_generic_loop (except for AUX encoding)
-		for_generic_loop_prepare_next,
-		for_generic_loop_next,
+		// for_generator_loop with 2 output variables (no AUX encoding), assuming generator is bytecode_next
+		// for_generator_loop_prepare_next prepares the index variable and jumps to for_generator_loop_next
+		// for_generator_loop_next has identical encoding and semantics to for_generator_loop (except for AUX encoding)
+		for_generator_loop_prepare_next,
+		for_generator_loop_next,
 
 		// copy variables into the target register from vararg storage for current function
 		// A: target register
@@ -592,7 +592,7 @@ namespace gal::compiler
 
 			case set_list:
 
-			case for_generic_loop:
+			case for_generator_loop:
 
 			case load_key_extra:
 
@@ -668,11 +668,11 @@ namespace gal::compiler
 			case set_list: { return "set_list"; }
 			case for_numeric_loop_prepare: { return "for_numeric_loop_prepare"; }
 			case for_numeric_loop: { return "for_numeric_loop"; }
-			case for_generic_loop: { return "for_generic_loop"; }
-			case for_generic_loop_prepare_inext: { return "for_generic_loop_prepare_inext"; }
-			case for_generic_loop_inext: { return "for_generic_loop_inext"; }
-			case for_generic_loop_prepare_next: { return "for_generic_loop_prepare_next"; }
-			case for_generic_loop_next: { return "for_generic_loop_next"; }
+			case for_generator_loop: { return "for_generator_loop"; }
+			case for_generator_loop_prepare_inext: { return "for_generator_loop_prepare_inext"; }
+			case for_generator_loop_inext: { return "for_generator_loop_inext"; }
+			case for_generator_loop_prepare_next: { return "for_generator_loop_prepare_next"; }
+			case for_generator_loop_next: { return "for_generator_loop_next"; }
 			case load_varargs: { return "load_varargs"; }
 			case copy_closure: { return "copy_closure"; }
 			case prepare_varargs: { return "prepare_varargs"; }

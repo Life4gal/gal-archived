@@ -263,7 +263,7 @@ namespace gal::compiler
 					CHECK_JUMP(instruction_to_d(instruction));
 					break;
 				}
-				case for_generic_loop:
+				case for_generator_loop:
 				{
 					// for generic loop protocol: A, A+1, A+2 are used for iteration protocol
 					// A+3, ... are loop variables
@@ -272,10 +272,10 @@ namespace gal::compiler
 					gal_assert(instructions_[i + 1] >= 1);
 					break;
 				}
-				case for_generic_loop_prepare_inext:
-				case for_generic_loop_inext:
-				case for_generic_loop_prepare_next:
-				case for_generic_loop_next:
+				case for_generator_loop_prepare_inext:
+				case for_generator_loop_inext:
+				case for_generator_loop_prepare_next:
+				case for_generator_loop_next:
 				{
 					// for generic loop protocol: A, A+1, A+2 are used for iteration protocol
 					// A+3, A+4 are loop variables
@@ -658,10 +658,10 @@ namespace gal::compiler
 			case copy_table:
 			case for_numeric_loop_prepare:
 			case for_numeric_loop:
-			case for_generic_loop_prepare_inext:
-			case for_generic_loop_inext:
-			case for_generic_loop_prepare_next:
-			case for_generic_loop_next:
+			case for_generator_loop_prepare_inext:
+			case for_generator_loop_inext:
+			case for_generator_loop_prepare_next:
+			case for_generator_loop_next:
 			case copy_closure:
 			{
 				append_ad_default();
@@ -673,7 +673,7 @@ namespace gal::compiler
 			case jump_if_not_equal:
 			case jump_if_not_less_equal:
 			case jump_if_not_less_than:
-			case for_generic_loop:
+			case for_generator_loop:
 			case load_key_extra:
 			case jump_if_equal_key:
 			case jump_if_not_equal_key:
@@ -1171,11 +1171,11 @@ namespace gal::compiler
 				operands::jump_if_not_less_than,
 				operands::for_numeric_loop_prepare,
 				operands::for_numeric_loop,
-				operands::for_generic_loop,
-				operands::for_generic_loop_prepare_inext,
-				operands::for_generic_loop_inext,
-				operands::for_generic_loop_prepare_next,
-				operands::for_generic_loop_next,
+				operands::for_generator_loop,
+				operands::for_generator_loop_prepare_inext,
+				operands::for_generator_loop_inext,
+				operands::for_generator_loop_prepare_next,
+				operands::for_generator_loop_next,
 				operands::jump_if_equal_key,
 				operands::jump_if_not_equal_key
 				));
