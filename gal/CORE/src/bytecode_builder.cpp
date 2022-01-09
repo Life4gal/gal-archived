@@ -2,6 +2,7 @@
 #include <utils/macro.hpp>
 #include <utils/format.hpp>
 #include <algorithm>
+#include <config/config.hpp>
 
 namespace gal::compiler
 {
@@ -843,7 +844,7 @@ namespace gal::compiler
 			}
 		}
 
-		// child protos
+		// child prototypes
 		// todo
 		write_var_int(str, static_cast<index_type>(protos_.size()));
 
@@ -939,7 +940,7 @@ namespace gal::compiler
 
 		write_byte(str, static_cast<std::byte>(log_span));
 
-		std::uint8_t last_offset = 0;
+		baseline_delta_type last_offset = 0;
 		for (decltype(lines_.size()) i = 0; i < lines_.size(); ++i)
 		{
 			const auto delta = lines_[i] - baseline[i >> log_span];
@@ -1409,7 +1410,7 @@ namespace gal::compiler
 		debug_upvalues_.emplace_back(index);
 	}
 
-	constexpr bytecode_builder::debug_pc_type bytecode_builder::get_debug_pc() const noexcept { return static_cast<debug_pc_type>(instructions_.size()); }
+	constexpr debug_pc_type bytecode_builder::get_debug_pc() const noexcept { return static_cast<debug_pc_type>(instructions_.size()); }
 
 	void bytecode_builder::finalize()
 	{

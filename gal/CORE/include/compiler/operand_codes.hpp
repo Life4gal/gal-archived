@@ -3,11 +3,11 @@
 #ifndef GAL_LANG_COMPILER_OPERAND_CODES_HPP
 #define GAL_LANG_COMPILER_OPERAND_CODES_HPP
 
-#include<cstdint>
 #include <string_view>
 #include <utils/assert.hpp>
 #include <utils/enum_utils.hpp>
 #include <utils/macro.hpp>
+#include <config/config.hpp>
 
 namespace gal::compiler
 {
@@ -36,15 +36,9 @@ namespace gal::compiler
 	 * Registers: 0-254. Registers refer to the values on the function's stack frame, including arguments.
 	 * Upvalues: 0-254. Upvalues refer to the values stored in the closure object.
 	 * Constants: 0-2^23-1. Constants are stored in a table allocated with each proto; to allow for future byte-code tweaks the encode-able value is limited to 23 bits.
-	 * Closures: 0-2^15-1. Closures are created from child protos via a child index; the limit is for the number of closures immediately referenced in each function.
+	 * Closures: 0-2^15-1. Closures are created from child prototypes via a child index; the limit is for the number of closures immediately referenced in each function.
 	 * Jumps: -2^23~2^23. Jump offsets are specified in word increments, so jumping over an instruction may sometimes require an offset of 2 or more.
 	 */
-
-	using operand_underlying_type = std::uint32_t;
-	using operand_abc_underlying_type = std::uint8_t;
-	using operand_d_underlying_type = std::int16_t;
-	using operand_e_underlying_type = std::int32_t;
-	using operand_aux_underlying_type = operand_underlying_type;
 
 	enum class operands : operand_underlying_type
 	{

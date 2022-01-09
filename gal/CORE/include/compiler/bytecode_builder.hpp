@@ -3,7 +3,6 @@
 #ifndef GAL_LANG_COMPILER_BYTECODE_BUILDER_HPP
 #define GAL_LANG_COMPILER_BYTECODE_BUILDER_HPP
 
-#include <ast/common.hpp>
 #include <compiler/operand_codes.hpp>
 #include <utils/hash_container.hpp>
 #include <utils/hash.hpp>
@@ -41,8 +40,6 @@ namespace gal::compiler
 		using string_ref_type = std::string_view;
 		using label_type = std::size_t;
 		using label_offset_type = std::make_signed_t<label_type>;
-		using debug_pc_type = index_type;
-		using register_type = operand_abc_underlying_type;
 
 		constexpr static signed_index_type constant_too_many_index = -1;
 

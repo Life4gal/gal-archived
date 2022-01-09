@@ -88,13 +88,9 @@ namespace gal::compiler
 	class compiler
 	{
 	public:
-		using stack_size_type = std::uint32_t;
-		using register_size_type = stack_size_type;
 		using label_type = bytecode_builder::label_type;
 		using function_id_type = bytecode_builder::function_id_type;
-		using register_type = bytecode_builder::register_type;
-		using debug_pc_type = bytecode_builder::debug_pc_type;
-
+		
 		constexpr static register_size_type max_register_size = std::numeric_limits<register_type>::max();
 		constexpr static register_size_type max_upvalue_size = 200;
 		constexpr static register_size_type max_local_size = 200;

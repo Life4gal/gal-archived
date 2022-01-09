@@ -3,5 +3,7 @@ project(
 		LANGUAGES CXX
 )
 
-add_subdirectory(CORE)
 add_subdirectory(UTILS)
+add_subdirectory(CONFIG)
+add_subdirectory(CORE)
+add_subdirectory(VM)
