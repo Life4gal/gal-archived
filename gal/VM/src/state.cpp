@@ -5,14 +5,6 @@
 
 namespace gal::vm
 {
-	void global_state::destroy_all(thread_state& state)
-	{
-		gal_assert(main_thread == &state);
-		// main thread is at the end of root_gc list
-		gal_assert(not state.has_next());
-		// todo
-	}
-
 	void thread_state::new_stack()
 	{
 		gal_assert(top_ == 0);
@@ -46,7 +38,7 @@ namespace gal::vm
 			// remove from open list
 			open_upvalue_ = upvalue->get_next();
 
-			if (global_.is_dead(*upvalue)) { upvalue->destroy(); }
+			if (global_.is_dead(*upvalue)) { upvalue->destroy(*this); }
 			else
 			{
 				upvalue->unlink();
@@ -56,7 +48,6 @@ namespace gal::vm
 			}
 		}
 	}
-
 
 	void thread_state::destroy_list(object** begin, object* end)
 	{
@@ -75,13 +66,10 @@ namespace gal::vm
 		}
 	}
 
-
 	thread_state::thread_state(
-			global_state& global,
-			const memory_categories_type active_memory_category)
-		: object{object_type::thread, active_memory_category},
+			global_state& global)
+		: object{object_type::thread},
 		  status_{0},
-		  active_memory_category_{active_memory_category},
 		  stack_state_{0},
 		  single_step_{false},
 		  global_{global},
@@ -92,6 +80,8 @@ namespace gal::vm
 		  num_internal_calls_{0},
 		  base_internal_calls_{0},
 		  cached_slot_{0},
+	open_upvalue_{nullptr},
+	gc_list_{nullptr},
 		  named_call_{nullptr},
 		  user_data_{nullptr} { new_stack(); }
 
@@ -100,7 +90,7 @@ namespace gal::vm
 		vm_allocator<thread_state> allocator{*this};
 
 		auto* child = allocator.allocate(1);
-		allocator.construct(child, global_, active_memory_category_);
+		allocator.construct(child, global_);
 
 		global_.link_object(*child);
 		// share table of globals
@@ -111,4 +101,17 @@ namespace gal::vm
 
 		return child;
 	}
+
+	void thread_state::destroy()
+	{
+		gal_assert(global_.main_thread == this);
+		// main thread is at the end of root_gc list
+		gal_assert(not has_next());
+
+		destroy_list(&global_.root_gc, this);
+
+		// free all string lists
+		
+	}
+
 }

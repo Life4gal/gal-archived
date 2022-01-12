@@ -624,7 +624,11 @@ namespace gal::compiler
 				append_abc(instruction_to_a(instruction), instruction_to_b(instruction) - 1, instruction_to_c(instruction));
 				break;
 			}
-			case load_varargs: { append_abc(instruction_to_a(instruction), instruction_to_b(instruction) - 1, instruction_to_c(instruction)); }
+			case load_varargs:
+			{
+				append_abc(instruction_to_a(instruction), instruction_to_b(instruction) - 1, instruction_to_c(instruction));
+				break;
+			}
 			case load_global:
 			case set_global:
 			case load_table_string_key:

@@ -60,15 +60,14 @@ namespace gal::vm
 		object* next_;
 		object_type type_;
 		mark_type marked_;
-		memory_categories_type memory_category_;
 
 		constexpr virtual void do_mark(global_state& state) = 0;
 	protected:
-		constexpr explicit object(const object_type type, const memory_categories_type category = default_memory_category) noexcept
+		constexpr explicit object(const object_type type) noexcept
 			: next_{nullptr},
 			  type_{type},
-			  marked_{0},
-			  memory_category_{category} {}
+			  marked_{0}
+		{}
 
 		/**
 		 * @brief Destroy all dynamically allocated objects in the class, generally called before the object will be recycled (destructed)
@@ -115,15 +114,15 @@ namespace gal::vm
 
 		constexpr void set_mark_black_to_gray() noexcept { marked_ &= ~mark_black_bit_mask; }
 
-		[[nodiscard]] constexpr memory_categories_type get_category() const noexcept { return memory_category_; }
-
 		[[nodiscard]] explicit operator magic_value() const noexcept;
 
 		constexpr void mark(global_state& state);
 
 		constexpr void try_mark(global_state& state) { if (is_mark_white()) { mark(state); } }
 
-		constexpr virtual void destroy() = 0;
+		constexpr void						delete_chain(thread_state& state, object* end);
+
+		constexpr virtual void destroy(thread_state& state) = 0;
 	};
 
 	/**
@@ -496,7 +495,7 @@ namespace gal::vm
 			upvalue_.link.prev->upvalue_.link.next = upvalue_.link.next;
 		}
 
-		void destroy() override
+		void destroy(thread_state& state) override
 		{
 			// is it open?
 			if (*value_ != upvalue_.closed)
@@ -506,7 +505,7 @@ namespace gal::vm
 			}
 
 			// free upvalue
-			vm_allocator<gal_upvalue> allocator{*this};
+			vm_allocator<gal_upvalue> allocator{state};
 			allocator.deallocate(this, 1);
 		}
 	};

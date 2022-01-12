@@ -20,8 +20,6 @@ namespace gal::vm
 		sweep
 	};
 
-	using gal_string_table = std::vector<object*>;
-
 	struct gal_call_info
 	{
 		// base for this function
@@ -41,8 +39,8 @@ namespace gal::vm
 
 	struct gc_cycle_state
 	{
-		size_t heap_goal_size_bytes = 0;
-		size_t heap_trigger_size_bytes = 0;
+		std::size_t heap_goal_size_bytes = 0;
+		std::size_t heap_trigger_size_bytes = 0;
 
 		// time from end of the last cycle to the start of a new one
 		double wait_time = 0;
@@ -53,18 +51,18 @@ namespace gal::vm
 		double mark_time = 0;
 
 		double atomic_begin_time_stamp = 0;
-		size_t atomic_begin_total_size_bytes = 0;
+		std::size_t atomic_begin_total_size_bytes = 0;
 		double atomic_time = 0;
 
 		double sweep_time;
 
-		size_t mark_items = 0;
-		size_t sweep_items = 0;
+		std::size_t mark_items = 0;
+		std::size_t sweep_items = 0;
 
-		size_t assist_work = 0;
-		size_t explicit_work = 0;
+		std::size_t assist_work = 0;
+		std::size_t explicit_work = 0;
 
-		size_t end_total_size_bytes = 0;
+		std::size_t end_total_size_bytes = 0;
 	};
 
 	/**
@@ -73,9 +71,9 @@ namespace gal::vm
 	struct gc_heap_trigger_state
 	{
 		constexpr static auto terminate_count = 32;
-		int32_t terminates[terminate_count]{0};
-		uint32_t terminate_pos = 0;
-		int32_t integral = 0;
+		std::int32_t terminates[terminate_count]{0};
+		std::uint32_t terminate_pos = 0;
+		std::int32_t integral = 0;
 	};
 
 	struct gc_state
@@ -84,7 +82,7 @@ namespace gal::vm
 		double step_assist_time_accumulate = 0;
 
 		// when cycle is completed, last cycle values are updated
-		uint64_t completed_cycles = 0;
+		std::uint64_t completed_cycles = 0;
 
 		gc_cycle_state last_cycle;
 		gc_cycle_state current_cycle;
@@ -101,7 +99,7 @@ namespace gal::vm
 	struct global_state
 	{
 		// hash table for strings
-		gal_string_table string_table;
+		utils::hash_set<gal_string> string_table;
 
 		// auxiliary data to allocator
 		user_data_type user_data;
@@ -111,7 +109,7 @@ namespace gal::vm
 		gc_current_state_type gc_current_state;
 
 		// position of sweep in string_table
-		gal_string_table::size_type sweep_string_gc;
+		decltype(string_table)::size_type sweep_string_gc;
 		// list of all collectable objects
 		object* root_gc;
 		// position of sweep in root_gc
@@ -136,9 +134,6 @@ namespace gal::vm
 
 		// free page linked list for each size class
 		std::array<struct memory_page*, size_classes> free_pages;
-
-		// total amount of memory used by each memory category
-		std::array<std::size_t, memory_categories_size> memory_category_bytes;
 
 		thread_state* main_thread;
 		// head of double-linked list of all open upvalues
@@ -199,7 +194,6 @@ namespace gal::vm
 
 		constexpr object* exchange_gray(object& new_gray) noexcept { return std::exchange(gray, &new_gray); }
 
-		void destroy_all(thread_state& state);
 		void step(thread_state& state, bool assist);
 		void full_gc(thread_state& state);
 
@@ -327,7 +321,6 @@ namespace gal::vm
 
 	constexpr void gal_table::do_mark(global_state& state) { gc_list_ = state.exchange_gray(*this); }
 
-
 	class thread_state final : public object
 	{
 	public:
@@ -346,9 +339,6 @@ namespace gal::vm
 
 	private:
 		std::uint8_t status_;
-
-		// memory category that is used for new GC object allocations
-		memory_categories_type active_memory_category_;
 		std::uint8_t stack_state_;
 
 		// call debug_step hook after each instruction
@@ -398,10 +388,10 @@ namespace gal::vm
 		static void destroy_list(object** begin, object* end);
 
 	public:
-		thread_state(global_state& global,
-		             memory_categories_type active_memory_category);
+		explicit thread_state(global_state& global);
 
 		// todo: interface
+		void destroy(thread_state& state) override;
 
 		/**
 		 * @brief Create a new child thread
@@ -431,10 +421,31 @@ namespace gal::vm
 			}
 		}
 
+		void close_upvalue() { open_upvalue_->delete_chain(*this, nullptr); }
+
 		[[nodiscard]] constexpr auto* get_stack_last() noexcept { return &stack_[basic_stack_size - 1]; }
 
 		[[nodiscard]] constexpr auto* get_stack_last() const noexcept { return &stack_[basic_stack_size - 1]; }
 	};
+
+	constexpr void object::delete_chain(thread_state& state, object* end)
+	{
+		auto* current = this;
+		auto* next = current->next_;
+
+		while (current != end)
+		{
+			if (current->type() == object_type::thread)
+			{
+				// delete open upvalues of each thread
+				dynamic_cast<thread_state*>(current)->close_upvalue();
+			}
+
+			current->destroy(state);
+			current = next;
+			next = current->next_;
+		}
+	}
 
 	inline thread_state* magic_value::as_thread() const noexcept
 	{

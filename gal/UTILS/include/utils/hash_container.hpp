@@ -40,9 +40,9 @@ namespace gal::utils
 		[[nodiscard]] constexpr std::size_t operator()(const typename std::pointer_traits<U>::element_type* ptr) const noexcept(std::is_nothrow_invocable_v<std::hash<const typename std::pointer_traits<U>::element_type*>, const typename std::pointer_traits<U>::element_type*>) { return std::hash<const typename std::pointer_traits<U>::element_type*>{}(ptr); }
 	};
 
-	template<typename Key, typename Hasher = default_hasher<Key>, typename KeyEqual = std::equal_to<>>
-	using hash_set = std::unordered_set<Key, Hasher, KeyEqual>;
-	template<typename Key, typename Value, typename Hasher = default_hasher<Key>, typename KeyEqual = std::equal_to<>>
+	template<typename Key, typename Hasher = default_hasher<Key>, typename KeyEqual = std::equal_to<>, typename Allocator = std::allocator<Key>>
+	using hash_set = std::unordered_set<Key, Hasher, KeyEqual, Allocator>;
+	template<typename Key, typename Value, typename Hasher = default_hasher<Key>, typename KeyEqual = std::equal_to<>, typename Allocator = std::pair<const Key, Value>>
 	using hash_map = std::unordered_map<Key, Value, Hasher, KeyEqual>;
 }
 
