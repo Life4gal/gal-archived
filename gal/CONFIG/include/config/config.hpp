@@ -151,11 +151,15 @@ namespace gal
 		 */
 		constexpr auto buffer_size						 = 512;
 
+		using user_data_tag_type						 = std::uint8_t;
 		/**
 		 * @brief The limit of valid user data tag
 		 */
-		using user_data_tag_type						 = std::uint8_t;
 		constexpr user_data_tag_type user_data_tag_limit = 128;
+		/**
+		 * @brief Special tag value is used for user data with inline destructor
+		 */
+		constexpr user_data_tag_type user_data_tag_inline_destructor = user_data_tag_limit;
 
 		/**
 		 * @brief The upper bound for number of size classes used by page allocator

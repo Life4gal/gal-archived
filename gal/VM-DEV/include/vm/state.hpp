@@ -31,12 +31,12 @@ namespace gal::vm_dev
 			// time from end of the last cycle to the start of a new one
 			double wait_time = 0;
 
-			double begin_time_stamp = 0;
-			double end_time_stamp = 0;
+			std::uint64_t begin_time_stamp = 0;
+			std::uint64_t end_time_stamp = 0;
 
 			double mark_time = 0;
 
-			double atomic_begin_time_stamp = 0;
+			std::uint64_t atomic_begin_time_stamp = 0;
 			std::size_t atomic_begin_total_size_bytes = 0;
 			double atomic_time = 0;
 
@@ -56,10 +56,12 @@ namespace gal::vm_dev
 		 */
 		struct gc_heap_trigger_state
 		{
-			constexpr static auto terminate_count = 32;
-			std::int32_t terminates[terminate_count]{0};
-			std::uint32_t terminate_pos = 0;
-			std::int32_t integral = 0;
+			using term_type = std::int32_t;
+
+			constexpr static auto term_count = 32;
+			term_type terms[term_count]{0};
+			std::uint32_t term_pos = 0;
+			term_type integral = 0;
 		};
 
 		struct gc_state
@@ -82,15 +84,21 @@ namespace gal::vm_dev
 		using user_data_gc_handler = void(*)(user_data_type);
 		using user_data_gc_handler_container_type = std::array<user_data_gc_handler, user_data_tag_limit>;
 
+		constexpr static std::size_t sweep_max_count = 40;
+		constexpr static std::size_t sweep_cost = 10;
+
 		// state of garbage collector
 		gc_current_state_type gc_current_state;
 
 		user_data_gc_handler_container_type user_data_gc_handlers;
 
+		// position of sweep in main_thread::string_table
+		std::size_t sweep_string_gc;
+
 		// list of all collectable objects
 		object* root_gc;
 		// position of sweep in root_gc
-		object** sweep_gc;
+		object* sweep_gc;
 
 		// list of gray objects
 		object* gray;
@@ -127,7 +135,19 @@ namespace gal::vm_dev
 			return work;
 		}
 
-		std::size_t step();
+		std::size_t atomic(child_state& state);
+
+		object* sweep_list(main_state& state, object* begin, std::size_t* traversed_count = nullptr, std::size_t count = std::numeric_limits<std::size_t>::max());
+
+		std::size_t step(main_state& state, std::size_t limit);
+
+		void begin_gc_cycle();
+
+		void end_gc_cycle();
+
+		void record_state_time(gc_current_state_type current_state, double second, bool assist);
+
+		std::size_t get_heap_trigger(std::size_t heap_goal);
 
 	public:
 		/**
@@ -158,6 +178,8 @@ namespace gal::vm_dev
 			object.link_next(root_gc);
 			root_gc = &object;
 		}
+
+		void step(child_state& state, bool assist);
 	};
 
 	struct call_info
@@ -249,6 +271,8 @@ namespace gal::vm_dev
 			// todo
 		}
 
+		void do_destroy(main_state& state) override;
+
 	public:
 		explicit child_state(main_state& parent)
 			: object{object_type::thread},
@@ -278,11 +302,6 @@ namespace gal::vm_dev
 					.saved_pc = 0,
 					.num_returns = 0,
 					.flags = 0};
-		}
-
-		void destroy(main_state& state) override
-		{
-			// todo
 		}
 
 		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(child_state); }
@@ -315,7 +334,7 @@ namespace gal::vm_dev
 		friend struct gc_handler;
 
 	public:
-		using string_table_type = utils::hash_set<object_string>;
+		using string_table_type = std::vector<object_string*>;
 
 		using builtin_type_meta_table_type = std::array<object_table*, static_cast<std::size_t>(object_type::tagged_value_count)>;
 		using builtin_type_name_table_type = std::array<object_string*, static_cast<std::size_t>(object_type::tagged_value_count)>;
@@ -323,8 +342,6 @@ namespace gal::vm_dev
 
 	private:
 		string_table_type string_table_;
-		// position of sweep in string_table
-		string_table_type::size_type sweep_string_gc_;
 
 		object::mark_type current_white_;
 
@@ -346,6 +363,8 @@ namespace gal::vm_dev
 		index_type registry_free_;
 
 		gc_handler gc_;
+
+		debug::callback_info callback_;
 
 		void mark_meta_table();
 
@@ -378,13 +397,17 @@ namespace gal::vm_dev
 
 		constexpr void make_white(object& obj) const noexcept { return obj.set_mark((obj.get_mark() & object::mask_marks) | get_white()); }
 
-		[[nodiscard]] constexpr bool is_dead(const object& value) const noexcept
+		constexpr void flip_white() noexcept { current_white_ = another_white(); }
+
+		[[nodiscard]] constexpr bool check_is_dead(const object& value) const noexcept
 		{
 			return (value.get_mark() & (object::mark_white_bits_mask | object::mark_fixed_bit_mask)) ==
 			       (another_white() & object::mark_white_bits_mask);
 		}
 
-		GAL_ASSERT_CONSTEXPR void check_alive([[maybe_unused]] const magic_value value) const noexcept { gal_assert(not value.is_object() || not is_dead(*value.as_object())); }
+		GAL_ASSERT_CONSTEXPR void check_alive([[maybe_unused]] const magic_value value) const noexcept { gal_assert(not value.is_object() || not check_is_dead(*value.as_object())); }
+
+		GAL_ASSERT_CONSTEXPR std::size_t remark_upvalues() { return upvalue_head_.remark(*this); }
 
 		[[nodiscard]] constexpr gc_handler::gc_current_state_type get_gc_state() const noexcept { return gc_.gc_current_state; }
 
@@ -411,9 +434,13 @@ namespace gal::vm_dev
 						: nullptr;
 		}
 
+		debug::callback_info& get_callback_info() noexcept { return callback_; }
+
+		void remove_string_from_table(object_string& string);
+
 		GAL_ASSERT_CONSTEXPR void barrier_upvalue(object& value)
 		{
-			gal_assert(value.is_mark_white() && not is_dead(value));
+			gal_assert(value.is_mark_white() && not check_is_dead(value));
 
 			if (gc_.keep_invariant()) { value.mark(*this); }
 		}
@@ -421,7 +448,7 @@ namespace gal::vm_dev
 		void barrier_finalize(object& obj, object& value)
 		{
 			gal_assert(obj.is_mark_black() && value.is_mark_white());
-			gal_assert(not is_dead(value) && not is_dead(obj));
+			gal_assert(not check_is_dead(value) && not check_is_dead(obj));
 			gal_assert(gc_.running());
 
 			// must keep invariant?
@@ -440,7 +467,7 @@ namespace gal::vm_dev
 
 		void barrier_back(object_table& table)
 		{
-			gal_assert(table.is_mark_black() && not is_dead(table));
+			gal_assert(table.is_mark_black() && not check_is_dead(table));
 			gal_assert(gc_.running());
 
 			// make table gray (again)
@@ -464,13 +491,13 @@ namespace gal::vm_dev
 				if (gc_.gc_current_state == gc_handler::gc_current_state_type::propagate_again)
 				{
 					gal_assert(table.is_mark_black() && value.is_mark_white());
-					gal_assert(not is_dead(value) && not is_dead(table));
+					gal_assert(not check_is_dead(value) && not check_is_dead(table));
 
 					value.mark(*this);
 				}
 				else
 				{
-					gal_assert(table.is_mark_black() && not is_dead(table));
+					gal_assert(table.is_mark_black() && not check_is_dead(table));
 					gal_assert(gc_.running());
 
 					// make table gray (again)
@@ -485,7 +512,7 @@ namespace gal::vm_dev
 			object.set_mark(get_white());
 		}
 
-		void link_upvalue(child_state& state, object_upvalue& upvalue)
+		void link_upvalue(object_upvalue& upvalue)
 		{
 			gc_.link_object(upvalue);
 
@@ -505,11 +532,18 @@ namespace gal::vm_dev
 				}
 			}
 		}
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR gc_handler::user_data_gc_handler get_user_data_gc_handler(const user_data_tag_type tag) const noexcept
+		{
+			gal_assert(tag < user_data_tag_limit);
+
+			return gc_.user_data_gc_handlers[tag];
+		}
 	};
 
 	GAL_ASSERT_CONSTEXPR void object::mark(main_state& state)
 	{
-		gal_assert(is_mark_white() && not state.is_dead(*this));
+		gal_assert(is_mark_white() && not state.check_is_dead(*this));
 		set_mark_white_to_gray();
 		do_mark(state);
 	}

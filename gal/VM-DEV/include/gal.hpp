@@ -85,6 +85,50 @@ namespace gal::vm_dev
 		GAL_API boolean_type is_thread_reset(main_state& state);
 		GAL_API boolean_type is_thread_reset(child_state& state);
 	}// namespace state
+
+	namespace debug
+	{
+		struct debug_info
+		{
+			string_type name;
+			string_type what;
+			string_type source;
+			int line_defined;
+			int current_line;
+			compiler::operand_abc_underlying_type num_upvalues;
+			compiler::operand_abc_underlying_type num_params;
+			boolean_type is_vararg;
+			char short_source[max_id_size];
+			user_data_type user_data;
+		};
+
+		struct callback_info
+		{
+			// arbitrary user_data pointer that is never overwritten by GAL
+			user_data_type user_data;
+
+			// gets called at safe_points (loop back edges, call/ret, gc) if set
+			void (*interrupt)(child_state& state, int gc);
+			// gets called when an unprotected error is raised
+			void (*panic)(child_state& state, int error_code);
+
+			// gets called when state is created (parent_state == parent) or destroyed (parent_state == nullptr)
+			void (*user_thread)(main_state* parent_state, child_state& state);
+			// gets called when a string is created; returned atom can be retrieved via to_string_atomic
+			std::int16_t (*user_atomic)(string_type string, std::size_t length);
+
+			// gets called when BREAK instruction is encountered
+			void (*debug_break)(child_state& state, debug_info& ar);
+			// gets called after each instruction in single step mode
+			void (*debug_step)(child_state& state, debug_info& ar);
+			// gets called when thread execution is interrupted by break in another thread
+			void (*debug_interrupt)(child_state& state, debug_info& ar);
+			// gets called when handled call results in an error
+			void (*debug_handled_error)(child_state& state);
+		};
+
+		GAL_API callback_info* callback(child_state& state);
+	}
 }
 
 #endif // GAL_LANG_VM_GAL_HPP

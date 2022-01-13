@@ -11,10 +11,6 @@
 #include <vm/tagged_method.hpp>
 #include <utils/enum_utils.hpp>
 
-#include "object.hpp"
-#include "object.hpp"
-#include "object.hpp"
-
 namespace gal::vm_dev
 {
 	class magic_value;
@@ -58,6 +54,8 @@ namespace gal::vm_dev
 
 		constexpr virtual void do_mark([[maybe_unused]] main_state& state) = 0;
 
+		constexpr virtual void do_destroy([[maybe_unused]] main_state& state) = 0;
+
 	protected:
 		constexpr explicit object(const object_type type, const mark_type mark = 0, object* next = nullptr)
 			: next_{next},
@@ -74,7 +72,7 @@ namespace gal::vm_dev
 	public:
 		[[nodiscard]] constexpr bool has_next() const noexcept { return next_; }
 
-		[[nodiscard]] constexpr object* get_next() noexcept { return next_; }
+		[[nodiscard]] constexpr object*& get_next() noexcept { return next_; }
 
 		[[nodiscard]] constexpr const object* get_next() const noexcept { return next_; }
 
@@ -83,6 +81,8 @@ namespace gal::vm_dev
 			gal_assert(not next_, "Should not link an object that already exists `next`");
 			next_ = next;
 		}
+
+		constexpr void reset_next(object* next) noexcept { next_ = next; }
 
 		[[nodiscard]] constexpr object_type type() const noexcept { return type_; }
 
@@ -123,14 +123,30 @@ namespace gal::vm_dev
 		 */
 		constexpr bool is_object_cleared();
 
-		/**
-		 * @brief Destroy all dynamically allocated objects in the class, generally called before the object will be recycled (destructed)
-		 *
-		 * Usually, this function does not need to do anything (because the memory is managed by the STL components),
-		 * but if the class contains a container for storing polymorphic objects (such as map),
-		 * then you need to call this function to destroy all of them.
-		 */
-		constexpr virtual void destroy(main_state& state) = 0;
+		template<typename T, typename... Args>
+			requires std::is_base_of_v<object, T>
+		[[nodiscard]] constexpr static T* create(main_state& state, Args&&... args)
+		{
+			// construct object
+			vm_allocator<T> allocator{state};
+
+			auto ptr = allocator.allocate(1);
+			allocator.construct(ptr, std::forward<Args>(args)...);
+
+			return ptr;
+		}
+
+		template<typename T>
+			requires std::is_base_of_v<object, T>
+		constexpr static void destroy(main_state& state, T* ptr)
+		{
+			// free object
+			ptr->do_destroy(state);
+
+			vm_allocator<T> allocator{state};
+			allocator.destroy(ptr);
+			allocator.deallocate(ptr, 1);
+		}
 
 		[[nodiscard]] constexpr virtual std::size_t memory_usage() const noexcept = 0;
 	};
@@ -378,17 +394,14 @@ namespace gal::vm_dev
 			/* nothing need to do*/
 		}
 
+		void do_destroy(main_state& state) override;
+
 	public:
 		object_string(const hash_type hash, data_type&& data)
 			: object{object_type::string},
 			  atomic_{0},
 			  hash_{hash},
 			  data_{std::move(data)} {}
-
-		void destroy(main_state& state) override
-		{
-			// todo
-		}
 
 		[[nodiscard]] constexpr atomic_type get_atomic() const noexcept { return atomic_; }
 
@@ -408,9 +421,14 @@ namespace gal::vm_dev
 	private:
 		user_data_tag_type tag_;
 		object_table* meta_table_;
+		// If user_data has an inline_destructor, we always assume it is at the end of the data and of type gc_handler::user_data_gc_handler
+		// [xxx...xxx...xxx...xxx destructor-pointer]
+		// ^......read data......^^.....gc-pointer.....^
 		data_container_type data_;
 
 		constexpr void do_mark(main_state& state) override;
+
+		void do_destroy(main_state& state) override;
 
 	public:
 		object_user_data(const user_data_tag_type tag, data_container_type&& data, object_table* meta_table = nullptr)
@@ -418,11 +436,6 @@ namespace gal::vm_dev
 			  tag_{tag},
 			  meta_table_{meta_table},
 			  data_{std::move(data)} {}
-
-		void destroy(main_state& state) override
-		{
-			// todo
-		}
 
 		[[nodiscard]] constexpr user_data_tag_type get_tag() const noexcept { return tag_; }
 
@@ -456,6 +469,7 @@ namespace gal::vm_dev
 		using line_info_container_type = std::vector<compiler::baseline_delta_type, vm_allocator<compiler::baseline_delta_type>>;
 		using local_variable_container_type = std::vector<local_variable, vm_allocator<local_variable>>;
 		using upvalue_name_container_type = std::vector<object_string*, vm_allocator<object_string*>>;
+		using debug_instruction_container_type = std::vector<compiler::operand_abc_underlying_type, vm_allocator<compiler::operand_abc_underlying_type>>;
 
 	private:
 		// constants used by the function
@@ -477,7 +491,7 @@ namespace gal::vm_dev
 		object_string* source_;
 		object_string* debug_name_;
 		// a copy of code_ with just operands
-		compiler::operand_abc_underlying_type debug_instructions_;
+		debug_instruction_container_type debug_instructions_;
 
 		object* gc_list_;
 
@@ -491,13 +505,19 @@ namespace gal::vm_dev
 			// todo
 		}
 
+		void do_destroy(main_state& state) override
+		{
+			constants_.clear();
+			code_.clear();
+			children_.clear();
+			line_info_.clear();
+			local_variables_.clear();
+			upvalue_names_.clear();
+			debug_instructions_.clear();
+		}
+
 	public:
 		// todo: ctor
-
-		void destroy(main_state& state) override
-		{
-			// todo
-		}
 
 		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override
 		{
@@ -547,14 +567,7 @@ namespace gal::vm_dev
 			// todo
 		}
 
-	public:
-		// ReSharper disable once CppParameterMayBeConst
-		constexpr object_upvalue(stack_element_type value, object_upvalue& next)
-			: object{object_type::upvalue},
-			  value_{value},
-			  upvalue_{.link = {.prev = nullptr, .next = &next}} { next.upvalue_.link.prev = this; }
-
-		void destroy(main_state& state) override
+		void do_destroy(main_state& state) override
 		{
 			// is it open?
 			if (*value_ != upvalue_.closed)
@@ -562,11 +575,14 @@ namespace gal::vm_dev
 				// remove from open list
 				unlink();
 			}
-
-			// free upvalue
-			vm_allocator<object_upvalue> allocator{state};
-			allocator.deallocate(this, 1);
 		}
+
+	public:
+		// ReSharper disable once CppParameterMayBeConst
+		constexpr object_upvalue(stack_element_type value, object_upvalue& next)
+			: object{object_type::upvalue},
+			  value_{value},
+			  upvalue_{.link = {.prev = nullptr, .next = &next}} { next.upvalue_.link.prev = this; }
 
 		std::size_t memory_usage() const noexcept override
 		{
@@ -607,6 +623,11 @@ namespace gal::vm_dev
 			}
 			return work;
 		}
+
+		/**
+		 * @return Return the end of the list.
+		 */
+		[[nodiscard]] object* close_until(main_state& state, stack_element_type level);
 	};
 
 	class object_closure final : public object
@@ -649,13 +670,14 @@ namespace gal::vm_dev
 			// todo
 		}
 
+		void do_destroy(main_state& state) override
+		{
+			if (is_internal()) { function_.internal.upvalues.clear(); }
+			else { function_.gal.upreferences.clear(); }
+		}
+
 	public:
 		// todo: ctor
-
-		void destroy(main_state& state) override
-		{
-			// todo
-		}
 
 		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override
 		{
@@ -692,7 +714,34 @@ namespace gal::vm_dev
 
 		[[nodiscard]] constexpr const object* get_gc_list() const noexcept { return gc_list_; }
 	};
+}// namespace gal::vm_dev
 
+template<>
+struct std::hash<::gal::vm_dev::magic_value>
+{
+	std::size_t operator()(const ::gal::vm_dev::magic_value& value) const noexcept
+	{
+		constexpr static auto hash_bits = [](std::size_t hash) constexpr noexcept
+		{
+			hash = ~hash + (hash << 18);// hash = (hash << 18) - hash - 1;
+			hash = hash ^ (hash >> 31);
+			hash = hash * 21;// hash = (hash + (hash << 2)) + (hash << 4);
+			hash = hash ^ (hash >> 11);
+			hash = hash + (hash << 6);
+			hash = hash ^ (hash >> 22);
+			return hash & 0x3fffffff;
+		};
+
+		if (value.is_string()) { return value.as_string()->get_hash(); }
+
+		// todo
+
+		return hash_bits(value.get_data());
+	}
+};
+
+namespace gal::vm_dev
+{
 	class object_table final : public object
 	{
 	public:
@@ -720,13 +769,14 @@ namespace gal::vm_dev
 			// todo
 		}
 
-	public:
-		// todo: ctor
-
-		void destroy(main_state& state) override
+		void do_destroy(main_state& state) override
 		{
 			// todo
+			nodes_.clear();
 		}
+
+	public:
+		// todo: ctor
 
 		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(object_table) + sizeof(node_container_type::value_type) * nodes_.size(); }
 
@@ -773,6 +823,8 @@ namespace gal::vm_dev
 			}
 			return tagged_method;
 		}
+
+		std::size_t clear_dead_node(main_state& state);
 	};
 
 	constexpr bool object::is_object_cleared()
@@ -817,29 +869,5 @@ namespace gal::vm_dev
 		return dynamic_cast<object_user_data*>(as_object());
 	}
 }
-
-template<>
-struct std::hash<::gal::vm_dev::magic_value>
-{
-	std::size_t operator()(const ::gal::vm_dev::magic_value& value) const noexcept
-	{
-		constexpr static auto hash_bits = [](std::size_t hash) constexpr noexcept
-		{
-			hash = ~hash + (hash << 18);// hash = (hash << 18) - hash - 1;
-			hash = hash ^ (hash >> 31);
-			hash = hash * 21;// hash = (hash + (hash << 2)) + (hash << 4);
-			hash = hash ^ (hash >> 11);
-			hash = hash + (hash << 6);
-			hash = hash ^ (hash >> 22);
-			return hash & 0x3fffffff;
-		};
-
-		if (value.is_string()) { return value.as_string()->get_hash(); }
-
-		// todo
-
-		return hash_bits(value.get_data());
-	}
-};
 
 #endif // GAL_LANG_VM_OBJECT_HPP
