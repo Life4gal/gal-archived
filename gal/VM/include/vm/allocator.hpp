@@ -23,7 +23,7 @@ namespace gal::vm
 		using pointer = typename allocator_traits::pointer;
 		using size_type = typename allocator_traits::size_type;
 
-		thread_state& state;
+		main_state& state;
 		[[no_unique_address]] allocator_type dummy_allocator{};
 
 		[[nodiscard]] constexpr auto allocate(
@@ -34,7 +34,7 @@ namespace gal::vm
 				#endif
 				)
 		{
-			auto* ret = static_cast<T*>(memory_manager::allocate(state, sizeof(value_type) * n));
+			auto* ret = static_cast<T*>(raw_memory::allocate(state, sizeof(value_type) * n));
 			#ifndef GAL_ALLOCATOR_NO_TRACE
 			std::clog << std_format::format(
 					"allocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. allocate at: [file:{}][line:{}, column: {}][function:{}]\n",
@@ -72,7 +72,7 @@ namespace gal::vm
 					location.function_name());
 			#endif
 
-			memory_manager::deallocate(state, p, n);
+			raw_memory::deallocate(state, p, n);
 		}
 
 		template<typename U, typename... Args>
@@ -104,7 +104,7 @@ namespace gal::vm
 
 	template<typename T1, typename T2>
 	constexpr bool operator==(const vm_allocator<T1>& lhs, const vm_allocator<T2>& rhs) { return lhs.dummy_allocator == rhs.dummy_allocator; };
-}
+}// namespace gal::vm
 
 template<typename ValueType>
 struct std::allocator_traits<::gal::vm::vm_allocator<ValueType>>
@@ -193,4 +193,4 @@ struct std::allocator_traits<::gal::vm::vm_allocator<ValueType>>
 	constexpr static allocator_type select_on_container_copy_construction(const allocator_type& a) { return a; }
 };// namespace std
 
-#endif // GAL_LANG_VM_ALLOCATOR_HPP
+#endif// GAL_LANG_VM_ALLOCATOR_HPP

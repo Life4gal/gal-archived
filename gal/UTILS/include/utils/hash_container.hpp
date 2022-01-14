@@ -42,8 +42,8 @@ namespace gal::utils
 
 	template<typename Key, typename Hasher = default_hasher<Key>, typename KeyEqual = std::equal_to<>, typename Allocator = std::allocator<Key>>
 	using hash_set = std::unordered_set<Key, Hasher, KeyEqual, Allocator>;
-	template<typename Key, typename Value, typename Hasher = default_hasher<Key>, typename KeyEqual = std::equal_to<>, typename Allocator = std::pair<const Key, Value>>
-	using hash_map = std::unordered_map<Key, Value, Hasher, KeyEqual>;
+	template<typename Key, typename Value, typename Hasher = default_hasher<Key>, typename KeyEqual = std::equal_to<>, typename Allocator = std::allocator<std::pair<const Key, Value>>>
+	using hash_map = std::unordered_map<Key, Value, Hasher, KeyEqual, Allocator>;
 }
 
 #endif // GAL_LANG_UTILS_HASH_CONTAINER_HPP

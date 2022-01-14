@@ -1,20 +1,18 @@
 #pragma once
 
 #ifndef GAL_LANG_VM_TAGGED_METHOD_HPP
-#define AL_LANG_VM_TAGGED_METHOD_HPP
-
-#include <string_view>
-#include <gal.hpp>
+#define GAL_LANG_VM_TAGGED_METHOD_HPP
 
 namespace gal::vm
 {
-	enum class tagged_method_type
+	enum class tagged_method_type : std::uint8_t
 	{
 		index = 0,
 		new_index,
 		mode,
 		named_call,
 
+		// last tag method with `fast` access
 		equal,
 
 		plus,
@@ -57,8 +55,7 @@ namespace gal::vm
 
 			{"$call"},
 
-			{"$type"}
-	};
+			{"$type"}};
 
 	static_assert(std::size(gal_event_name) == static_cast<size_t>(tagged_method_type::tagged_method_count));
 
@@ -67,17 +64,14 @@ namespace gal::vm
 	{
 			{"null"},
 			{"boolean"},
-			{"user_data"},
 			{"number"},
-			{"vector"},
 			{"string"},
 			{"table"},
 			{"function"},
 			{"user_data"},
-			{"thread"}
-	};
+			{"thread"}};
 
 	static_assert(std::size(gal_typename) == static_cast<size_t>(object_type::tagged_value_count));
 }
 
-#endif // AL_LANG_VM_TAGGED_METHOD_HPP
+#endif // GAL_LANG_VM_TAGGED_METHOD_HPP

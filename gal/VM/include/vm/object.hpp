@@ -1,41 +1,33 @@
 #pragma once
 
-#include <gal.hpp>
-#include <cstdint>
-#include <variant>
-#include <array>
-#include <string>
-#include <vector>
-#include <utils/assert.hpp>
-#include <utils/concept.hpp>
-#include <utils/macro.hpp>
-#include <vm/allocator.hpp>
-
 #ifndef GAL_LANG_VM_OBJECT_HPP
 #define GAL_LANG_VM_OBJECT_HPP
+
+#include <gal.hpp>
+#include <vm/allocator.hpp>
+#include <utils/assert.hpp>
+#include <utils/hash_container.hpp>
+#include <vector>
+#include <vm/tagged_method.hpp>
+#include <utils/enum_utils.hpp>
+#include <utils/hash.hpp>
 
 namespace gal::vm
 {
 	class magic_value;
 
-	/**
-	 * @brief Collectable objects
-	 */
-	class gal_string;
-	class gal_user_data;
-	class gal_prototype;
-	class gal_upvalue;
-	class gal_closure;
-	class gal_table;
-	class thread_state;
-	struct global_state;
+	class object_string;
+	class object_user_data;
+	class object_prototype;
+	class object_upvalue;
+	class object_closure;
+	class object_table;
 
 	/**
 	 * @brief Base struct for all heap-allocated objects.
 	 */
 	class object
 	{
-		friend struct memory_manager;
 	public:
 		using mark_type = std::uint8_t;
 		/**
@@ -61,21 +53,16 @@ namespace gal::vm
 		object_type type_;
 		mark_type marked_;
 
-		constexpr virtual void do_mark(global_state& state) = 0;
-	protected:
-		constexpr explicit object(const object_type type) noexcept
-			: next_{nullptr},
-			  type_{type},
-			  marked_{0}
-		{}
+		constexpr virtual void do_mark([[maybe_unused]] main_state& state) = 0;
 
-		/**
-		 * @brief Destroy all dynamically allocated objects in the class, generally called before the object will be recycled (destructed)
-		 *
-		 * Usually, this function does not need to do anything (because the memory is managed by the STL components),
-		 * but if the class contains a container for storing polymorphic objects (such as map),
-		 * then you need to call this function to destroy all of them.
-		 */
+		constexpr virtual void do_destroy([[maybe_unused]] main_state& state) = 0;
+
+	protected:
+		constexpr explicit object(const object_type type, const mark_type mark = 0, object* next = nullptr)
+			: next_{next},
+			  type_{type},
+			  marked_{mark} {}
+
 		virtual ~object() noexcept = 0;
 
 		object(const object&) = default;
@@ -86,13 +73,23 @@ namespace gal::vm
 	public:
 		[[nodiscard]] constexpr bool has_next() const noexcept { return next_; }
 
-		[[nodiscard]] constexpr object* get_next() noexcept { return next_; }
+		[[nodiscard]] constexpr object*& get_next() noexcept { return next_; }
 
-		[[nodiscard]] constexpr object* get_next() const noexcept { return next_; }
+		[[nodiscard]] constexpr const object* get_next() const noexcept { return next_; }
 
-		constexpr void link_next(object* next) noexcept { next_ = next; }
+		GAL_ASSERT_CONSTEXPR void link_next(object* next) noexcept
+		{
+			gal_assert(not next_, "Should not link an object that already exists `next`");
+			next_ = next;
+		}
+
+		constexpr void reset_next(object* next) noexcept { next_ = next; }
+
+		constexpr void delete_chain(main_state& state, object* end = nullptr);
 
 		[[nodiscard]] constexpr object_type type() const noexcept { return type_; }
+
+		constexpr void set_type(const object_type type) noexcept { type_ = type; }
 
 		[[nodiscard]] constexpr mark_type get_mark() const noexcept { return marked_; }
 
@@ -114,15 +111,48 @@ namespace gal::vm
 
 		constexpr void set_mark_black_to_gray() noexcept { marked_ &= ~mark_black_bit_mask; }
 
+		constexpr void set_mark_fix() noexcept { marked_ |= mark_fixed_bit_mask; }
+
 		[[nodiscard]] explicit operator magic_value() const noexcept;
 
-		constexpr void mark(global_state& state);
+		GAL_ASSERT_CONSTEXPR void mark(main_state& state);
 
-		constexpr void try_mark(global_state& state) { if (is_mark_white()) { mark(state); } }
+		constexpr void try_mark(main_state& state) { if (is_mark_white()) { mark(state); } }
 
-		constexpr void						delete_chain(thread_state& state, object* end);
+		/**
+		 * @brief Tells whether a key or value can be cleared from
+		 * a weak table. Non-collectable objects are never removed from weak
+		 * tables. Strings behave as `values`, so are never removed too. for
+		 * other objects: if really collected, cannot keep them..
+		 */
+		constexpr bool is_object_cleared();
 
-		constexpr virtual void destroy(thread_state& state) = 0;
+		template<typename T, typename... Args>
+			requires std::is_base_of_v<object, T>
+		[[nodiscard]] constexpr static T* create(main_state& state, Args&&... args)
+		{
+			// construct object
+			vm_allocator<T> allocator{state};
+
+			auto ptr = allocator.allocate(1);
+			allocator.construct(ptr, std::forward<Args>(args)...);
+
+			return ptr;
+		}
+
+		template<typename T>
+			requires std::is_base_of_v<object, T>
+		constexpr static void destroy(main_state& state, T* ptr)
+		{
+			// free object
+			ptr->do_destroy(state);
+
+			vm_allocator<T> allocator{state};
+			allocator.destroy(ptr);
+			allocator.deallocate(ptr, 1);
+		}
+
+		[[nodiscard]] constexpr virtual std::size_t memory_usage() const noexcept = 0;
 	};
 
 	/**
@@ -305,27 +335,21 @@ namespace gal::vm
 		 */
 		[[nodiscard]] bool is_object(const object_type type) const noexcept { return is_object() && as_object()->type() == type; }
 
-		// todo
-		[[nodiscard]] constexpr bool is_light_user_data() const noexcept { return is_object(object_type::light_user_data); }
-
 		[[nodiscard]] constexpr bool is_string() const noexcept { return is_object(object_type::string); }
 		[[nodiscard]] constexpr bool is_table() const noexcept { return is_object(object_type::table); }
 		[[nodiscard]] constexpr bool is_function() const noexcept { return is_object(object_type::function); }
 		[[nodiscard]] constexpr bool is_user_data() const noexcept { return is_object(object_type::user_data); }
 		[[nodiscard]] constexpr bool is_thread() const noexcept { return is_object(object_type::thread); }
 
-		// todo
-		[[nodiscard]] inline user_data_type as_light_user_data() const noexcept;
+		[[nodiscard]] inline object_string* as_string() const noexcept;
+		[[nodiscard]] inline object_table* as_table() const noexcept;
+		[[nodiscard]] inline object_closure* as_function() const noexcept;
+		[[nodiscard]] inline object_user_data* as_user_data() const noexcept;
+		[[nodiscard]] inline child_state* as_thread() const noexcept;
 
-		[[nodiscard]] inline gal_string* as_string() const noexcept;
-		[[nodiscard]] inline gal_table* as_table() const noexcept;
-		[[nodiscard]] inline gal_closure* as_function() const noexcept;
-		[[nodiscard]] inline gal_user_data* as_user_data() const noexcept;
-		[[nodiscard]] inline thread_state* as_thread() const noexcept;
+		constexpr void copy_magic_value(const main_state& state, magic_value target) noexcept;
 
-		constexpr void copy_magic_value(const global_state& state, magic_value target) noexcept;
-
-		constexpr void mark(global_state& state) const noexcept { if (is_object()) { as_object()->try_mark(state); } }
+		constexpr void mark(main_state& state) const noexcept { if (is_object()) { as_object()->try_mark(state); } }
 
 		/**
 		 * @brief Returns true if [lhs] and [rhs] are strictly the same value. This is identity
@@ -342,7 +366,7 @@ namespace gal::vm
 
 		/**
 		 * @brief Returns true if [this] and [other] are equivalent. Immutable values
-		 * (null, booleans, numbers, ranges, and strings) are equal if they have the
+		 * (null, booleans, numbers, strings) are equal if they have the
 		 * same data. All other values are equal if they are identical objects.
 		 */
 		[[nodiscard]] bool equal(const magic_value& other) const;
@@ -355,79 +379,123 @@ namespace gal::vm
 
 	inline object::operator magic_value() const noexcept { return magic_value{this}; }
 
-	/**
-	 * @brief index to stack elements
-	 */
-	using stack_index_type = magic_value*;
+	using stack_element_type = magic_value*;
 
-	/**
-	 * @brief String headers for string table
-	 */
-	class gal_string final : public object
+	class object_string final : public object
 	{
-	private:
-		std::int16_t atomic_;
-		std::uint32_t hash_;
-		std::string data_;
+	public:
+		using atomic_type = std::int16_t;
+		using data_type = std::basic_string<char, std::char_traits<char>, vm_allocator<char>>;
 
-		constexpr void do_mark(global_state& state) override
+	private:
+		atomic_type atomic_;
+		data_type data_;
+
+		void do_mark(main_state& state) override
 		{
-			// do nothing
+			/* nothing need to do*/
 		}
 
+		void do_destroy(main_state& state) override;
+
 	public:
-		// todo interface
+		object_string(main_state& state, data_type&& data);
+
+		[[nodiscard]] constexpr atomic_type get_atomic() const noexcept { return atomic_; }
+
+		[[nodiscard]] constexpr auto get_hash() const noexcept { return utils::short_string_hash(data_); }
+
+		[[nodiscard]] constexpr const data_type& get_data() const noexcept { return data_; }
+
+		constexpr void mark() noexcept { set_mark_white_to_gray(); }
 	};
 
-	class gal_user_data final : public object
+	class object_user_data final : public object
 	{
+	public:
+		using data_type = std::uint8_t;
+		using data_container_type = std::vector<data_type, vm_allocator<data_type>>;
+
 	private:
 		user_data_tag_type tag_;
-		gal_table* meta_table_;
-		std::vector<char> data_;
+		object_table* meta_table_;
+		// If user_data has an inline_destructor, we always assume it is at the end of the data and of type gc_handler::user_data_gc_handler
+		// [xxx...xxx...xxx...xxx destructor-pointer]
+		// ^......read data......^^.....gc-pointer.....^
+		data_container_type data_;
 
-		constexpr void do_mark(global_state& state) override;
+		constexpr void do_mark(main_state& state) override;
+
+		void do_destroy(main_state& state) override;
 
 	public:
-		// todo: interface
-	};
+		object_user_data(const user_data_tag_type tag, data_container_type&& data, object_table* meta_table = nullptr)
+			: object{object_type::user_data},
+			  tag_{tag},
+			  meta_table_{meta_table},
+			  data_{std::move(data)} {}
 
-	struct gal_local_var
-	{
-		gal_string* name;
-		// first point where variable is active
-		compiler::debug_pc_type begin_pc;
-		// first point where variable is dead
-		compiler::debug_pc_type end_pc;
-		// register slot, relative to base, where variable is stored
-		compiler::register_type reg;
+		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override
+		{
+			// todo
+			return 0;
+		}
+
+		[[nodiscard]] constexpr user_data_tag_type get_tag() const noexcept { return tag_; }
+
+		[[nodiscard]] constexpr data_type* get_data() noexcept { return data_.data(); }
+
+		[[nodiscard]] constexpr const data_type* get_data() const noexcept { return data_.data(); }
+
+		constexpr void set_meta_table(object_table* meta_table) { meta_table_ = meta_table; }
 	};
 
 	/**
 	 * @brief Function Prototypes
 	 */
-	class gal_prototype final : public object
+	class object_prototype final : public object
 	{
+	public:
+		struct local_variable
+		{
+			object_string* name = nullptr;
+			// first point where variable is active
+			compiler::debug_pc_type begin_pc = 0;
+			// first point where variable is dead
+			compiler::debug_pc_type end_pc = 0;
+			// register slot, relative to base, where variable is stored
+			compiler::register_type reg = 0;
+		};
+
+		using constant_container_type = std::vector<magic_value, vm_allocator<magic_value>>;
+		using instruction_container_type = std::vector<instruction_type, vm_allocator<instruction_type>>;
+		using parent_prototype_container_type = std::vector<object_prototype*, vm_allocator<object_prototype*>>;
+		using line_info_container_type = std::vector<compiler::baseline_delta_type, vm_allocator<compiler::baseline_delta_type>>;
+		using local_variable_container_type = std::vector<local_variable, vm_allocator<local_variable>>;
+		using upvalue_name_container_type = std::vector<object_string*, vm_allocator<object_string*>>;
+		using debug_instruction_container_type = std::vector<compiler::operand_abc_underlying_type, vm_allocator<compiler::operand_abc_underlying_type>>;
+
 	private:
 		// constants used by the function
-		magic_value key_;
+		constant_container_type constants_;
 		// function bytecode
-		compiler::operand_underlying_type* code_;
+		instruction_container_type code_;
 		// functions defined inside the function
-		gal_prototype** parent_;
+		parent_prototype_container_type children_;
 		// for each instruction, line number as a delta from baseline
-		compiler::baseline_delta_type* line_info_;
-		// baseline line info, one entry for each 1 << line_gap_log2 instructions; allocated after line_info
-		int* abs_line_info_;
+		line_info_container_type line_info_;
+		// baseline line info, one entry for each 1 << line_gap_log2_ instructions; point to line_info_
+		decltype(line_info_.data()) abs_line_info_;
+		int line_gap_log2_;
 		// information about local variables
-		gal_local_var* local_var_;
+		local_variable_container_type local_variables_;
 		// upvalue names
-		gal_string** upvalues_;
-		gal_string* source_;
+		upvalue_name_container_type upvalue_names_;
 
-		gal_string* debug_name_;
-		// a copy of code[] array with just operands
-		compiler::operand_abc_underlying_type* debug_instruction_;
+		object_string* source_;
+		object_string* debug_name_;
+		// a copy of code_ with just operands
+		debug_instruction_container_type debug_instructions_;
 
 		object* gc_list_;
 
@@ -436,17 +504,58 @@ namespace gal::vm
 		compiler::operand_abc_underlying_type is_vararg_;
 		compiler::operand_abc_underlying_type max_stack_size_;
 
-		constexpr void do_mark(global_state& state) override;
+		void do_mark(main_state& state) override
+		{
+			// todo
+		}
+
+		void do_destroy(main_state& state) override
+		{
+			constants_.clear();
+			code_.clear();
+			children_.clear();
+			line_info_.clear();
+			local_variables_.clear();
+			upvalue_names_.clear();
+			debug_instructions_.clear();
+		}
 
 	public:
-		// todo: interface
+		explicit object_prototype(main_state& state);
+
+		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override
+		{
+			return sizeof(object_prototype) +
+			       sizeof(magic_value) * constants_.size() +
+			       sizeof(instruction_type) * code_.size() +
+			       sizeof(object_prototype*) * children_.size() +
+			       sizeof(line_info_container_type::value_type) * line_info_.size() +
+			       sizeof(local_variable) * local_variables_.size() +
+			       sizeof(object_string*) * upvalue_names_.size();
+		}
+
+		/**
+		 * @brief All marks are conditional because a GC may happen while the
+		 * prototype is still being created.
+		 */
+		void traverse(main_state& state);
+
+		constexpr void set_gc_list(object* list) noexcept { gc_list_ = list; }
+
+		[[nodiscard]] constexpr object* get_gc_list() noexcept { return gc_list_; }
+
+		[[nodiscard]] constexpr const object* get_gc_list() const noexcept { return gc_list_; }
+
+		[[nodiscard]] constexpr auto get_stack_capacity() const noexcept { return max_stack_size_; }
+
+		const local_variable* get_local(int local_number, compiler::debug_pc_type pc);
 	};
 
-	class gal_upvalue final : public object
+	class object_upvalue final : public object
 	{
 	private:
 		// points to stack or to its own value
-		stack_index_type value_;
+		stack_element_type value_;
 
 		union upvalue_state
 		{
@@ -456,35 +565,54 @@ namespace gal::vm
 			struct upvalue_link
 			{
 				// double linked list (when open)
-				gal_upvalue* prev{nullptr};
-				gal_upvalue* next{nullptr};
+				object_upvalue* prev{nullptr};
+				object_upvalue* next{nullptr};
 			} link;
 		} upvalue_;
 
-		constexpr void do_mark(global_state& state) override
+		void do_mark(main_state& state) override
 		{
-			value_->mark(state);
-			// closed?
-			if (*value_ == upvalue_.closed)
+			// todo
+		}
+
+		void do_destroy(main_state& state) override
+		{
+			// is it open?
+			if (*value_ != upvalue_.closed)
 			{
-				// open upvalues are never black
-				set_mark_gray_to_black();
+				// remove from open list
+				unlink();
 			}
 		}
 
 	public:
+		constexpr object_upvalue()
+			: object{object_type::upvalue},
+			  value_{nullptr},
+			  upvalue_{.link = {.prev = this, .next = this}} {}
+
+		// ReSharper disable once CppParameterMayBeConst
+		constexpr object_upvalue(stack_element_type value, object_upvalue* next)
+			: object{object_type::upvalue},
+			  value_{value},
+			  upvalue_{.link = {.prev = nullptr, .next = next}} { if (next) { next->upvalue_.link.prev = this; } }
+
+		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(object_upvalue); }
+
 		[[nodiscard]] constexpr magic_value* get_index() noexcept { return value_; }
 
 		[[nodiscard]] constexpr const magic_value* get_index() const noexcept { return value_; }
 
 		[[nodiscard]] constexpr magic_value get_close_value() const noexcept { return upvalue_.closed; }
 
-		constexpr void close(const global_state& state)
+		constexpr void close(const main_state& state)
 		{
 			upvalue_.closed.copy_magic_value(state, *value_);
 			// now current value lives here
 			value_ = &upvalue_.closed;
 		}
+
+		[[nodiscard]] constexpr bool is_closed() const noexcept { return value_ == &upvalue_.closed; }
 
 		GAL_ASSERT_CONSTEXPR void unlink()
 		{
@@ -495,137 +623,317 @@ namespace gal::vm
 			upvalue_.link.prev->upvalue_.link.next = upvalue_.link.next;
 		}
 
-		void destroy(thread_state& state) override
+		GAL_ASSERT_CONSTEXPR void link_behind(object_upvalue& target)
 		{
-			// is it open?
-			if (*value_ != upvalue_.closed)
-			{
-				// remove from open list
-				unlink();
-			}
+			gal_assert(target.upvalue_.link.prev == nullptr);
 
-			// free upvalue
-			vm_allocator<gal_upvalue> allocator{state};
-			allocator.deallocate(this, 1);
+			target.upvalue_.link.prev = this;
+			target.upvalue_.link.next = upvalue_.link.next;
+			upvalue_.link.next->upvalue_.link.prev = &target;
+			upvalue_.link.next = &target;
+
+			gal_assert(target.upvalue_.link.next->upvalue_.link.prev == &target);
+			gal_assert(target.upvalue_.link.prev->upvalue_.link.next == &target);
 		}
+
+		GAL_ASSERT_CONSTEXPR std::size_t remark(main_state& state) noexcept
+		{
+			std::size_t work = 0;
+			for (auto* upvalue = upvalue_.link.next; upvalue != this; upvalue = upvalue->upvalue_.link.next)
+			{
+				work += sizeof(object_upvalue);
+				gal_assert(upvalue->upvalue_.link.next->upvalue_.link.prev == upvalue);
+				gal_assert(upvalue->upvalue_.link.prev->upvalue_.link.next == upvalue);
+				if (upvalue->is_mark_gray()) { upvalue->try_mark(state); }
+			}
+			return work;
+		}
+
+		/**
+		 * @return Return the end of the list.
+		 */
+		[[nodiscard]] object* close_until(main_state& state, std::add_const_t<stack_element_type> level);
+
+		GAL_ASSERT_CONSTEXPR void check_list() const noexcept
+		{
+			gal_assert(not is_closed());
+
+			for (const auto* current = upvalue_.link.next;
+			     current != this;
+			     current = current->upvalue_.link.next
+			)
+			{
+				gal_assert(not current->is_closed());
+				gal_assert(current->upvalue_.link.next->upvalue_.link.prev == current);
+				gal_assert(current->upvalue_.link.prev->upvalue_.link.next == current);
+			}
+		}
+
+		/**
+		 * @brief Try to find a qualified (== level) upvalue on the stack, if found, return directly, if not found will create a new one, and link it to the `link`.
+		 */
+		object_upvalue* find_upvalue(main_state& state, stack_element_type level, object_upvalue& link);
 	};
 
-	class gal_closure final : public object
+	class object_closure final : public object
 	{
-	private:
-		compiler::operand_abc_underlying_type is_internal_;
-		compiler::operand_abc_underlying_type num_upvalues_;
-		compiler::operand_abc_underlying_type stack_size_;
-		compiler::operand_abc_underlying_type is_preload_;
-
-		object* gc_list_;
-		gal_table* environment_;
-
+	public:
 		struct internal_type
 		{
-			internal_function_type function;
-			continuation_type continuation;
-			const char* debug_name;
-			magic_value upvalues[1];
+			using upvalue_container_type = std::vector<magic_value, vm_allocator<magic_value>>;
+
+			internal_function_type function{nullptr};
+			continuation_function_type continuation{nullptr};
+			const char* debug_name{nullptr};
+			upvalue_container_type upvalues;
 		};
 
 		struct gal_type
 		{
-			gal_prototype* proto;
-			magic_value upreferences[1];
-		};
+			using upreference_container_type = std::vector<magic_value, vm_allocator<magic_value>>;
 
-		union function_type
-		{
-			internal_type internal;
-			gal_type gal;
-		} function_;
-
-		constexpr void do_mark(global_state& state) override;
-	public:
-		[[nodiscard]] constexpr bool is_internal() const noexcept { return is_internal_; }
-
-		// todo: interface
-	};
-
-	class gal_table final : public object
-	{
-	public:
-		struct table_node
-		{
-			struct node_key
-			{
-				magic_value value;
-				// for chaining
-				index_type next;
-			};
-
-			using node_value = magic_value;
+			object_prototype* prototype{nullptr};
+			upreference_container_type upreferences;
 		};
 
 	private:
-		// 1 << p means tag_method(p) is not present
-		compiler::operand_abc_underlying_type flags_;
-		// sand-box feature to prohibit writes to table
-		compiler::operand_abc_underlying_type immutable_;
-		// environment does not share globals with other scripts
-		compiler::operand_abc_underlying_type sharable_;
-		// log2 of size of `node' array
-		compiler::operand_abc_underlying_type node_size_;
-		// (1 << node_size)-1, truncated to 8 bits
-		compiler::operand_abc_underlying_type node_mask8_;
+		compiler::operand_abc_underlying_type is_internal_;
+		compiler::operand_abc_underlying_type stack_size_;
+		compiler::operand_abc_underlying_type is_preload_;
 
-		int array_size_;
-
-		union
-		{
-			// any free position is before this position
-			int last_free;
-			// negated 'boundary' of `array' array; if array_boundary < 0
-			int array_boundary;
-		};
-
-		gal_table* meta_table_;
-		magic_value* array_;
-		table_node* node_;
 		object* gc_list_;
+		object_table* environment_;
 
-		constexpr void do_mark(global_state& state) override;
+		// force function_type to be an aggregate type
+		union function_type// NOLINT(cppcoreguidelines-special-member-functions)
+		{
+			gal_type gal;
+			internal_type internal;
+
+			~function_type() noexcept
+			{
+				// must be explicitly defined
+				gal_assert(true);
+			}
+		} function_;
+
+		void do_mark(main_state& state) override
+		{
+			// todo
+		}
+
+		void do_destroy(main_state& state) override
+		{
+			if (is_internal()) { function_.internal.upvalues.clear(); }
+			else { function_.gal.upreferences.clear(); }
+		}
 
 	public:
-		// todo: interface
+		object_closure(main_state& state, compiler::operand_abc_underlying_type num_elements, object_table* environment, object_prototype& prototype);
+
+		object_closure(main_state& state, compiler::operand_abc_underlying_type num_elements, object_table* environment);
+
+		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override
+		{
+			// todo: remove them
+			static_assert(offsetof(object_closure, is_internal_) == sizeof(object));// 24
+			static_assert(offsetof(object_closure, stack_size_) == sizeof(object) + 1);
+			static_assert(offsetof(object_closure, is_preload_) == sizeof(object) + 2);
+			static_assert(offsetof(object_closure, gc_list_) == sizeof(object) + 8);
+			static_assert(offsetof(object_closure, environment_) == sizeof(object) + 16);
+
+			static_assert(offsetof(object_closure, function_.internal) == sizeof(object) + 24);
+			static_assert(offsetof(object_closure, function_.internal.function) == sizeof(object) + 24);
+			static_assert(offsetof(object_closure, function_.internal.continuation) == sizeof(object) + 32);
+			static_assert(offsetof(object_closure, function_.internal.debug_name) == sizeof(object) + 40);
+			static_assert(offsetof(object_closure, function_.internal.upvalues) == sizeof(object) + 48);
+
+			static_assert(offsetof(object_closure, function_.gal) == sizeof(object) + 24);
+			static_assert(offsetof(object_closure, function_.gal.prototype) == sizeof(object) + 24);
+			static_assert(offsetof(object_closure, function_.gal.upreferences) == sizeof(object) + 32);
+
+			return is_internal()
+				       ? (
+					       offsetof(object_closure, function_.internal.upvalues) + sizeof(magic_value) * function_.internal.upvalues.size())
+				       : (offsetof(object_closure, function_.gal.upreferences) + sizeof(magic_value) * function_.gal.upreferences.size());
+		}
+
+		[[nodiscard]] constexpr bool is_internal() const noexcept { return is_internal_; }
+
+		void traverse(main_state& state);
+
 		constexpr void set_gc_list(object* list) noexcept { gc_list_ = list; }
+
+		[[nodiscard]] constexpr object* get_gc_list() noexcept { return gc_list_; }
+
+		[[nodiscard]] constexpr const object* get_gc_list() const noexcept { return gc_list_; }
+	};
+}// namespace gal::vm_dev
+
+template<>
+struct std::hash<::gal::vm::magic_value>
+{
+	std::size_t operator()(const ::gal::vm::magic_value& value) const noexcept
+	{
+		constexpr static auto hash_bits = [](std::size_t hash) constexpr noexcept
+		{
+			hash = ~hash + (hash << 18);// hash = (hash << 18) - hash - 1;
+			hash = hash ^ (hash >> 31);
+			hash = hash * 21;// hash = (hash + (hash << 2)) + (hash << 4);
+			hash = hash ^ (hash >> 11);
+			hash = hash + (hash << 6);
+			hash = hash ^ (hash >> 22);
+			return hash & 0x3fffffff;
+		};
+
+		if (value.is_string()) { return value.as_string()->get_hash(); }
+
+		// todo
+
+		return hash_bits(value.get_data());
+	}
+};
+
+namespace gal::vm
+{
+	class object_table final : public object
+	{
+	public:
+		using node_container_type = utils::hash_map<
+			magic_value,
+			magic_value,
+			std::hash<magic_value>,
+			std::equal_to<>,
+			vm_allocator<std::pair<const magic_value, magic_value>>
+		>;
+		using map_iterator = node_container_type::iterator;
+		using map_const_iterator = node_container_type::const_iterator;
+
+		using flag_type = std::uint8_t;
+
+	private:
+		// 1 << p means tagged_method(p) is not present
+		flag_type flags_;
+		// sand-box feature to prohibit writes to table
+		bool immutable_;
+		// environment does not share globals with other scripts
+		bool sharable_;
+
+		object_table* meta_table_;
+		object* gc_list_;
+
+		node_container_type nodes_;
+
+		void do_mark(main_state& state) override
+		{
+			// todo
+		}
+
+		void do_destroy(main_state& state) override
+		{
+			// todo
+			nodes_.clear();
+		}
+
+	public:
+		explicit object_table(main_state& state)
+			: object{object_type::table},
+			  flags_{static_cast<flag_type>(~flag_type{0})},
+			  immutable_{false},
+			  sharable_{false},
+			  meta_table_{nullptr},
+			  gc_list_{nullptr},
+			  nodes_{2, node_container_type::allocator_type{state}} {}
+
+		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(object_table) + sizeof(node_container_type::value_type) * nodes_.size(); }
+
+		[[nodiscard]] constexpr bool check_flag(const flag_type flag) const noexcept { return flags_ & (1 << flag); }
+
+		[[nodiscard]] constexpr bool check_flag(const tagged_method_type flag) const noexcept { return check_flag(static_cast<flag_type>(flag)); }
+
+		[[nodiscard]] constexpr bool has_meta_table() const noexcept { return meta_table_; }
+
+		[[nodiscard]] constexpr object_table* get_meta_table() noexcept { return meta_table_; }
+
+		[[nodiscard]] constexpr const object_table* get_meta_table() const noexcept { return meta_table_; }
+
+		constexpr void mark_meta_table(main_state& state) const { if (meta_table_) { meta_table_->mark(state); } }
+
+		constexpr void set_gc_list(object* list) noexcept { gc_list_ = list; }
+
+		[[nodiscard]] constexpr object* get_gc_list() noexcept { return gc_list_; }
+
+		[[nodiscard]] constexpr const object* get_gc_list() const noexcept { return gc_list_; }
+
+		void traverse(main_state& state, bool weak_key, bool weak_value);
+
+		/**
+		 * @brief Looks up [key] in [table]. If found, returns the value. Otherwise, returns
+		 * `magic_value_null`.
+		 */
+		[[nodiscard]] magic_value find(const magic_value value) const
+		{
+			if (const auto it = nodes_.find(value); it == nodes_.end()) { return magic_value_null; }
+			else { return it->second; }
+		}
+
+		[[nodiscard]] magic_value get_tagged_method(const tagged_method_type event, const object_string& name)
+		{
+			gal_assert(utils::is_enum_between_of(event, tagged_method_type::index, tagged_method_type::equal));
+
+			const auto tagged_method = find(name.operator magic_value());
+			if (tagged_method == magic_value_null)
+			{
+				// no tagged method
+				// cache this fact
+				flags_ |= (1 << static_cast<flag_type>(event));
+			}
+			return tagged_method;
+		}
+
+		std::size_t clear_dead_node(main_state& state);
 	};
 
-	constexpr void gal_user_data::do_mark(global_state& state)
+	constexpr bool object::is_object_cleared()
+	{
+		if (type_ == object_type::string)
+		{
+			// strings are `values`, so are never weak
+			dynamic_cast<object_string*>(this)->mark();
+			return false;
+		}
+		return is_mark_white();
+	}
+
+	constexpr void object_user_data::do_mark(main_state& state)
 	{
 		// user data are never gray
 		set_mark_gray_to_black();
 		if (meta_table_) { meta_table_->try_mark(state); }
 	}
 
-	inline gal_string* magic_value::as_string() const noexcept
+	inline object_string* magic_value::as_string() const noexcept
 	{
 		gal_assert(is_string());
-		return dynamic_cast<gal_string*>(as_object());
+		return dynamic_cast<object_string*>(as_object());
 	}
 
-	inline gal_table* magic_value::as_table() const noexcept
+	inline object_table* magic_value::as_table() const noexcept
 	{
 		gal_assert(is_table());
-		return dynamic_cast<gal_table*>(as_object());
+		return dynamic_cast<object_table*>(as_object());
 	}
 
-	inline gal_closure* magic_value::as_function() const noexcept
+	inline object_closure* magic_value::as_function() const noexcept
 	{
 		gal_assert(is_function());
-		return dynamic_cast<gal_closure*>(as_object());
+		return dynamic_cast<object_closure*>(as_object());
 	}
 
-	inline gal_user_data* magic_value::as_user_data() const noexcept
+	inline object_user_data* magic_value::as_user_data() const noexcept
 	{
 		gal_assert(is_user_data());
-		return dynamic_cast<gal_user_data*>(as_object());
+		return dynamic_cast<object_user_data*>(as_object());
 	}
 }
 

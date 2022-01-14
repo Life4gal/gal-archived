@@ -32,74 +32,6 @@ namespace gal
 
 	namespace vm
 	{
-		/**
-		 * @brief The maximum size for the description of the source
-		 */
-		constexpr auto max_id_size = 256;
-
-		/**
-		 * @brief The desired top heap size in relation to the live heap size at the end of the GC cycle
-		 *
-		 * @note 200% (allow heap to double compared to live heap size)
-		 */
-		constexpr auto gc_goal = 200;
-
-		/**
-		 * @brief The default speed of garbage collection relative to memory allocation
-		 *
-		 * @note Every GC_STEP_SIZE KB allocated, incremental collector collects GC_STEP_SIZE times GC_STEP_MULTIPLE% bytes.
-		 */
-		constexpr auto gc_step_multiple = 200;
-
-		/**
-		 * @brief GC runs every 1 KB of memory allocation
-		 */
-		constexpr auto gc_step_size = 1;
-
-		/**
-		 * @brief The guaranteed number of stack slots available to a internal function
-		 */
-		constexpr auto min_stack_size	= 20;
-
-		/**
-		 * @brief The number of stack slots that a internal function can use
-		 */
-		constexpr auto max_stack_size = 8000;
-
-		/**
-		 * @brief The number of nested calls
-		 */
-		constexpr auto max_call_size = 20000;
-
-		/**
-		 * @brief The maximum depth for nested internal calls; this limit depends on native stack size
-		 */
-		constexpr auto max_internal_call = 200;
-
-		/**
-		 * @brief The buffer size used for on-stack string operations; this limit depends on native stack size
-		 */
-		constexpr auto buffer_size		 = 512;
-
-		/**
-		 * @brief The limit of valid user data tag
-		 */
-		using user_data_tag_type = std::uint8_t;
-		constexpr user_data_tag_type user_data_tag_limit	 = 128;
-
-		/**
-		 * @brief The upper bound for number of size classes used by page allocator
-		 */
-		constexpr auto size_classes		   = 32;
-
-		/**
-		 * @brief maximum number of captures supported by pattern matching
-		 */
-		constexpr auto max_captures		   = 32;
-	}
-
-	namespace vm_dev
-	{
 		using instruction_type = compiler::operand_underlying_type;
 
 		/**
@@ -112,19 +44,19 @@ namespace gal
 		 *
 		 * @note 200% (allow heap to double compared to live heap size)
 		 */
-		constexpr auto gc_goal							 = 200;
+		constexpr auto default_gc_goal							 = 200;
 
 		/**
 		 * @brief The default speed of garbage collection relative to memory allocation
 		 *
 		 * @note Every GC_STEP_SIZE KB allocated, incremental collector collects GC_STEP_SIZE times GC_STEP_MULTIPLE% bytes.
 		 */
-		constexpr auto gc_step_multiple					 = 200;
+		constexpr auto default_gc_step_multiple						 = 200;
 
 		/**
 		 * @brief GC runs every 1 KB of memory allocation
 		 */
-		constexpr auto gc_step_size						 = 1;
+		constexpr auto default_gc_step_size							 = 1;
 
 		/**
 		 * @brief The guaranteed number of stack slots available to a internal function

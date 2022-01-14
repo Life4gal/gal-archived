@@ -7,9 +7,8 @@ set(
 		${PROJECT_NAME}_SOURCE
 
 		src/gal.cpp
-		src/object.cpp
 		src/state.cpp
-		
+		src/object.cpp
 )
 
 add_library(
