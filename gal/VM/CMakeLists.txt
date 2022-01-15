@@ -9,6 +9,7 @@ set(
 		src/gal.cpp
 		src/state.cpp
 		src/object.cpp
+		src/memory.cpp
 )
 
 add_library(

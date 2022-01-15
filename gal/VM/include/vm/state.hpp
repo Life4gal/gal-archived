@@ -369,6 +369,8 @@ namespace gal::vm
 	class main_state final
 	{
 		friend struct gc_handler;
+		friend struct raw_memory;
+		friend struct memory_page;
 
 	public:
 		// todo: string pool?
