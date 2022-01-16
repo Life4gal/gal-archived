@@ -91,8 +91,8 @@ namespace gal::vm
 		[[nodiscard]] constexpr void* get_next_free_block() noexcept
 		{
 			auto* ret = &data + next_free_block;
-			next_free_block -= per_block_size;
 			if (next_free_block == 0) { next_free_block = block_run_out; }
+			else { next_free_block -= per_block_size; }
 			++used_block;
 			return ret;
 		}
@@ -100,7 +100,7 @@ namespace gal::vm
 		[[nodiscard]] void* get_free_list() noexcept
 		{
 			auto* ret = free_list;
-			reinterpret_cast<block_header_type&>(free_list) = reinterpret_cast<block_header_type>(ret);
+			reinterpret_cast<block_header_type&>(free_list) = reinterpret_cast<block_header_type>(ret);// NOLINT(clang-diagnostic-undefined-reinterpret-cast)
 			++used_block;
 			return ret;
 		}
@@ -114,7 +114,7 @@ namespace gal::vm
 		{
 			auto* ret = has_free_block() ? get_next_free_block() : get_free_list();
 			// the first word in a block point back to the page
-			reinterpret_cast<block_header_type&>(ret) = reinterpret_cast<block_header_type>(this);
+			reinterpret_cast<block_header_type&>(ret) = reinterpret_cast<block_header_type>(this);// NOLINT(clang-diagnostic-undefined-reinterpret-cast)
 			// the user data is right after the metadata
 			return static_cast<char*>(ret) + block_header;
 		}
@@ -122,7 +122,7 @@ namespace gal::vm
 		void set_free_list(void* block) noexcept
 		{
 			// add the block to the free list inside the page
-			reinterpret_cast<block_header_type&>(block) = reinterpret_cast<block_header_type>(free_list);
+			reinterpret_cast<block_header_type&>(block) = reinterpret_cast<block_header_type>(free_list);// NOLINT(clang-diagnostic-undefined-reinterpret-cast)
 			free_list = block;
 			--used_block;
 		}
@@ -133,7 +133,7 @@ namespace gal::vm
 			return static_cast<char*>(block) - block_header;
 		}
 
-		[[nodiscard]] static memory_page* get_block_located_page(void* block) noexcept { return reinterpret_cast<memory_page*>(reinterpret_cast<block_header_type>(block)); }
+		[[nodiscard]] static memory_page* get_block_located_page(void* block) noexcept { return reinterpret_cast<memory_page*>(reinterpret_cast<block_header_type>(block)); }// NOLINT(performance-no-int-to-ptr)
 
 		static memory_page* create_page(main_state& state, const std::size_t size_class)
 		{
@@ -183,7 +183,7 @@ namespace gal::vm
 			if (not page) { page = create_page(state, size_class); }
 
 			gal_assert(not page->prev);
-			gal_assert(page->free_list || page->next_free_block != block_run_out);
+			gal_assert(page->free_list || page->has_free_block());
 			gal_assert(page->per_block_size == config.size_of_class[size_class] + block_header);
 
 			auto* block = page->get_next_block();
@@ -207,7 +207,7 @@ namespace gal::vm
 			block = get_block_real_address(block);
 
 			auto* page = get_block_located_page(block);
-			gal_assert(page && page->used_block > 0);
+			gal_assert(page && not page->empty());
 			gal_assert(page->per_block_size == config.size_of_class[size_class] + block_header);
 
 			// if the page was not in the page free list, it should be now since it got a block!
