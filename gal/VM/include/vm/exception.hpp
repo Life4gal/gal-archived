@@ -11,19 +11,20 @@ namespace gal::vm
 	{
 	private:
 		main_state& state_;
-		vm_status status_;
+		thread_status status_;
 
 	public:
-		constexpr vm_exception(main_state& state, const vm_status status)
+		vm_exception(main_state& state, const thread_status status)
 			: state_{state},
 			  status_{status} {}
 
-		const char* what() const override
+		[[nodiscard]] const char* what() const override
 		{
 			// todo
+			return "todo";
 		}
 
-		[[nodiscard]] constexpr vm_status get_status() const noexcept { return status_; }
+		[[nodiscard]] constexpr thread_status get_status() const noexcept { return status_; }
 	};
 }
 

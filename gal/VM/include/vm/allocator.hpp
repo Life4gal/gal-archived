@@ -26,6 +26,12 @@ namespace gal::vm
 		main_state& state;
 		[[no_unique_address]] allocator_type dummy_allocator{};
 
+		template<typename U>
+		[[nodiscard]] constexpr explicit operator vm_allocator<U>() const noexcept
+		{
+			return {state};
+		}
+
 		[[nodiscard]] constexpr auto allocate(
 				size_type n
 				#ifndef GAL_ALLOCATOR_NO_TRACE
@@ -99,11 +105,17 @@ namespace gal::vm
 			allocator_traits::destroy(dummy_allocator, p);
 		}
 
-		friend constexpr bool operator==(const vm_allocator& lhs, const vm_allocator& rhs) noexcept { return lhs.dummy_allocator == rhs.dummy_allocator; }
+		friend constexpr bool operator==(const vm_allocator& lhs, const vm_allocator& rhs) noexcept
+		{
+			return &lhs.state == &rhs.state;
+		}
 	};
 
 	template<typename T1, typename T2>
-	constexpr bool operator==(const vm_allocator<T1>& lhs, const vm_allocator<T2>& rhs) { return lhs.dummy_allocator == rhs.dummy_allocator; };
+	constexpr bool operator==(const vm_allocator<T1>& lhs, const vm_allocator<T2>& rhs)
+	{
+		return &lhs.state == &rhs.state;
+	};
 }// namespace gal::vm
 
 template<typename ValueType>
@@ -188,7 +200,7 @@ struct std::allocator_traits<::gal::vm::vm_allocator<ValueType>>
 				);
 	}
 
-	constexpr static size_type max_size(const allocator_type& a) noexcept { return internal_allocator_traits::max_size(a.allocator); }
+	constexpr static size_type		max_size(const allocator_type& a) noexcept { return internal_allocator_traits::max_size(a.dummy_allocator); }
 
 	constexpr static allocator_type select_on_container_copy_construction(const allocator_type& a) { return a; }
 };// namespace std

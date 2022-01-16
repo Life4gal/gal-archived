@@ -5,7 +5,6 @@
 
 #include <vm/object.hpp>
 #include <vm/tagged_method.hpp>
-#include <utils/hash_container.hpp>
 #include <utils/enum_utils.hpp>
 #include <array>
 
@@ -179,13 +178,15 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr object* exchange_weak(object& new_weak) noexcept { return std::exchange(weak, &new_weak); }
 
-		constexpr void link_object(object& object) noexcept
+		GAL_ASSERT_CONSTEXPR void link_object(object& object) noexcept
 		{
 			object.link_next(root_gc);
 			root_gc = &object;
 		}
 
 		void step(child_state& state, bool assist);
+
+		void check(child_state& state) { if (total_bytes >= gc_threshold) { step(state, true); } }
 
 		void full_gc(main_state& state);
 
@@ -237,7 +238,7 @@ namespace gal::vm
 	private:
 		main_state& parent_;
 
-		std::uint8_t status_;
+		thread_status status_;
 		std::uint8_t stack_state_;
 
 		// call debug_step hook after each instruction
@@ -279,45 +280,33 @@ namespace gal::vm
 		void do_mark(main_state& state) override
 		{
 			// todo
+			(void)state;
 		}
 
 		void do_destroy(main_state& state) override;
 
 	public:
-		explicit child_state(main_state& parent)
-			: object{object_type::thread},
-			  parent_{parent},
-			  status_{0},
-			  stack_state_{0},
-			  single_step_{false},
-			  // function entry for this call info
-			  top_{1},
-			  base_{1},
-			  call_infos_{},
-			  current_call_info_{0},
-			  num_internal_calls_{0},
-			  base_internal_calls_{0},
-			  cached_slot_{0},
-			  global_table_(create<object_table>(parent, parent)->operator magic_value()),
-			  open_upvalue_{nullptr},
-			  gc_list_{nullptr},
-			  named_call_{nullptr},
-			  user_data_{nullptr}
-		{
-			// todo
-			// initialize first call info
-			call_infos_[0] = {
-					.base = &stack_[0],
-					.function = &stack_[0],
-					.top = &stack_[min_stack_size],
-					.saved_pc = 0,
-					.num_returns = 0,
-					.flags = 0};
-		}
+		explicit child_state(main_state& parent);
+
+		explicit child_state(child_state& brother);
+
+		child_state& operator=(const child_state&) = delete;
+		child_state(child_state&&) = delete;
+		child_state& operator=(child_state&&) = delete;
+
+		~child_state() override = default;
+
+		void reset();
+
+		[[nodiscard]] constexpr bool is_reset() const noexcept { return current_call_info_ == 0 && base_ == top_ && base_ == 0 && status_ == thread_status::ok; }
+
+		GAL_ASSERT_CONSTEXPR void push_into_stack(const magic_value value) { stack_[top_++] = value; }
 
 		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(child_state); }
 
 		void traverse(main_state& state, bool clear_stack);
+
+		[[nodiscard]] constexpr main_state& get_parent() const noexcept { return parent_; }
 
 		constexpr void set_gc_list(object* list) noexcept { gc_list_ = list; }
 
@@ -438,6 +427,10 @@ namespace gal::vm
 
 		~main_state() noexcept;
 
+		[[nodiscard]] child_state* create_child();
+
+		void destroy_child(child_state& state);
+
 		[[nodiscard]] constexpr object::mark_type another_white() const noexcept { return current_white_ ^ object::mark_white_bits_mask; }
 
 		[[nodiscard]] constexpr object::mark_type get_white() const noexcept { return current_white_ & object::mark_white_bits_mask; }
@@ -471,6 +464,8 @@ namespace gal::vm
 			}
 		}
 
+		[[nodiscard]] child_state& get_main_state() noexcept { return main_thread_; }
+
 		[[nodiscard]] const object_string* get_table_mode(const object_table& table) const
 		{
 			return
@@ -480,6 +475,12 @@ namespace gal::vm
 							  : nullptr
 						: nullptr;
 		}
+
+		gc_handler& get_gc_handler() noexcept { return gc_; }
+
+		void check_gc() noexcept { gc_.check(main_thread_); }
+
+		void check_thread() noexcept { if (main_thread_.is_thread_sleeping()) { main_thread_.make_stack_wake(); } }
 
 		debug::callback_info& get_callback_info() noexcept { return callback_; }
 
@@ -555,7 +556,7 @@ namespace gal::vm
 			}
 		}
 
-		constexpr void link_object(object& object) noexcept
+		GAL_ASSERT_CONSTEXPR void link_object(object& object) noexcept
 		{
 			gc_.link_object(object);
 			object.set_mark(get_white());
@@ -595,6 +596,18 @@ namespace gal::vm
 		gal_assert(is_mark_white() && not state.check_is_dead(*this));
 		set_mark_white_to_gray();
 		do_mark(state);
+	}
+
+	inline child_state* magic_value::as_thread() const noexcept
+	{
+		gal_assert(is_thread());
+		return dynamic_cast<child_state*>(as_object());
+	}
+
+	GAL_ASSERT_CONSTEXPR void magic_value::copy_magic_value(const main_state& state, magic_value target) noexcept
+	{
+		data_ = target.data_;
+		state.check_alive(*this);
 	}
 }
 

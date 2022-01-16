@@ -138,7 +138,6 @@ namespace gal::vm
 		}
 
 		UNREACHABLE();
-		return 0;
 	}
 
 	std::size_t gc_handler::atomic(child_state& state)
@@ -169,7 +168,7 @@ namespace gal::vm
 
 		work += propagate_all(parent);
 		// remove collected objects from weak tables
-		work += weak ? dynamic_cast<object_table*>(weak)->clear_dead_node(parent) : 0;
+		work += weak ? dynamic_cast<object_table*>(weak)->clear_dead_node() : 0;
 		weak = nullptr;
 
 		// flip current white
@@ -619,6 +618,8 @@ namespace gal::vm
 
 	void child_state::do_destroy(main_state& state)
 	{
+		gal_assert(&parent_ == &state);
+
 		// close all upvalues for this thread
 		gal_assert(dynamic_cast<object_upvalue*>(open_upvalue_));
 		open_upvalue_ = dynamic_cast<object_upvalue*>(open_upvalue_)->close_until(parent_, stack_.data());
@@ -628,6 +629,101 @@ namespace gal::vm
 			callback.user_thread) { callback.user_thread(nullptr, *this); }
 
 		destroy(parent_, this);
+	}
+
+	child_state::child_state(main_state& parent)
+		: object{object_type::thread, mark_white_bit0_mask | mark_fixed_bit_mask},
+		  parent_{parent},
+		  status_{0},
+		  stack_state_{0},
+		  single_step_{false},
+		  // function entry for this call info
+		  top_{1},
+		  base_{1},
+		  call_infos_{},
+		  current_call_info_{0},
+		  num_internal_calls_{0},
+		  base_internal_calls_{0},
+		  cached_slot_{0},
+		  global_table_(create<object_table>(parent, parent)->operator magic_value()),
+		  open_upvalue_{nullptr},
+		  gc_list_{nullptr},
+		  named_call_{nullptr},
+		  user_data_{nullptr}
+	{
+		// initialize first call info
+		call_infos_[0] = {
+				.base		 = &stack_[0],
+				.function	 = &stack_[0],
+				.top		 = &stack_[min_stack_size],
+				.saved_pc	 = 0,
+				.num_returns = 0,
+				.flags		 = 0};
+
+		// main thread only
+		gal_assert(this == &parent_.get_main_state());
+	}
+
+	child_state::child_state(child_state& brother)
+		: object{object_type::thread},
+	parent_{brother.parent_},
+		  status_{0},
+		  stack_state_{0},
+		  single_step_{brother.single_step_},
+		  // function entry for this call info
+		  top_{1},
+		  base_{1},
+		  call_infos_{},
+		  current_call_info_{0},
+		  num_internal_calls_{0},
+		  base_internal_calls_{0},
+		  cached_slot_{0},
+		  open_upvalue_{nullptr},
+		  gc_list_{nullptr},
+		  named_call_{nullptr},
+		  user_data_{nullptr}
+	{
+		// initialize first call info
+		call_infos_[0] = {
+				.base		 = &stack_[0],
+				.function	 = &stack_[0],
+				.top		 = &stack_[min_stack_size],
+				.saved_pc	 = 0,
+				.num_returns = 0,
+				.flags		 = 0};
+
+		// brother is main thread only
+		gal_assert(&brother == &parent_.get_main_state());
+
+		parent_.link_object(*this);
+
+		// share table of globals
+		global_table_.copy_magic_value(parent_, brother.global_table_);
+
+		brother.push_into_stack(this->operator magic_value());
+
+		gal_assert(is_mark_white());
+	}
+
+	void child_state::reset()
+	{
+		close_upvalue();
+		// clear call frames
+		auto& base = call_infos_.front();
+		base.base = stack_.data() + 1;
+		base.function = stack_.data();
+		base.top	  = base.base + min_stack_size;
+
+		current_call_info_ = 0;
+
+		// clear thread state
+		status_			   = thread_status::ok;
+		top_			   = 0;
+		base_			   = 0;
+		num_internal_calls_ = 0;
+		base_internal_calls_ = 0;
+		// clear thread stack
+		std::ranges::fill(stack_, magic_value_null);
 	}
 
 	void child_state::traverse(main_state& state, const bool clear_stack)
@@ -671,21 +767,21 @@ namespace gal::vm
 	{
 		for (decltype(type_name_.size()) i = 0; i < type_name_.size(); ++i)
 		{
-			type_name_[i] = object::create<object_string>(*this, *this, object_string::data_type{gal_typename[i]});
+			type_name_[i] = object::create<object_string>(*this, *this, gal_typename[i].data(), gal_typename[i].size());
 			// never collect these names
 			type_name_[i]->set_mark_fix();
 		}
 
 		for (decltype(tagged_method_name_.size()) i = 0; i < tagged_method_name_.size(); ++i)
 		{
-			tagged_method_name_[i] = object::create<object_string>(*this, *this, object_string::data_type{gal_event_name[i]});
+			tagged_method_name_[i] = object::create<object_string>(*this, *this, gal_event_name[i].data(), gal_event_name[i].size());
 			// never collect these names
 			tagged_method_name_[i]->set_mark_fix();
 		}
 
 		// pin to make sure we can always throw these error
-		(void)object_string::create<object_string>(*this, *this, object_string::data_type{"Out of memory"});
-		(void)object_string::create<object_string>(*this, *this, object_string::data_type{"Error in error handling"});
+		(void)object::create<object_string>(*this, *this, "Out of memory");
+		(void)object::create<object_string>(*this, *this, "Error in error handling");
 
 		gc_.gc_threshold = 4 * gc_.total_bytes;
 	}
@@ -714,6 +810,33 @@ namespace gal::vm
 		gal_assert(gc_.total_bytes == sizeof(main_thread_));
 	}
 
+	child_state* main_state::create_child()
+	{
+		vm_allocator<child_state> allocator{*this};
+
+		auto*					  child = allocator.allocate(1);
+		allocator.construct(child, main_thread_);
+
+		if (callback_.user_thread)
+		{
+			callback_.user_thread(this, *child);
+		}
+
+		return child;
+	}
+
+	void main_state::destroy_child(child_state& state)
+	{
+		state.close_upvalue();
+		gal_assert(state.open_upvalue_ == nullptr);
+		if (callback_.user_thread)
+		{
+			callback_.user_thread(nullptr, state);
+		}
+
+		object::destroy(*this, &state);
+	}
+
 	void main_state::add_string_into_table(object_string& string) { string_table_.push_back(&string); }
 
 	void main_state::remove_string_from_table(object_string& string)
@@ -725,8 +848,30 @@ namespace gal::vm
 
 	namespace state
 	{
-		main_state* new_state() { return new main_state{}; }
+		[[nodiscard]] main_state* new_state() { return new main_state{}; }
 
 		void destroy_state(main_state& state) { delete &state; }
+
+		[[nodiscard]] child_state* new_thread(main_state& state)
+		{
+			state.check_gc();
+			state.check_thread();
+			return state.create_child();
+		}
+
+		[[nodiscard]] main_state& main_thread(child_state& state)
+		{
+			return state.get_parent();
+		}
+
+		void reset_thread(child_state& state)
+		{
+			state.reset();
+		}
+
+		[[nodiscard]] boolean_type is_thread_reset(const child_state& state)
+		{
+			return state.is_reset();
+		}
 	}
 }

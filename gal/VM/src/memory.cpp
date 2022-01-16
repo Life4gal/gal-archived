@@ -34,7 +34,7 @@ namespace
 			  class_count{0}
 		{
 			std::ranges::fill(size_of_class, 0);
-			std::ranges::fill(class_for_size, -1);
+			std::ranges::fill(class_for_size, static_cast<std::int8_t>(-1));
 
 			// we use a progressive size class scheme:
 			// - all size classes are aligned by 8b to satisfy pointer alignment requirements
@@ -82,9 +82,11 @@ namespace gal::vm
 
 		void* free_list{nullptr};
 
-		union alignas(std::max_align_t)
+		union // alignas(std::max_align_t)
 		{
-			char data[1]{};
+			char data[1];
+
+			std::max_align_t dummy;
 		};
 
 	private:
@@ -140,7 +142,7 @@ namespace gal::vm
 			gal_assert(size_class < size_classes);
 
 			auto* page = static_cast<memory_page*>(std::malloc(per_page_size));
-			if (not page) { throw vm_exception{state, vm_status::error_memory}; }
+			if (not page) { throw vm_exception{state, thread_status::error_memory}; }
 
 			const auto block_size = static_cast<std::uint32_t>(config.size_of_class[size_class] + block_header);
 			const auto block_count = static_cast<std::uint32_t>((per_page_size - offsetof(memory_page, data)) / block_size);
@@ -236,7 +238,7 @@ namespace gal::vm
 			              ? memory_page::create_block(state, n_class)
 			              : std::malloc(size);
 
-		if (not block && n_class > 0) { throw vm_exception{state, vm_status::error_memory}; }
+		if (not block && n_class > 0) { throw vm_exception{state, thread_status::error_memory}; }
 
 		state.gc_.total_bytes += size;
 
@@ -270,7 +272,7 @@ namespace gal::vm
 				         ? memory_page::create_block(state, n_class)
 				         : std::malloc(needed_size);
 
-			if (not result && needed_size != 0) { throw vm_exception{state, vm_status::error_memory}; }
+			if (not result && needed_size != 0) { throw vm_exception{state, thread_status::error_memory}; }
 
 			if (current_size != 0 && needed_size != 0) { std::memcpy(result, ptr, std::ranges::min(current_size, needed_size)); }
 
@@ -280,7 +282,7 @@ namespace gal::vm
 		else
 		{
 			result = std::realloc(ptr, needed_size);
-			if (not result && needed_size != 0) { throw vm_exception{state, vm_status::error_memory}; }
+			if (not result && needed_size != 0) { throw vm_exception{state, thread_status::error_memory}; }
 		}
 
 		gal_assert((needed_size == 0) == (result == nullptr));

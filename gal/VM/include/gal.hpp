@@ -25,7 +25,7 @@ namespace gal::vm
 	using stack_size_type = index_type;
 	using string_type = const char*;
 
-	enum class vm_status
+	enum class thread_status
 	{
 		ok = 0,
 		yield,
@@ -37,8 +37,7 @@ namespace gal::vm
 		breakpoint,
 	};
 
-	constexpr std::uint8_t unknown_object_type(-1);
-
+	constexpr std::uint8_t unknown_object_type = static_cast<std::uint8_t>(-1);
 	enum class object_type : std::uint8_t
 	{
 		null = 0,
@@ -67,23 +66,21 @@ namespace gal::vm
 	class child_state;
 
 	using internal_function_type = index_type(*)(child_state& state);
-	using continuation_function_type = index_type(*)(child_state& state, vm_status status);
+	using continuation_function_type = index_type(*)(child_state& state, thread_status status);
 
 	/**
 	 * @brief state manipulation
 	 */
 	namespace state
 	{
-		GAL_API main_state* new_state();
+		GAL_API [[nodiscard]] main_state*  new_state();
 		GAL_API void destroy_state(main_state& state);
 
-		GAL_API child_state* new_thread(main_state& state);
-		GAL_API main_state* main_thread(child_state& state);
+		GAL_API [[nodiscard]] child_state* new_thread(main_state& state);
+		GAL_API [[nodiscard]] main_state&  main_thread(child_state& state);
 
-		GAL_API void reset_thread(main_state& state);
 		GAL_API void reset_thread(child_state& state);
-		GAL_API boolean_type is_thread_reset(main_state& state);
-		GAL_API boolean_type is_thread_reset(child_state& state);
+		GAL_API [[nodiscard]] boolean_type is_thread_reset(const child_state& state);
 	}// namespace state
 
 	namespace debug

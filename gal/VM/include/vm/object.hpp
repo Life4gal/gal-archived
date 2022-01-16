@@ -42,11 +42,13 @@ namespace gal::vm
 		constexpr static mark_type mark_black_bit = 2;
 		constexpr static mark_type mark_fixed_bit = 3;
 
-		constexpr static mark_type mark_white_bits_mask = (1 << mark_white_bit0) | (1 << mark_white_bit1);
+		constexpr static mark_type mark_white_bit0_mask = 1 << mark_white_bit0;
+		constexpr static mark_type mark_white_bit1_mask = 1 << mark_white_bit1;
+		constexpr static mark_type mark_white_bits_mask = mark_white_bit0_mask | mark_white_bit1_mask;
 		constexpr static mark_type mark_black_bit_mask = 1 << mark_black_bit;
 		constexpr static mark_type mark_fixed_bit_mask = 1 << mark_fixed_bit;
 
-		constexpr static mark_type mask_marks = ~(mark_white_bits_mask | mark_black_bit_mask);
+		constexpr static mark_type mask_marks = static_cast<mark_type>(~(mark_white_bits_mask | mark_black_bit_mask));
 
 	private:
 		object* next_;
@@ -63,6 +65,7 @@ namespace gal::vm
 			  type_{type},
 			  marked_{mark} {}
 
+	public:
 		virtual ~object() noexcept = 0;
 
 		object(const object&) = default;
@@ -70,7 +73,6 @@ namespace gal::vm
 		object(object&&) = default;
 		object& operator=(object&&) = default;
 
-	public:
 		[[nodiscard]] constexpr bool has_next() const noexcept { return next_; }
 
 		[[nodiscard]] constexpr object*& get_next() noexcept { return next_; }
@@ -145,7 +147,8 @@ namespace gal::vm
 		constexpr static void destroy(main_state& state, T* ptr)
 		{
 			// free object
-			ptr->do_destroy(state);
+			// todo
+			// ptr->do_destroy(state);
 
 			vm_allocator<T> allocator{state};
 			allocator.destroy(ptr);
@@ -327,7 +330,7 @@ namespace gal::vm
 		[[nodiscard]] object* as_object() const noexcept
 		{
 			gal_assert(is_object());
-			return reinterpret_cast<object*>((data_ & ~pointer_mask));
+			return reinterpret_cast<object*>((data_ & ~pointer_mask));  // NOLINT(performance-no-int-to-ptr)
 		}
 
 		/**
@@ -335,11 +338,11 @@ namespace gal::vm
 		 */
 		[[nodiscard]] bool is_object(const object_type type) const noexcept { return is_object() && as_object()->type() == type; }
 
-		[[nodiscard]] constexpr bool is_string() const noexcept { return is_object(object_type::string); }
-		[[nodiscard]] constexpr bool is_table() const noexcept { return is_object(object_type::table); }
-		[[nodiscard]] constexpr bool is_function() const noexcept { return is_object(object_type::function); }
-		[[nodiscard]] constexpr bool is_user_data() const noexcept { return is_object(object_type::user_data); }
-		[[nodiscard]] constexpr bool is_thread() const noexcept { return is_object(object_type::thread); }
+		[[nodiscard]] bool is_string() const noexcept { return is_object(object_type::string); }
+		[[nodiscard]] bool is_table() const noexcept { return is_object(object_type::table); }
+		[[nodiscard]] bool is_function() const noexcept { return is_object(object_type::function); }
+		[[nodiscard]] bool is_user_data() const noexcept { return is_object(object_type::user_data); }
+		[[nodiscard]] bool is_thread() const noexcept { return is_object(object_type::thread); }
 
 		[[nodiscard]] inline object_string* as_string() const noexcept;
 		[[nodiscard]] inline object_table* as_table() const noexcept;
@@ -347,7 +350,7 @@ namespace gal::vm
 		[[nodiscard]] inline object_user_data* as_user_data() const noexcept;
 		[[nodiscard]] inline child_state* as_thread() const noexcept;
 
-		constexpr void copy_magic_value(const main_state& state, magic_value target) noexcept;
+		GAL_ASSERT_CONSTEXPR void			   copy_magic_value(const main_state& state, magic_value target) noexcept;
 
 		constexpr void mark(main_state& state) const noexcept { if (is_object()) { as_object()->try_mark(state); } }
 
@@ -394,12 +397,20 @@ namespace gal::vm
 		void do_mark(main_state& state) override
 		{
 			/* nothing need to do*/
+			(void)state;
 		}
 
 		void do_destroy(main_state& state) override;
 
 	public:
-		object_string(main_state& state, data_type&& data);
+		object_string(main_state& state, const data_type::value_type* data);
+
+		object_string(main_state& state, const data_type::value_type* data, data_type::size_type size);
+
+		[[nodiscard]] constexpr std::size_t		 memory_usage() const noexcept override
+		{
+			return sizeof(object_string) + sizeof(data_type::value_type) * data_.size();
+		}
 
 		[[nodiscard]] constexpr atomic_type get_atomic() const noexcept { return atomic_; }
 
@@ -437,8 +448,7 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override
 		{
-			// todo
-			return 0;
+			return sizeof(object_user_data) + sizeof(data_type) * data_.size();
 		}
 
 		[[nodiscard]] constexpr user_data_tag_type get_tag() const noexcept { return tag_; }
@@ -507,6 +517,7 @@ namespace gal::vm
 		void do_mark(main_state& state) override
 		{
 			// todo
+			(void)state;
 		}
 
 		void do_destroy(main_state& state) override
@@ -518,6 +529,8 @@ namespace gal::vm
 			local_variables_.clear();
 			upvalue_names_.clear();
 			debug_instructions_.clear();
+
+			(void)state;
 		}
 
 	public:
@@ -573,6 +586,7 @@ namespace gal::vm
 		void do_mark(main_state& state) override
 		{
 			// todo
+			(void)state;
 		}
 
 		void do_destroy(main_state& state) override
@@ -583,6 +597,8 @@ namespace gal::vm
 				// remove from open list
 				unlink();
 			}
+
+			(void)state;
 		}
 
 	public:
@@ -605,7 +621,7 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr magic_value get_close_value() const noexcept { return upvalue_.closed; }
 
-		constexpr void close(const main_state& state)
+		GAL_ASSERT_CONSTEXPR void				   close(const main_state& state)
 		{
 			upvalue_.closed.copy_magic_value(state, *value_);
 			// now current value lives here
@@ -720,12 +736,15 @@ namespace gal::vm
 		void do_mark(main_state& state) override
 		{
 			// todo
+			(void)state;
 		}
 
 		void do_destroy(main_state& state) override
 		{
 			if (is_internal()) { function_.internal.upvalues.clear(); }
 			else { function_.gal.upreferences.clear(); }
+
+			(void)state;
 		}
 
 	public:
@@ -827,12 +846,15 @@ namespace gal::vm
 		void do_mark(main_state& state) override
 		{
 			// todo
+			(void)state;
 		}
 
 		void do_destroy(main_state& state) override
 		{
 			// todo
 			nodes_.clear();
+
+			(void)state;
 		}
 
 	public:
@@ -845,7 +867,7 @@ namespace gal::vm
 			  gc_list_{nullptr},
 			  nodes_{2, node_container_type::allocator_type{state}} {}
 
-		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(object_table) + sizeof(node_container_type::value_type) * nodes_.size(); }
+		[[nodiscard]] std::size_t memory_usage() const noexcept override { return sizeof(object_table) + sizeof(node_container_type::value_type) * nodes_.size(); }
 
 		[[nodiscard]] constexpr bool check_flag(const flag_type flag) const noexcept { return flags_ & (1 << flag); }
 
@@ -891,7 +913,7 @@ namespace gal::vm
 			return tagged_method;
 		}
 
-		std::size_t clear_dead_node(main_state& state);
+		std::size_t clear_dead_node();
 	};
 
 	constexpr bool object::is_object_cleared()

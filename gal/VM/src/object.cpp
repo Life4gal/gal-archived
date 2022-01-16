@@ -26,17 +26,27 @@ namespace gal::vm
 		data_.clear();
 	}
 
-	object_string::object_string(main_state& state, data_type&& data)
+	object_string::object_string(main_state& state, const data_type::value_type* data)
+		: object_string{state, data, data_type::traits_type::length(data)} { }
+
+	object_string::object_string(main_state& state, const data_type::value_type* data, const data_type::size_type size)
 		: object{object_type::string},
 		  atomic_{0},
-		  data_{std::move(data)} { state.add_string_into_table(*this); }
+		  data_{data, size, {state}} { state.add_string_into_table(*this); }
 
 	object_prototype::object_prototype(main_state& state)
 		: object{object_type::prototype},
+		  constants_{{state}},
+		  code_{{state}},
+		  children_{{state}},
+		  line_info_{{state}},
 		  abs_line_info_{nullptr},
 		  line_gap_log2_{0},
+		  local_variables_{{state}},
+		  upvalue_names_{{state}},
 		  source_{nullptr},
 		  debug_name_{nullptr},
+		  debug_instructions_{{state}},
 		  gc_list_{nullptr},
 		  num_upvalues_{0},
 		  num_params_{0},
@@ -184,11 +194,12 @@ namespace gal::vm
 		  gc_list_{nullptr},
 		  environment_{environment},
 		  function_{.internal = {
-				  .function = nullptr,
-				  .continuation = nullptr,
-				  .debug_name = nullptr,
-				  .upvalues = {num_elements, magic_value_null, {state}}
-		  }} { state.link_object(*this); }
+						  .function = nullptr,
+						  .continuation = nullptr,
+						  .debug_name = nullptr,
+						  .upvalues = {num_elements, magic_value_null, {state}
+						  }}
+		  } { state.link_object(*this); }
 
 	void object_closure::traverse(main_state& state)
 	{
@@ -231,7 +242,7 @@ namespace gal::vm
 		                      });
 	}
 
-	std::size_t object_table::clear_dead_node(main_state& state)
+	std::size_t object_table::clear_dead_node()
 	{
 		std::size_t work = 0;
 
@@ -259,5 +270,7 @@ namespace gal::vm
 				                      }
 			                      });
 		}
+
+		return work;
 	}
 }

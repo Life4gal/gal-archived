@@ -10,16 +10,24 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_CXX_STANDARD 20)
 
 set(
-		${PROJECT_NAME}_SOURCE
+		${PROJECT_NAME}_SOURCE_UTILS
 		
 		test_utils/test_point.cpp
 		test_utils/test_string_utils.cpp
 		test_utils/test_string_pool.cpp
 )
 
+set(
+		${PROJECT_NAME}_SOURCE_VM
+		
+		test_vm/test_state.cpp
+)
+
 add_executable(
 		${PROJECT_NAME}
-		${${PROJECT_NAME}_SOURCE}
+
+		${${PROJECT_NAME}_SOURCE_UTILS}
+		${${PROJECT_NAME}_SOURCE_VM}
 )
 
 if(MSVC)
@@ -43,6 +51,7 @@ target_link_libraries(
 		PRIVATE
 		gal::UTILS
 		gal::CORE
+		gal::VM
 		gtest_main
 )
 

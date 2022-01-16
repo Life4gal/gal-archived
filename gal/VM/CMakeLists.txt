@@ -46,8 +46,13 @@ endif(MSVC)
 
 target_link_libraries(
 			${PROJECT_NAME}
-			PRIVATE
+			PUBLIC
 			gal::CONFIG
+)
+
+target_link_libraries(
+			${PROJECT_NAME}
+			PRIVATE
 			gal::UTILS
 )
 
