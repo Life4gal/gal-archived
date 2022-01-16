@@ -12,12 +12,8 @@ set(
 		src/timer.cpp
 )
 
-message("${PROJECT_NAME} info: build ${PROJECT_NAME} as a shared module.")
-
 add_library(
 		${PROJECT_NAME}
-		# SHARED
-		# todo: it should be shared
 		STATIC
 		${${PROJECT_NAME}_SOURCE}
 )
@@ -27,11 +23,6 @@ add_library(
 		ALIAS
 		${PROJECT_NAME}
 )
-
-if (MSVC)
-	# todo: Maybe we don¡¯t need to export all symbols
-	set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-endif ()
 
 target_include_directories(
 		${PROJECT_NAME}

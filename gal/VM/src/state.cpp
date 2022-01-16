@@ -629,6 +629,8 @@ namespace gal::vm
 			callback.user_thread) { callback.user_thread(nullptr, *this); }
 
 		destroy(parent_, this);
+
+		(void)state;
 	}
 
 	child_state::child_state(main_state& parent)

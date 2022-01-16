@@ -180,11 +180,14 @@ namespace gal::vm
 		  is_preload_{0},
 		  gc_list_{nullptr},
 		  environment_{environment},
-		  function_{.gal = {
-						  .prototype = &prototype,
-						  .upreferences = {num_elements, magic_value_null, {state}
-						  }}
-		  } { state.link_object(*this); }
+		  function_{num_elements}
+	// function_{.gal = {
+	// 		  .prototype = &prototype,
+	// 		  .upreferences = {num_elements, magic_value_null, {state}
+	// 		  }}}
+	{
+		state.link_object(*this);
+	}
 
 	object_closure::object_closure(main_state& state, compiler::operand_abc_underlying_type num_elements, object_table* environment)
 		: object{object_type::function},
@@ -193,13 +196,16 @@ namespace gal::vm
 		  is_preload_{0},
 		  gc_list_{nullptr},
 		  environment_{environment},
-		  function_{.internal = {
-						  .function = nullptr,
-						  .continuation = nullptr,
-						  .debug_name = nullptr,
-						  .upvalues = {num_elements, magic_value_null, {state}
-						  }}
-		  } { state.link_object(*this); }
+		  function_{num_elements}
+	// function_{.internal = {
+	// 		  .function = nullptr,
+	// 		  .continuation = nullptr,
+	// 		  .debug_name = nullptr,
+	// 		  .upvalues = {num_elements, magic_value_null, {state}
+	// 		  }}}
+	{
+		state.link_object(*this);
+	}
 
 	void object_closure::traverse(main_state& state)
 	{

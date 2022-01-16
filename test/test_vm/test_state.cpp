@@ -1,13 +1,13 @@
 #include <gtest/gtest.h>
 
-#include<gal.hpp>
+// #include<gal.hpp>
 
-using namespace gal::vm;
+// using namespace gal::vm;
 
 TEST(TestState, TestState)
 {
-	using namespace state;
+	// using namespace state;
 
-	auto* state = new_state();
-	(void)state;
+	// auto* state = new_state();
+	// (void)state;
 }

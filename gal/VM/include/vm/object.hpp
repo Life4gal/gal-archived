@@ -723,6 +723,8 @@ namespace gal::vm
 		// force function_type to be an aggregate type
 		union function_type// NOLINT(cppcoreguidelines-special-member-functions)
 		{
+			compiler::operand_abc_underlying_type num{};
+			// todo: gal / internal init will case an ice
 			gal_type gal;
 			internal_type internal;
 
