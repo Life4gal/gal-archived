@@ -867,13 +867,9 @@ namespace gal::vm
 		gal_assert(main_thread_.global_table_.is_table());
 		object::destroy(*this, main_thread_.global_table_.as_table());
 
-		// 3472
-		// 3120 + 64 + 64 + 120 = 3368
-		// gal_assert(gc_.total_bytes == 
-		// 	sizeof(main_state) + 
-		// 	sizeof(builtin_type_meta_table_type) + 
-		// 	sizeof(builtin_type_name_table_type) + 
-		// 	sizeof(tagged_method_name_table_type));
+		gal_assert(std::ranges::all_of(gc_.free_pages, [](const auto* page) { return page == nullptr; }));
+
+		gal_assert(gc_.total_bytes == sizeof(main_state));
 
 		#ifndef GAL_ALLOCATOR_NO_TRACE
 		raw_memory::print_trace_log();
