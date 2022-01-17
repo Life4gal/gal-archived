@@ -3,9 +3,18 @@
 #include <array>
 #include <algorithm>
 #include <utils/assert.hpp>
-#include <vm/allocator.hpp>
 #include <vm/exception.hpp>
 #include <vm/state.hpp>
+
+#ifndef GAL_ALLOCATOR_NO_TRACE
+#include <iostream>// for std::clog
+#include <utils/format.hpp>
+#include <vector>
+#include <string>
+#include <unordered_map>
+#include <mutex>
+#include <numeric>
+#endif
 
 namespace
 {
@@ -64,6 +73,86 @@ namespace
 	};
 
 	constexpr size_class_config config{};
+
+	#ifndef GAL_ALLOCATOR_NO_TRACE
+	std::vector<std::string> trace_errors{};
+	std::unordered_map<const void*, std::pair<std::size_t, std_source_location>> trace_mapping{};
+	std::mutex trace_mutex;
+
+	void trace(const void* ptr, const std::size_t size, const std_source_location& location)
+	{
+		std::scoped_lock lock{trace_mutex};
+
+		if (auto [it, inserted] = trace_mapping.emplace(ptr, std::make_pair(size, location));
+			not inserted)
+		{
+			// already exist
+			if (it->second.first != size)
+			{
+				trace_errors.emplace_back(std_format::format(
+						"{} bytes of memory were allocated at {}, but only {} bytes were deallocate!\n",
+						it->second.first,
+						it->first,
+						size));
+			}
+
+			// remove it
+			trace_mapping.erase(it);
+		}
+	}
+
+	void print_trace()
+	{
+		std::scoped_lock lock{trace_mutex};
+
+		if (trace_mapping.empty() && trace_errors.empty()) { std::clog << "\ntrace log: nothing interesting\n"; return; }
+
+		std::clog <<
+				"\n====================================================\n"
+				"====================== trace log ===================\n"
+				"====================================================\n";
+
+		std::ranges::for_each(trace_mapping,
+		                      [](const auto& pair)
+		                      {
+			                      const auto& [size, location] = pair.second;
+
+			                      std::clog << std_format::format(
+					                      "An object(located at: {}, memory used: {}) may not have been freed! Required from: [file:{}][line:{}, column: {}][function:{}]\n",
+					                      pair.first,
+					                      size,
+					                      location.file_name(),
+					                      location.line(),
+					                      location.column(),
+					                      location.function_name()
+					                      );
+		                      });
+
+		if (not trace_mapping.empty())
+		{
+			std::clog << std_format::format(
+					"{} times memory leaks, leak about {} byte(s) in total.\n",
+					trace_mapping.size(),
+					std::reduce(
+							trace_mapping.begin(),
+							trace_mapping.end(),
+							std::size_t{0},
+							[](const auto sum, const auto& pair) { return sum + pair.second.first; }));
+		}
+
+		if (not trace_errors.empty())
+		{
+			std::clog << "The following error(s) occurred while allocating memory: \n";
+			std::ranges::for_each(trace_errors,
+			                      [](const auto& message) { std::cout << message << '\n'; });
+		}
+
+		std::clog <<
+				"====================================================\n"
+				"==================== trace log end =================\n"
+				"====================================================\n";
+	}
+	#endif
 }
 
 namespace gal::vm
@@ -82,7 +171,7 @@ namespace gal::vm
 
 		void* free_list{nullptr};
 
-		union // alignas(std::max_align_t)
+		union// alignas(std::max_align_t)
 		{
 			char data[1];
 
@@ -102,7 +191,7 @@ namespace gal::vm
 		[[nodiscard]] void* get_free_list() noexcept
 		{
 			auto* ret = free_list;
-			reinterpret_cast<block_header_type&>(free_list) = reinterpret_cast<block_header_type>(ret);// NOLINT(clang-diagnostic-undefined-reinterpret-cast)
+			*static_cast<block_header_type*>(free_list) = reinterpret_cast<block_header_type>(ret);// NOLINT(clang-diagnostic-undefined-reinterpret-cast)
 			++used_block;
 			return ret;
 		}
@@ -116,7 +205,7 @@ namespace gal::vm
 		{
 			auto* ret = has_free_block() ? get_next_free_block() : get_free_list();
 			// the first word in a block point back to the page
-			reinterpret_cast<block_header_type&>(ret) = reinterpret_cast<block_header_type>(this);// NOLINT(clang-diagnostic-undefined-reinterpret-cast)
+			*static_cast<block_header_type*>(ret) = reinterpret_cast<block_header_type>(this);// NOLINT(clang-diagnostic-undefined-reinterpret-cast)
 			// the user data is right after the metadata
 			return static_cast<char*>(ret) + block_header;
 		}
@@ -124,18 +213,18 @@ namespace gal::vm
 		void set_free_list(void* block) noexcept
 		{
 			// add the block to the free list inside the page
-			reinterpret_cast<block_header_type&>(block) = reinterpret_cast<block_header_type>(free_list);// NOLINT(clang-diagnostic-undefined-reinterpret-cast)
+			*static_cast<block_header_type*>(block) = reinterpret_cast<block_header_type>(free_list);// NOLINT(clang-diagnostic-undefined-reinterpret-cast)
 			free_list = block;
 			--used_block;
 		}
 
 		[[nodiscard]] constexpr static void* get_block_real_address(void* block) noexcept
 		{
-			// // the user data is right after the metadata
+			// the user data is right after the metadata
 			return static_cast<char*>(block) - block_header;
 		}
 
-		[[nodiscard]] static memory_page* get_block_located_page(void* block) noexcept { return reinterpret_cast<memory_page*>(reinterpret_cast<block_header_type>(block)); }// NOLINT(performance-no-int-to-ptr)
+		[[nodiscard]] static memory_page* get_block_located_page(void* block) noexcept { return reinterpret_cast<memory_page*>(*static_cast<block_header_type*>(block)); }// NOLINT(performance-no-int-to-ptr)
 
 		static memory_page* create_page(main_state& state, const std::size_t size_class)
 		{
@@ -143,6 +232,9 @@ namespace gal::vm
 
 			auto* page = static_cast<memory_page*>(std::malloc(per_page_size));
 			if (not page) { throw vm_exception{state, thread_status::error_memory}; }
+
+			// default construct page :)
+			std::construct_at(page);
 
 			const auto block_size = static_cast<std::uint32_t>(config.size_of_class[size_class] + block_header);
 			const auto block_count = static_cast<std::uint32_t>((per_page_size - offsetof(memory_page, data)) / block_size);
@@ -156,8 +248,8 @@ namespace gal::vm
 			page->next_free_block = (block_count - 1) * block_size;
 
 			// prepend a page to page free_list (which is empty because we only ever allocate a new page when it is!)
-			gal_assert(not state.gc_.free_pages[size_class]);
-			state.gc_.free_pages[size_class] = page;
+			gal_assert(not state.get_gc_handler().free_pages[size_class]);
+			state.get_gc_handler().free_pages[size_class] = page;
 
 			return page;
 		}
@@ -170,16 +262,19 @@ namespace gal::vm
 			if (page->next) { page->next->prev = page->prev; }
 
 			if (page->prev) { page->prev->next = page->next; }
-			else if (state.gc_.free_pages[size_class] == page) { state.gc_.free_pages[size_class] = page->next; }
+			else if (state.get_gc_handler().free_pages[size_class] == page) { state.get_gc_handler().free_pages[size_class] = page->next; }
 
-			delete page;
+			// should be not necessary
+			std::destroy_at(page);
+
+			std::free(page);
 		}
 
 		static void* create_block(main_state& state, const std::size_t size_class)
 		{
 			gal_assert(size_class < size_classes);
 
-			auto* page = state.gc_.free_pages[size_class];
+			auto* page = state.get_gc_handler().free_pages[size_class];
 
 			// slow path: no page in the free_list, allocate a new one
 			if (not page) { page = create_page(state, size_class); }
@@ -193,7 +288,7 @@ namespace gal::vm
 			// if we allocate the last block out of a page, we need to remove it from free list
 			if (not page->free_list && not page->has_free_block())
 			{
-				state.gc_.free_pages[size_class] = page->next;
+				state.get_gc_handler().free_pages[size_class] = page->next;
 				if (page->next) { page->next->prev = nullptr; }
 				page->next = nullptr;
 			}
@@ -218,9 +313,9 @@ namespace gal::vm
 				gal_assert(not page->prev);
 				gal_assert(not page->next);
 
-				page->next = state.gc_.free_pages[size_class];
+				page->next = state.get_gc_handler().free_pages[size_class];
 				if (page->next) { page->next->prev = page; }
-				state.gc_.free_pages[size_class] = page;
+				state.get_gc_handler().free_pages[size_class] = page;
 			}
 
 			page->set_free_list(block);
@@ -230,7 +325,13 @@ namespace gal::vm
 		}
 	};
 
-	void* raw_memory::allocate(main_state& state, const std::size_t size)
+	void* raw_memory::allocate(main_state& state,
+	                           const std::size_t size
+	                           #ifndef GAL_ALLOCATOR_NO_TRACE
+	                           ,
+	                           const std_source_location& location
+	                           #endif
+			)
 	{
 		const auto n_class = config.get_class_size(size);
 
@@ -240,12 +341,33 @@ namespace gal::vm
 
 		if (not block && n_class > 0) { throw vm_exception{state, thread_status::error_memory}; }
 
-		state.gc_.total_bytes += size;
+		state.get_gc_handler().total_bytes += size;
+
+		#ifndef GAL_ALLOCATOR_NO_TRACE
+		trace(block, size, location);
+
+		std::clog << std_format::format(
+				"Target at {}, memory usage now: {}. Required from: [file:{}][line:{}, column: {}][function:{}].\n",
+				block,
+				state.get_gc_handler().total_bytes,
+				location.file_name(),
+				location.line(),
+				location.column(),
+				location.function_name()
+				);
+		#endif
 
 		return block;
 	}
 
-	void raw_memory::deallocate(main_state& state, void* ptr, const std::size_t size)
+	void raw_memory::deallocate(main_state& state,
+	                            void* ptr,
+	                            const std::size_t size
+	                            #ifndef GAL_ALLOCATOR_NO_TRACE
+	                            ,
+	                            const std_source_location& location
+	                            #endif
+			)
 	{
 		gal_assert((size == 0) == (ptr == nullptr));
 
@@ -254,9 +376,30 @@ namespace gal::vm
 		else { std::free(ptr); }
 
 		state.gc_.total_bytes -= size;
+
+		#ifndef GAL_ALLOCATOR_NO_TRACE
+		trace(ptr, size, location);
+
+		std::clog << std_format::format(
+				"Target at {}, memory usage now: {}. Required from: [file:{}][line:{}, column: {}][function:{}].\n",
+				ptr,
+				state.get_gc_handler().total_bytes,
+				location.file_name(),
+				location.line(),
+				location.column(),
+				location.function_name());
+		#endif
 	}
 
-	void* raw_memory::memory_re_allocate(main_state& state, void* ptr, std::size_t current_size, std::size_t needed_size)
+	void* raw_memory::memory_re_allocate(main_state& state,
+	                                     void* ptr,
+	                                     const std::size_t current_size,
+	                                     const std::size_t needed_size
+	                                     #ifndef GAL_ALLOCATOR_NO_TRACE
+	                                     ,
+	                                     const std_source_location& location
+	                                     #endif
+			)
 	{
 		gal_assert((current_size == 0) == (ptr == nullptr));
 
@@ -289,6 +432,23 @@ namespace gal::vm
 
 		state.gc_.total_bytes += needed_size - current_size;
 
+		#ifndef GAL_ALLOCATOR_NO_TRACE
+		trace(ptr, current_size, location);
+		trace(result, needed_size, location);
+
+		std::clog << std_format::format(
+				"Previous at {}, Result at{}, memory usage now: {}. Required from: [file:{}][line:{}, column: {}][function:{}].\n",
+				ptr,
+				result,
+				state.get_gc_handler().total_bytes,
+				location.file_name(),
+				location.line(),
+				location.column(),
+				location.function_name());
+		#endif
+
 		return result;
 	}
+
+	void raw_memory::print_trace_log() { print_trace(); }
 }

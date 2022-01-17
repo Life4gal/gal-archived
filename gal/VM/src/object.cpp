@@ -4,6 +4,8 @@
 
 namespace gal::vm
 {
+	object::~object() noexcept = default;
+
 	void object_string::do_destroy(main_state& state) { state.remove_string_from_table(*this); }
 
 	void object_user_data::do_destroy(main_state& state)
@@ -159,6 +161,9 @@ namespace gal::vm
 
 		auto* ret = create<object_upvalue>(
 				state,
+				#ifndef GAL_ALLOCATOR_NO_TRACE
+				std_source_location::current(),
+				#endif
 				// current value lives in the stack
 				level,
 				nullptr
@@ -173,7 +178,7 @@ namespace gal::vm
 		return ret;
 	}
 
-	object_closure::object_closure(main_state& state, compiler::operand_abc_underlying_type num_elements, object_table* environment, object_prototype& prototype)
+	object_closure::object_closure(main_state& state, const compiler::operand_abc_underlying_type num_elements, object_table* environment, object_prototype& prototype)
 		: object{object_type::function},
 		  is_internal_{0},
 		  stack_size_{prototype.get_stack_capacity()},
@@ -189,7 +194,7 @@ namespace gal::vm
 		state.link_object(*this);
 	}
 
-	object_closure::object_closure(main_state& state, compiler::operand_abc_underlying_type num_elements, object_table* environment)
+	object_closure::object_closure(main_state& state, const compiler::operand_abc_underlying_type num_elements, object_table* environment)
 		: object{object_type::function},
 		  is_internal_{1},
 		  stack_size_{min_stack_size},

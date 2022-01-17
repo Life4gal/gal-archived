@@ -77,7 +77,7 @@ namespace gal::vm
 		GAL_API void destroy_state(main_state& state);
 
 		GAL_API [[nodiscard]] child_state* new_thread(main_state& state);
-		GAL_API [[nodiscard]] main_state&  main_thread(child_state& state);
+		GAL_API [[nodiscard]] main_state&  main_thread(const child_state& state);
 
 		GAL_API void reset_thread(child_state& state);
 		GAL_API [[nodiscard]] boolean_type is_thread_reset(const child_state& state);

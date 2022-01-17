@@ -75,7 +75,7 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr bool has_next() const noexcept { return next_; }
 
-		[[nodiscard]] constexpr object*& get_next() noexcept { return next_; }
+		[[nodiscard]] constexpr object* get_next() noexcept { return next_; }
 
 		[[nodiscard]] constexpr const object* get_next() const noexcept { return next_; }
 
@@ -131,12 +131,24 @@ namespace gal::vm
 
 		template<typename T, typename... Args>
 			requires std::is_base_of_v<object, T>
-		[[nodiscard]] constexpr static T* create(main_state& state, Args&&... args)
+		[[nodiscard]] constexpr static T* create(
+				main_state& state,
+				#ifndef GAL_ALLOCATOR_NO_TRACE
+				const std_source_location& location = std_source_location::current(),
+				#endif
+				Args&&... args
+				)
 		{
 			// construct object
 			vm_allocator<T> allocator{state};
 
-			auto ptr = allocator.allocate(1);
+			auto ptr = allocator.allocate(
+					1
+					#ifndef GAL_ALLOCATOR_NO_TRACE
+					,
+					location
+					#endif
+					);
 			allocator.construct(ptr, std::forward<Args>(args)...);
 
 			return ptr;
@@ -144,15 +156,30 @@ namespace gal::vm
 
 		template<typename T>
 			requires std::is_base_of_v<object, T>
-		constexpr static void destroy(main_state& state, T* ptr)
+		constexpr static void destroy(
+				main_state& state,
+				T* ptr
+				#ifndef GAL_ALLOCATOR_NO_TRACE
+				,
+				const std_source_location& location = std_source_location::current()
+				#endif
+				)
 		{
+			gal_assert(ptr);
+
 			// free object
-			// todo
-			// ptr->do_destroy(state);
+			ptr->do_destroy(state);
 
 			vm_allocator<T> allocator{state};
 			allocator.destroy(ptr);
-			allocator.deallocate(ptr, 1);
+			allocator.deallocate(
+					ptr,
+					1
+					#ifndef GAL_ALLOCATOR_NO_TRACE
+					,
+					location
+					#endif
+					);
 		}
 
 		[[nodiscard]] constexpr virtual std::size_t memory_usage() const noexcept = 0;
@@ -290,7 +317,7 @@ namespace gal::vm
 			: data_{std::bit_cast<value_type>(d)} {}
 
 		explicit magic_value(const object* obj) noexcept
-			: data_{reinterpret_cast<std::uintptr_t>(obj)} {}
+			: data_{std::bit_cast<value_type>(reinterpret_cast<std::uintptr_t>(obj)) | pointer_mask} {}
 
 		[[nodiscard]] constexpr value_type get_data() const noexcept { return data_; }
 
@@ -330,7 +357,7 @@ namespace gal::vm
 		[[nodiscard]] object* as_object() const noexcept
 		{
 			gal_assert(is_object());
-			return reinterpret_cast<object*>((data_ & ~pointer_mask));  // NOLINT(performance-no-int-to-ptr)
+			return reinterpret_cast<object*>((data_ & ~pointer_mask));// NOLINT(performance-no-int-to-ptr)
 		}
 
 		/**
@@ -350,7 +377,7 @@ namespace gal::vm
 		[[nodiscard]] inline object_user_data* as_user_data() const noexcept;
 		[[nodiscard]] inline child_state* as_thread() const noexcept;
 
-		GAL_ASSERT_CONSTEXPR void			   copy_magic_value(const main_state& state, magic_value target) noexcept;
+		GAL_ASSERT_CONSTEXPR void copy_magic_value(const main_state& state, magic_value target) noexcept;
 
 		constexpr void mark(main_state& state) const noexcept { if (is_object()) { as_object()->try_mark(state); } }
 
@@ -386,6 +413,7 @@ namespace gal::vm
 
 	class object_string final : public object
 	{
+		friend class object;
 	public:
 		using atomic_type = std::int16_t;
 		using data_type = std::basic_string<char, std::char_traits<char>, vm_allocator<char>>;
@@ -407,10 +435,7 @@ namespace gal::vm
 
 		object_string(main_state& state, const data_type::value_type* data, data_type::size_type size);
 
-		[[nodiscard]] constexpr std::size_t		 memory_usage() const noexcept override
-		{
-			return sizeof(object_string) + sizeof(data_type::value_type) * data_.size();
-		}
+		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(object_string) + sizeof(data_type::value_type) * data_.size(); }
 
 		[[nodiscard]] constexpr atomic_type get_atomic() const noexcept { return atomic_; }
 
@@ -423,6 +448,7 @@ namespace gal::vm
 
 	class object_user_data final : public object
 	{
+		friend class object;
 	public:
 		using data_type = std::uint8_t;
 		using data_container_type = std::vector<data_type, vm_allocator<data_type>>;
@@ -446,10 +472,7 @@ namespace gal::vm
 			  meta_table_{meta_table},
 			  data_{std::move(data)} {}
 
-		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override
-		{
-			return sizeof(object_user_data) + sizeof(data_type) * data_.size();
-		}
+		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(object_user_data) + sizeof(data_type) * data_.size(); }
 
 		[[nodiscard]] constexpr user_data_tag_type get_tag() const noexcept { return tag_; }
 
@@ -465,6 +488,7 @@ namespace gal::vm
 	 */
 	class object_prototype final : public object
 	{
+		friend class object;
 	public:
 		struct local_variable
 		{
@@ -566,6 +590,7 @@ namespace gal::vm
 
 	class object_upvalue final : public object
 	{
+		friend class object;
 	private:
 		// points to stack or to its own value
 		stack_element_type value_;
@@ -621,7 +646,7 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr magic_value get_close_value() const noexcept { return upvalue_.closed; }
 
-		GAL_ASSERT_CONSTEXPR void				   close(const main_state& state)
+		GAL_ASSERT_CONSTEXPR void close(const main_state& state)
 		{
 			upvalue_.closed.copy_magic_value(state, *value_);
 			// now current value lives here
@@ -693,6 +718,7 @@ namespace gal::vm
 
 	class object_closure final : public object
 	{
+		friend class object;
 	public:
 		struct internal_type
 		{
@@ -819,6 +845,7 @@ namespace gal::vm
 {
 	class object_table final : public object
 	{
+		friend class object;
 	public:
 		using node_container_type = utils::hash_map<
 			magic_value,

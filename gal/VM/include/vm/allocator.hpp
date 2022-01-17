@@ -27,10 +27,7 @@ namespace gal::vm
 		[[no_unique_address]] allocator_type dummy_allocator{};
 
 		template<typename U>
-		[[nodiscard]] constexpr explicit operator vm_allocator<U>() const noexcept
-		{
-			return {state};
-		}
+		[[nodiscard]] constexpr explicit operator vm_allocator<U>() const noexcept { return {state}; }
 
 		[[nodiscard]] constexpr auto allocate(
 				size_type n
@@ -40,20 +37,19 @@ namespace gal::vm
 				#endif
 				)
 		{
-			auto* ret = static_cast<T*>(raw_memory::allocate(state, sizeof(value_type) * n));
 			#ifndef GAL_ALLOCATOR_NO_TRACE
 			std::clog << std_format::format(
-					"allocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. allocate at: [file:{}][line:{}, column: {}][function:{}]\n",
+					"Allocate {} object(s) ({} byte(s) per object, totally: {} bytes).",
 					n,
-					static_cast<void*>(ret),
 					sizeof(value_type),
+					sizeof(value_type) * n);
+			return static_cast<T*>(raw_memory::allocate(
+					state,
 					sizeof(value_type) * n,
-					location.file_name(),
-					location.line(),
-					location.column(),
-					location.function_name());
+					location));
+			#else
+					return static_cast<T*>(raw_memory::allocate(state, sizeof(value_type) * n);
 			#endif
-			return ret;
 		}
 
 		constexpr void deallocate(
@@ -67,55 +63,29 @@ namespace gal::vm
 		{
 			#ifndef GAL_ALLOCATOR_NO_TRACE
 			std::clog << std_format::format(
-					"deallocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. allocate at: [file:{}][line:{}, column: {}][function:{}]\n",
+					"Deallocate {} object(s) at {} ({} byte(s) per object, totally: {} bytes).",
 					n,
 					static_cast<void*>(p),
 					sizeof(value_type),
-					sizeof(value_type) * n,
-					location.file_name(),
-					location.line(),
-					location.column(),
-					location.function_name());
-			#endif
+					sizeof(value_type) * n);
 
-			raw_memory::deallocate(state, p, n);
+			raw_memory::deallocate(state, p, sizeof(value_type) * n, location);
+			#else
+			raw_memory::deallocate(state, p, sizeof(value_type) * n);
+			#endif
 		}
 
 		template<typename U, typename... Args>
 		constexpr void construct(U* p, Args&&... args) { allocator_traits::construct(dummy_allocator, p, std::forward<Args>(args)...); }
 
 		template<typename U>
-		constexpr void destroy(
-				U* p
-				#ifndef GAL_ALLOCATOR_NO_TRACE
-				,
-				const std_source_location& location = std_source_location::current()
-				#endif
-				)
-		{
-			#ifndef GAL_ALLOCATOR_NO_TRACE
-			std::clog << std_format::format(
-					"destroy an object at {}. construct at: [file:{}][line:{}, column: {}][function:{}]\n",
-					static_cast<void*>(p),
-					location.file_name(),
-					location.line(),
-					location.column(),
-					location.function_name());
-			#endif
-			allocator_traits::destroy(dummy_allocator, p);
-		}
+		constexpr void destroy(U* p) { allocator_traits::destroy(dummy_allocator, p); }
 
-		friend constexpr bool operator==(const vm_allocator& lhs, const vm_allocator& rhs) noexcept
-		{
-			return &lhs.state == &rhs.state;
-		}
+		friend constexpr bool operator==(const vm_allocator& lhs, const vm_allocator& rhs) noexcept { return &lhs.state == &rhs.state; }
 	};
 
 	template<typename T1, typename T2>
-	constexpr bool operator==(const vm_allocator<T1>& lhs, const vm_allocator<T2>& rhs)
-	{
-		return &lhs.state == &rhs.state;
-	};
+	constexpr bool operator==(const vm_allocator<T1>& lhs, const vm_allocator<T2>& rhs) { return &lhs.state == &rhs.state; };
 }// namespace gal::vm
 
 template<typename ValueType>
@@ -183,24 +153,9 @@ struct std::allocator_traits<::gal::vm::vm_allocator<ValueType>>
 	constexpr static void construct(allocator_type& a, T* p, Args&&... args) { a.construct(p, std::forward<Args>(args)...); }
 
 	template<typename T>
-	constexpr static void destroy(
-			allocator_type& a,
-			T* p
-			#ifndef GAL_ALLOCATOR_NO_TRACE
-			,
-			const std_source_location& location = std_source_location::current()
-			#endif
-			)
-	{
-		a.destroy(p
-		          #ifndef GAL_ALLOCATOR_NO_TRACE
-		          ,
-		          location
-		          #endif
-				);
-	}
+	constexpr static void destroy(allocator_type& a, T* p) { a.destroy(p); }
 
-	constexpr static size_type		max_size(const allocator_type& a) noexcept { return internal_allocator_traits::max_size(a.dummy_allocator); }
+	constexpr static size_type max_size(const allocator_type& a) noexcept { return internal_allocator_traits::max_size(a.dummy_allocator); }
 
 	constexpr static allocator_type select_on_container_copy_construction(const allocator_type& a) { return a; }
 };// namespace std

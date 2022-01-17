@@ -2,6 +2,7 @@
 #include<chrono>
 #include <algorithm>
 #include <utils/macro.hpp>
+#include <ranges>
 
 namespace
 {
@@ -493,7 +494,8 @@ namespace gal::vm
 	gc_handler::gc_handler(object* root)
 		: root_gc{root},
 		  sweep_gc{root_gc},
-		  total_bytes{sizeof(main_state)} {}
+		  total_bytes{sizeof(main_state)},
+		  free_pages{} { std::ranges::fill(free_pages, nullptr); }
 
 	void gc_handler::step(child_state& state, const bool assist)
 	{
@@ -647,7 +649,14 @@ namespace gal::vm
 		  num_internal_calls_{0},
 		  base_internal_calls_{0},
 		  cached_slot_{0},
-		  global_table_(create<object_table>(parent, parent)->operator magic_value()),
+		  global_table_(
+				  create<object_table>(
+						  parent,
+						  #ifndef GAL_ALLOCATOR_NO_TRACE
+						  std_source_location::current(),
+						  #endif
+						  parent
+						  )->operator magic_value()),
 		  open_upvalue_{nullptr},
 		  gc_list_{nullptr},
 		  named_call_{nullptr},
@@ -655,12 +664,12 @@ namespace gal::vm
 	{
 		// initialize first call info
 		call_infos_[0] = {
-				.base		 = &stack_[0],
-				.function	 = &stack_[0],
-				.top		 = &stack_[min_stack_size],
-				.saved_pc	 = 0,
+				.base = &stack_[0],
+				.function = &stack_[0],
+				.top = &stack_[min_stack_size],
+				.saved_pc = 0,
 				.num_returns = 0,
-				.flags		 = 0};
+				.flags = 0};
 
 		// main thread only
 		gal_assert(this == &parent_.get_main_state());
@@ -668,7 +677,7 @@ namespace gal::vm
 
 	child_state::child_state(child_state& brother)
 		: object{object_type::thread},
-	parent_{brother.parent_},
+		  parent_{brother.parent_},
 		  status_{0},
 		  stack_state_{0},
 		  single_step_{brother.single_step_},
@@ -687,12 +696,12 @@ namespace gal::vm
 	{
 		// initialize first call info
 		call_infos_[0] = {
-				.base		 = &stack_[0],
-				.function	 = &stack_[0],
-				.top		 = &stack_[min_stack_size],
-				.saved_pc	 = 0,
+				.base = &stack_[0],
+				.function = &stack_[0],
+				.top = &stack_[min_stack_size],
+				.saved_pc = 0,
 				.num_returns = 0,
-				.flags		 = 0};
+				.flags = 0};
 
 		// brother is main thread only
 		gal_assert(&brother == &parent_.get_main_state());
@@ -714,14 +723,14 @@ namespace gal::vm
 		auto& base = call_infos_.front();
 		base.base = stack_.data() + 1;
 		base.function = stack_.data();
-		base.top	  = base.base + min_stack_size;
+		base.top = base.base + min_stack_size;
 
 		current_call_info_ = 0;
 
 		// clear thread state
-		status_			   = thread_status::ok;
-		top_			   = 0;
-		base_			   = 0;
+		status_ = thread_status::ok;
+		top_ = 0;
+		base_ = 0;
 		num_internal_calls_ = 0;
 		base_internal_calls_ = 0;
 		// clear thread stack
@@ -760,30 +769,62 @@ namespace gal::vm
 	}
 
 	main_state::main_state()
-		: current_white_{object::mark_white_bits_mask},
+		: gc_{&main_thread_},
+		  current_white_{object::mark_white_bits_mask},
 		  main_thread_{*this},
-		  registry_(object::create<object_table>(*this, *this)->operator magic_value()),
+		  registry_(object::create<object_table>(
+				  *this,
+				  #ifndef GAL_ALLOCATOR_NO_TRACE
+				  std_source_location::current(),
+				  #endif
+				  *this
+				  )->operator magic_value()),
 		  registry_free_{0},
-		  gc_{&main_thread_},
 		  callback_{}
 	{
 		for (decltype(type_name_.size()) i = 0; i < type_name_.size(); ++i)
 		{
-			type_name_[i] = object::create<object_string>(*this, *this, gal_typename[i].data(), gal_typename[i].size());
+			type_name_[i] = object::create<object_string>(
+					*this,
+					#ifndef GAL_ALLOCATOR_NO_TRACE
+					std_source_location::current(),
+					#endif
+					*this,
+					gal_typename[i].data(),
+					gal_typename[i].size());
 			// never collect these names
 			type_name_[i]->set_mark_fix();
 		}
 
 		for (decltype(tagged_method_name_.size()) i = 0; i < tagged_method_name_.size(); ++i)
 		{
-			tagged_method_name_[i] = object::create<object_string>(*this, *this, gal_event_name[i].data(), gal_event_name[i].size());
+			tagged_method_name_[i] = object::create<object_string>(
+					*this,
+					#ifndef GAL_ALLOCATOR_NO_TRACE
+					std_source_location::current(),
+					#endif
+					*this,
+					gal_event_name[i].data(),
+					gal_event_name[i].size());
 			// never collect these names
 			tagged_method_name_[i]->set_mark_fix();
 		}
 
 		// pin to make sure we can always throw these error
-		(void)object::create<object_string>(*this, *this, "Out of memory");
-		(void)object::create<object_string>(*this, *this, "Error in error handling");
+		(void)object::create<object_string>(
+				*this,
+				#ifndef GAL_ALLOCATOR_NO_TRACE
+				std_source_location::current(),
+				#endif
+				*this,
+				"Out of memory");
+		(void)object::create<object_string>(
+				*this,
+				#ifndef GAL_ALLOCATOR_NO_TRACE
+				std_source_location::current(),
+				#endif
+				*this,
+				"Error in error handling");
 
 		gc_.gc_threshold = 4 * gc_.total_bytes;
 	}
@@ -797,32 +838,56 @@ namespace gal::vm
 		gc_.root_gc->delete_chain(*this, &main_thread_);
 
 		// free all string lists
-		std::ranges::for_each(string_table_,
-		                      [this](auto* string) { string->delete_chain(*this); });
+		// todo: deleting strings from string_table_ will cause the vector to be altered and the iterator to be invalidated.
+		// remove from back
+		// for (auto* string: string_table_ | std::views::reverse)
+		// {
+		// 	string->delete_chain(*this);
+		// }
+		// for (auto it = string_table_.rbegin(), next = it + 1; it != string_table_.rend(); it = next, next = it + 1)
+		// {
+		// 	(*it)->delete_chain(*this);
+		// }
+		while (not string_table_.empty()) { string_table_.back()->delete_chain(*this); }
+		string_table_.shrink_to_fit();
+
 		gal_assert(string_table_.empty());
 
-		gc_.string_buffer_gc->delete_chain(*this);
+		if (gc_.string_buffer_gc) { gc_.string_buffer_gc->delete_chain(*this); }
 		// unfortunately, when string objects are freed, the string table use count is decremented
 		// even when the string is a buffer that wasn't placed into the table
 		gal_assert(string_table_.empty());
 
 		gal_assert(gc_.root_gc == &main_thread_);
-		gal_assert(gc_.string_buffer_gc = nullptr);
+		gal_assert(gc_.string_buffer_gc == nullptr);
 
-		gal_assert(gc_.total_bytes == sizeof(main_thread_));
+		gal_assert(registry_.is_table());
+		object::destroy(*this, registry_.as_table());
+
+		gal_assert(main_thread_.global_table_.is_table());
+		object::destroy(*this, main_thread_.global_table_.as_table());
+
+		// 3472
+		// 3120 + 64 + 64 + 120 = 3368
+		// gal_assert(gc_.total_bytes == 
+		// 	sizeof(main_state) + 
+		// 	sizeof(builtin_type_meta_table_type) + 
+		// 	sizeof(builtin_type_name_table_type) + 
+		// 	sizeof(tagged_method_name_table_type));
+
+		#ifndef GAL_ALLOCATOR_NO_TRACE
+		raw_memory::print_trace_log();
+		#endif
 	}
 
 	child_state* main_state::create_child()
 	{
 		vm_allocator<child_state> allocator{*this};
 
-		auto*					  child = allocator.allocate(1);
+		auto* child = allocator.allocate(1);
 		allocator.construct(child, main_thread_);
 
-		if (callback_.user_thread)
-		{
-			callback_.user_thread(this, *child);
-		}
+		if (callback_.user_thread) { callback_.user_thread(this, *child); }
 
 		return child;
 	}
@@ -831,10 +896,7 @@ namespace gal::vm
 	{
 		state.close_upvalue();
 		gal_assert(state.open_upvalue_ == nullptr);
-		if (callback_.user_thread)
-		{
-			callback_.user_thread(nullptr, state);
-		}
+		if (callback_.user_thread) { callback_.user_thread(nullptr, state); }
 
 		object::destroy(*this, &state);
 	}
@@ -843,9 +905,11 @@ namespace gal::vm
 
 	void main_state::remove_string_from_table(object_string& string)
 	{
-		gal_assert(std::ranges::find(string_table_, &string) != string_table_.end());
+		const auto it = std::ranges::find(string_table_, &string);
 
-		string_table_.erase(std::ranges::find(string_table_, &string));
+		gal_assert(it != string_table_.end());
+
+		string_table_.erase(it);
 	}
 
 	namespace state
@@ -861,19 +925,10 @@ namespace gal::vm
 			return state.create_child();
 		}
 
-		[[nodiscard]] main_state& main_thread(child_state& state)
-		{
-			return state.get_parent();
-		}
+		[[nodiscard]] main_state& main_thread(const child_state& state) { return state.get_parent(); }
 
-		void reset_thread(child_state& state)
-		{
-			state.reset();
-		}
+		void reset_thread(child_state& state) { state.reset(); }
 
-		[[nodiscard]] boolean_type is_thread_reset(const child_state& state)
-		{
-			return state.is_reset();
-		}
+		[[nodiscard]] boolean_type is_thread_reset(const child_state& state) { return state.is_reset(); }
 	}
 }

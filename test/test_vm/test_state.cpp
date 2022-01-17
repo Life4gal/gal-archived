@@ -1,13 +1,22 @@
 #include <gtest/gtest.h>
 
-// #include<gal.hpp>
+#include<gal.hpp>
+#include <iostream>
+#include <fstream>
 
-// using namespace gal::vm;
+using namespace gal::vm;
 
 TEST(TestState, TestState)
 {
-	// using namespace state;
+	using namespace state;
 
-	// auto* state = new_state();
-	// (void)state;
+	const std::ofstream out{"allocator_output.txt"};
+
+	const auto		  previous_buf = std::clog.rdbuf();
+	std::clog.rdbuf(out.rdbuf());
+
+	auto* state = new_state();
+	destroy_state(*state);
+
+	std::clog.rdbuf(previous_buf);
 }

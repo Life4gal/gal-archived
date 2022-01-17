@@ -7,6 +7,7 @@
 #include <vm/tagged_method.hpp>
 #include <utils/enum_utils.hpp>
 #include <array>
+#include <utils/macro.hpp>
 
 namespace gal::vm
 {
@@ -120,7 +121,7 @@ namespace gal::vm
 		int gc_step_size = default_gc_step_size << 10;
 
 		// free page linked list for each size class
-		std::array<struct memory_page*, size_classes> free_pages{};
+		std::array<struct memory_page*, size_classes> free_pages;
 
 		gc_state gc_states;
 
@@ -212,6 +213,7 @@ namespace gal::vm
 
 	class child_state final : public object
 	{
+		friend class object;
 		friend struct gc_handler;
 		friend class main_state;
 
@@ -327,8 +329,11 @@ namespace gal::vm
 		 */
 		void close_upvalue()
 		{
-			gal_assert(dynamic_cast<object_upvalue*>(open_upvalue_));
-			open_upvalue_ = dynamic_cast<object_upvalue*>(open_upvalue_)->close_until(parent_, stack_.data());
+			if (open_upvalue_)
+			{
+				gal_assert(dynamic_cast<object_upvalue*>(open_upvalue_));
+				open_upvalue_ = dynamic_cast<object_upvalue*>(open_upvalue_)->close_until(parent_, stack_.data());
+			}
 		}
 
 		[[nodiscard]] constexpr auto* get_stack_last() noexcept { return &stack_[basic_stack_size - 1]; }
@@ -338,20 +343,53 @@ namespace gal::vm
 
 	constexpr void object::delete_chain(main_state& state, object* end)
 	{
-		auto* current = this;
-		auto* next = current->next_;
-
-		while (current != end)
+		for (auto* current = this; current != end;)
 		{
-			if (current->type() == object_type::thread)
+			auto* next = current->get_next();
+
+			switch (current->type())
 			{
-				// delete open upvalues of each thread
-				dynamic_cast<child_state*>(current)->close_upvalue();
+				case object_type::null:
+				case object_type::boolean:
+				case object_type::number:
+				{
+					break;
+				}
+				case object_type::string:
+				{
+					destroy(state, dynamic_cast<object_string*>(current));
+					break;
+				}
+				case object_type::table:
+				{
+					destroy(state, dynamic_cast<object_table*>(current));
+					break;
+				}
+				case object_type::function:
+				{
+					destroy(state, dynamic_cast<object_closure*>(current));
+					break;
+				}
+				case object_type::user_data:
+				{
+					destroy(state, dynamic_cast<object_user_data*>(current));
+					break;
+				}
+				case object_type::thread:
+				{
+					// delete open upvalues of each thread
+					dynamic_cast<child_state*>(current)->close_upvalue();
+					break;
+				}
+				case object_type::prototype:
+				case object_type::upvalue:
+				case object_type::dead_key:
+				{
+					UNREACHABLE();
+				}
 			}
 
-			destroy(state, current);
 			current = next;
-			next = current->next_;
 		}
 	}
 
@@ -370,6 +408,8 @@ namespace gal::vm
 		using tagged_method_name_table_type = std::array<object_string*, static_cast<std::size_t>(tagged_method_type::tagged_method_count)>;
 
 	private:
+		gc_handler					  gc_;
+
 		string_table_type string_table_;
 
 		object::mark_type current_white_;
@@ -390,8 +430,6 @@ namespace gal::vm
 		magic_value registry_;
 		// next free slot in registry
 		index_type registry_free_;
-
-		gc_handler gc_;
 
 		debug::callback_info callback_;
 
