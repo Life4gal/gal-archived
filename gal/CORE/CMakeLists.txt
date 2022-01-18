@@ -50,7 +50,7 @@ target_link_libraries(
 			${PROJECT_NAME}
 			PRIVATE
 			gal::UTILS
-			gal::CONFIG
+			gal::COMMON
 )
 
 include(${GAL_MODULE_PATH}/config_build_type.cmake)

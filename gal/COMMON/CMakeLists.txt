@@ -1,5 +1,5 @@
 project(
-		gal-CONFIG
+		gal-COMMON
 		LANGUAGES CXX
 )
 
@@ -9,7 +9,7 @@ add_library(
 )
 
 add_library(
-		gal::CONFIG
+		gal::COMMON
 		ALIAS
 		${PROJECT_NAME}
 )

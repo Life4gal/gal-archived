@@ -12,6 +12,8 @@
 #include <utils/enum_utils.hpp>
 #include <utils/hash.hpp>
 
+#include "object.hpp"
+
 namespace gal::vm
 {
 	class magic_value;
@@ -410,7 +412,11 @@ namespace gal::vm
 	inline object::operator magic_value() const noexcept { return magic_value{this}; }
 
 	using stack_element_type = magic_value*;
+	using const_stack_element_type = const magic_value*;
 
+	/**
+	 * @todo The final design of the string should be a flexible array of strings at the end, storing the required data, and the string is immutable.
+	 */
 	class object_string final : public object
 	{
 		friend class object;
@@ -435,6 +441,9 @@ namespace gal::vm
 
 		object_string(main_state& state, const data_type::value_type* data, data_type::size_type size);
 
+		// internal usage
+		object_string(main_state& state, data_type&& data);
+
 		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(object_string) + sizeof(data_type::value_type) * data_.size(); }
 
 		[[nodiscard]] constexpr atomic_type get_atomic() const noexcept { return atomic_; }
@@ -442,6 +451,8 @@ namespace gal::vm
 		[[nodiscard]] constexpr auto get_hash() const noexcept { return utils::short_string_hash(data_); }
 
 		[[nodiscard]] constexpr const data_type& get_data() const noexcept { return data_; }
+
+		[[nodiscard]] constexpr const auto* get_raw_data() const noexcept { return data_.data(); }
 
 		constexpr void mark() noexcept { set_mark_white_to_gray(); }
 	};
@@ -508,6 +519,9 @@ namespace gal::vm
 		using local_variable_container_type = std::vector<local_variable, vm_allocator<local_variable>>;
 		using upvalue_name_container_type = std::vector<object_string*, vm_allocator<object_string*>>;
 		using debug_instruction_container_type = std::vector<compiler::operand_abc_underlying_type, vm_allocator<compiler::operand_abc_underlying_type>>;
+
+		using code_pc_type = instruction_container_type::const_pointer;
+		using size_type = std::common_type_t<instruction_container_type::size_type, line_info_container_type::size_type>;
 
 	private:
 		// constants used by the function
@@ -586,6 +600,19 @@ namespace gal::vm
 		[[nodiscard]] constexpr auto get_stack_capacity() const noexcept { return max_stack_size_; }
 
 		const local_variable* get_local(int local_number, compiler::debug_pc_type pc);
+
+		[[nodiscard]] constexpr const auto* get_source() const noexcept { return source_; }
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR int get_line(const struct call_info& call) const noexcept;
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR int get_line(const size_type pc) const noexcept
+		{
+			gal_assert(pc != 0 && pc < code_.size());
+
+			if (line_info_.empty()) { return 0; }
+
+			return abs_line_info_[pc >> line_gap_log2_] + line_info_[pc];
+		}
 	};
 
 	class object_upvalue final : public object
@@ -738,6 +765,8 @@ namespace gal::vm
 			upreference_container_type upreferences;
 		};
 
+		using size_type = std::common_type_t<internal_type::upvalue_container_type::size_type, gal_type::upreference_container_type::size_type>;
+
 	private:
 		compiler::operand_abc_underlying_type is_internal_;
 		compiler::operand_abc_underlying_type stack_size_;
@@ -746,6 +775,9 @@ namespace gal::vm
 		object* gc_list_;
 		object_table* environment_;
 
+		/**
+		 * @todo The final design of the function is actually to store the upvalues/upreferences as a flexible array at the end of the structure, and then store the number in the closure.
+		 */
 		// force function_type to be an aggregate type
 		union function_type// NOLINT(cppcoreguidelines-special-member-functions)
 		{
@@ -801,8 +833,13 @@ namespace gal::vm
 
 			return is_internal()
 				       ? (
-					       offsetof(object_closure, function_.internal.upvalues) + sizeof(magic_value) * function_.internal.upvalues.size())
-				       : (offsetof(object_closure, function_.gal.upreferences) + sizeof(magic_value) * function_.gal.upreferences.size());
+					       // offsetof(object_closure, function_.internal.upvalues) 
+					       sizeof(object_closure)
+					       + sizeof(magic_value) * function_.internal.upvalues.size())
+				       : (
+					       // offsetof(object_closure, function_.gal.upreferences) 
+					       sizeof(object_closure)
+					       + sizeof(magic_value) * function_.gal.upreferences.size());
 		}
 
 		[[nodiscard]] constexpr bool is_internal() const noexcept { return is_internal_; }
@@ -814,6 +851,40 @@ namespace gal::vm
 		[[nodiscard]] constexpr object* get_gc_list() noexcept { return gc_list_; }
 
 		[[nodiscard]] constexpr const object* get_gc_list() const noexcept { return gc_list_; }
+
+		[[nodiscard]] constexpr auto get_upvalue_size() const noexcept
+		{
+			// todo: is should be internal ?
+			return is_internal() ? function_.internal.upvalues.size() : function_.gal.upreferences.size();
+		}
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR auto get_upvalue(const size_type index) const noexcept
+		{
+			gal_assert(is_internal());
+			return function_.internal.upvalues[index - 1];
+		}
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR auto* get_upvalue_address(const size_type index) noexcept
+		{
+			gal_assert(is_internal());
+			return &function_.internal.upvalues[index - 1];
+		}
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR const auto* get_upvalue_address(const size_type index) const noexcept
+		{
+			gal_assert(is_internal());
+			return &function_.internal.upvalues[index - 1];
+		}
+
+		[[nodiscard]] constexpr auto* get_environment() noexcept { return environment_; }
+
+		[[nodiscard]] constexpr const auto* get_environment() const noexcept { return environment_; }
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR const auto* get_prototype() const noexcept
+		{
+			gal_assert(not is_internal());
+			return function_.gal.prototype;
+		}
 	};
 }// namespace gal::vm_dev
 

@@ -10,12 +10,12 @@ set(
 
 set(
 		GAL_MINOR_VERSION
-		0
+		1
 )
 
 set(
 		GAL_PATCH_VERSION
-		14
+		6
 )
 
 set(

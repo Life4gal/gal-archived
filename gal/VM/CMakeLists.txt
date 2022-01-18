@@ -10,6 +10,7 @@ set(
 		src/state.cpp
 		src/object.cpp
 		src/memory.cpp
+		src/api.cpp
 )
 
 add_library(
@@ -47,7 +48,7 @@ endif(MSVC)
 target_link_libraries(
 			${PROJECT_NAME}
 			PUBLIC
-			gal::CONFIG
+			gal::COMMON
 )
 
 target_link_libraries(

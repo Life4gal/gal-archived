@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_CONFIG_BASIC_TYPE_HPP
-#define GAL_LANG_CONFIG_BASIC_TYPE_HPP
+#ifndef GAL_LANG_COMMON_CONFIG_HPP
+	#define GAL_LANG_COMMON_CONFIG_HPP
 
 #include <cstddef>
 #include <cstdint>
@@ -105,4 +105,4 @@ namespace gal
 	}// namespace vm
 }
 
-#endif // GAL_LANG_CONFIG_BASIC_TYPE_HPP
+#endif // GAL_LANG_COMMON_CONFIG_HPP

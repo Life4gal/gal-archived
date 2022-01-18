@@ -203,7 +203,7 @@ namespace gal::vm
 		// top for this function
 		stack_element_type top;
 
-		compiler::debug_pc_type saved_pc;
+		object_prototype::code_pc_type saved_pc;
 
 		// expected number of results from this function
 		compiler::operand_abc_underlying_type num_returns;
@@ -298,13 +298,11 @@ namespace gal::vm
 
 		~child_state() override = default;
 
+		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(child_state); }
+
 		void reset();
 
 		[[nodiscard]] constexpr bool is_reset() const noexcept { return current_call_info_ == 0 && base_ == top_ && base_ == 0 && status_ == thread_status::ok; }
-
-		GAL_ASSERT_CONSTEXPR void push_into_stack(const magic_value value) { stack_[top_++] = value; }
-
-		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(child_state); }
 
 		void traverse(main_state& state, bool clear_stack);
 
@@ -336,9 +334,82 @@ namespace gal::vm
 			}
 		}
 
+		[[nodiscard]] constexpr auto* get_current_environment() const noexcept
+		{
+			// no enclosing function?
+			if (current_call_info_ == 0)
+			{
+				// use global table as environment
+				gal_assert(global_table_.is_table());
+				return global_table_.as_table();
+			}
+
+			gal_assert(call_infos_[current_call_info_].function->is_function());
+			return call_infos_[current_call_info_].function->as_function()->get_environment();
+		}
+
+		GAL_ASSERT_CONSTEXPR void set_current_environment(const object& env) noexcept;
+
+		/**
+		 * @brief basic error handler manipulation below
+		 */
+
+
+		void push_error(object_string::data_type&& data);
+
+		[[noreturn]] void runtime_error(object_string::data_type&& data);
+
+	private:
+		GAL_ASSERT_CONSTEXPR void push_into_stack_no_check(const magic_value value) noexcept
+		{
+			gal_assert(&stack_[top_] < call_infos_[current_call_info_].top);
+			stack_[top_++] = value;
+		}
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR stack_element_type get_stack_element_address(index_type index) noexcept;
+
+	public:
+		/**
+		 * @brief basic stack manipulation below
+		 */
+
+
+		GAL_ASSERT_CONSTEXPR void push_into_stack(const magic_value value) noexcept
+		{
+			gal_assert(&stack_[top_] < call_infos_[current_call_info_].top);
+			stack_[top_++].copy_magic_value(parent_, value);
+		}
+
+		GAL_ASSERT_CONSTEXPR void fill_stack(const stack_slot_type n) noexcept { while (top_ < base_ + n) { push_into_stack_no_check(magic_value_null); } }
+
+		constexpr void drop_stack(const stack_slot_type n) noexcept { top_ -= n; }
+
+		[[nodiscard]] constexpr auto get_current_stack_size() const noexcept { return top_ - base_; }
+
+		[[nodiscard]] constexpr auto get_total_stack_size() const noexcept { return (basic_stack_size - 1) - base_; }
+
 		[[nodiscard]] constexpr auto* get_stack_last() noexcept { return &stack_[basic_stack_size - 1]; }
 
 		[[nodiscard]] constexpr auto* get_stack_last() const noexcept { return &stack_[basic_stack_size - 1]; }
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR magic_value get_stack_element(index_type index) noexcept;
+
+		GAL_ASSERT_CONSTEXPR void remove_stack_element(index_type index) noexcept;
+
+		GAL_ASSERT_CONSTEXPR void insert_stack_element(index_type index) noexcept;
+
+		GAL_ASSERT_CONSTEXPR void replace_stack_element(index_type index) noexcept;
+
+	private:
+		// internal use only
+		void push_string(object_string::data_type&& data)
+		{
+			// todo
+			(void)data;
+		}
+
+	public:
+		constexpr void wake_me() noexcept;
 	};
 
 	constexpr void object::delete_chain(main_state& state, object* end)
@@ -351,10 +422,7 @@ namespace gal::vm
 			{
 				case object_type::null:
 				case object_type::boolean:
-				case object_type::number:
-				{
-					break;
-				}
+				case object_type::number: { break; }
 				case object_type::string:
 				{
 					destroy(state, dynamic_cast<object_string*>(current));
@@ -383,10 +451,7 @@ namespace gal::vm
 				}
 				case object_type::prototype:
 				case object_type::upvalue:
-				case object_type::dead_key:
-				{
-					UNREACHABLE();
-				}
+				case object_type::dead_key: { UNREACHABLE(); }
 			}
 
 			current = next;
@@ -400,7 +465,11 @@ namespace gal::vm
 		friend struct memory_page;
 
 	public:
-		// todo: string pool?
+		/**
+		 * @todo The implementation of string_table_ should be a fixed-size bucket array, and then the string is put into the bucket according to the hash value. If there is already a string in the target bucket, the new string is placed in the head of the object_chain where the bucket is located.
+		 *
+		 * @note The current design causes each string to cause a new node to be inserted, which not only results in additional memory allocation, but also causes the object_chain carried by the string to be wasted.
+		 */
 		using string_table_type = std::vector<object_string*>;
 
 		using builtin_type_meta_table_type = std::array<object_table*, static_cast<std::size_t>(object_type::tagged_value_count)>;
@@ -408,7 +477,7 @@ namespace gal::vm
 		using tagged_method_name_table_type = std::array<object_string*, static_cast<std::size_t>(tagged_method_type::tagged_method_count)>;
 
 	private:
-		gc_handler					  gc_;
+		gc_handler gc_;
 
 		string_table_type string_table_;
 
@@ -477,6 +546,8 @@ namespace gal::vm
 
 		constexpr void flip_white() noexcept { current_white_ = another_white(); }
 
+		[[nodiscard]] constexpr bool check_is_dead(const magic_value value) const noexcept { return value.is_object() && check_is_dead(*value.as_object()); }
+
 		[[nodiscard]] constexpr bool check_is_dead(const object& value) const noexcept
 		{
 			return (value.get_mark() & (object::mark_white_bits_mask | object::mark_fixed_bit_mask)) ==
@@ -489,7 +560,7 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr gc_handler::gc_current_state_type get_gc_state() const noexcept { return gc_.gc_current_state; }
 
-		constexpr void wake_child(child_state& child)
+		constexpr void wake_child(child_state& child) noexcept
 		{
 			if (not child.is_thread_sleeping()) { return; }
 
@@ -627,7 +698,88 @@ namespace gal::vm
 
 			return gc_.user_data_gc_handlers[tag];
 		}
+
+		[[nodiscard]] constexpr auto get_registry() const noexcept { return registry_; }
+
+		[[nodiscard]] constexpr auto* get_registry_address() noexcept { return &registry_; }
+
+		[[nodiscard]] constexpr const auto* get_registry_address() const noexcept { return &registry_; }
 	};
+
+	GAL_ASSERT_CONSTEXPR void child_state::set_current_environment(const object& env) noexcept
+	{
+		environment_ = env.operator magic_value();
+		gal_assert(parent_.check_is_dead(environment_));
+	}
+
+	GAL_ASSERT_CONSTEXPR stack_element_type child_state::get_stack_element_address(const index_type index) noexcept
+	{
+		if (index > 0)
+		{
+			gal_assert(std::cmp_less_equal(index, call_infos_[current_call_info_].top - &stack_[base_]));
+			auto* element = &stack_[base_ + (index - 1)];
+			if (element >= &stack_[top_]) { return nullptr; }
+			return element;
+		}
+
+		if (index > constant::registry_index)
+		{
+			gal_assert(index != 0 && std::cmp_less_equal(-index, get_current_stack_size()));
+			return &stack_[top_ + index];
+		}
+
+		// pseudo
+		gal_assert(is_pseudo(index));
+		switch (index)
+		{
+			case constant::registry_index: { return parent_.get_registry_address(); }
+			case constant::environment_index:
+			{
+				set_current_environment(*get_current_environment());
+				return &environment_;
+			}
+			case constant::global_safe_index: { return &global_table_; }
+			default:
+			{
+				gal_assert(call_infos_[current_call_info_].function->is_function());
+				auto* function = call_infos_[current_call_info_].function->as_function();
+				gal_assert(function->is_internal());
+				const auto real_index = constant::global_safe_index - index;
+				return std::cmp_less_equal(real_index, function->get_upvalue_size()) ? function->get_upvalue_address(real_index) : nullptr;
+			}
+		}
+	}
+
+	GAL_ASSERT_CONSTEXPR magic_value child_state::get_stack_element(const index_type index) noexcept
+	{
+		if (const auto address = get_stack_element_address(index); address) { return *address; }
+		return magic_value_null;
+	}
+
+	GAL_ASSERT_CONSTEXPR void child_state::remove_stack_element(const index_type index) noexcept
+	{
+		auto address = get_stack_element_address(index);
+		gal_assert(address);
+		gal_assert(address < &stack_[top_]);
+		while (++address < &stack_[top_]) { (address - 1)->copy_magic_value(parent_, *address); }
+		--top_;
+	}
+
+	GAL_ASSERT_CONSTEXPR void child_state::insert_stack_element(const index_type index) noexcept
+	{
+		const auto address = get_stack_element_address(index);
+		gal_assert(address);
+		for (auto t = top_; &stack_[top_] > address; --t) { stack_[t].copy_magic_value(parent_, stack_[t - 1]); }
+		address->copy_magic_value(parent_, stack_[top_]);
+	}
+
+	GAL_ASSERT_CONSTEXPR void child_state::replace_stack_element(index_type index) noexcept
+	{
+		// todo
+		(void)index;
+	}
+
+	constexpr void child_state::wake_me() noexcept { parent_.wake_child(*this); }
 
 	GAL_ASSERT_CONSTEXPR void object::mark(main_state& state)
 	{
@@ -642,11 +794,13 @@ namespace gal::vm
 		return dynamic_cast<child_state*>(as_object());
 	}
 
-	GAL_ASSERT_CONSTEXPR void magic_value::copy_magic_value(const main_state& state, magic_value target) noexcept
+	GAL_ASSERT_CONSTEXPR void magic_value::copy_magic_value(const main_state& state, const magic_value target) noexcept
 	{
 		data_ = target.data_;
 		state.check_alive(*this);
 	}
+
+	GAL_ASSERT_CONSTEXPR int object_prototype::get_line(const call_info& call) const noexcept { return get_line(call.saved_pc ? call.saved_pc - code_.data() - 1 : 0); }
 }
 
 #endif // GAL_LANG_VM_STATE_HPP

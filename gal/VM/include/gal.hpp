@@ -25,6 +25,19 @@ namespace gal::vm
 	using stack_size_type = index_type;
 	using string_type = const char*;
 
+	namespace constant
+	{
+		constexpr int multiple_return = -1;
+		constexpr index_type registry_index = -10000;
+		constexpr index_type environment_index = -10001;
+		constexpr index_type global_safe_index = -1002;
+	}// namespace constant
+
+	constexpr auto get_upvalue_index(const index_type i) noexcept { return constant::global_safe_index - i; }
+
+	constexpr bool is_pseudo(const index_type i) noexcept { return i <= constant::registry_index; }
+
+
 	enum class thread_status
 	{
 		ok = 0,
@@ -38,6 +51,7 @@ namespace gal::vm
 	};
 
 	constexpr std::uint8_t unknown_object_type = static_cast<std::uint8_t>(-1);
+
 	enum class object_type : std::uint8_t
 	{
 		null = 0,
@@ -73,15 +87,86 @@ namespace gal::vm
 	 */
 	namespace state
 	{
-		GAL_API [[nodiscard]] main_state*  new_state();
+		GAL_API [[nodiscard]] main_state* new_state();
 		GAL_API void destroy_state(main_state& state);
 
 		GAL_API [[nodiscard]] child_state* new_thread(main_state& state);
-		GAL_API [[nodiscard]] main_state&  main_thread(const child_state& state);
+		GAL_API [[nodiscard]] main_state& main_thread(const child_state& state);
 
 		GAL_API void reset_thread(child_state& state);
 		GAL_API [[nodiscard]] boolean_type is_thread_reset(const child_state& state);
 	}// namespace state
+
+	/**
+	 * @brief basic stack manipulation
+	 */
+	namespace stack
+	{
+		GAL_API [[nodiscard]] index_type abs_index(const child_state& state, index_type index) noexcept;
+
+		GAL_API [[nodiscard]] index_type get_top(const child_state& state) noexcept;
+		GAL_API void set_top(child_state& state, index_type index) noexcept;
+
+		GAL_API void push(child_state& state, index_type index) noexcept;
+		GAL_API void remove(child_state& state, index_type index) noexcept;
+		GAL_API void insert(child_state& state, index_type index) noexcept;
+		GAL_API void replace(child_state& state, index_type index) noexcept;
+
+		GAL_API boolean_type check(child_state& state, stack_size_type size);
+		/**
+		 * @brief Allows for unlimited stack frames
+		 */
+		GAL_API void raw_check(child_state& state, stack_size_type size);
+
+		GAL_API void exchange_move(child_state& from, child_state& to, stack_size_type num);
+		GAL_API void exchange_push(child_state& from, child_state& to, index_type index);
+	}// namespace stack
+
+	/**
+	 * @brief Access functions (stack -> C++) / Push functions (C++ -> stack)
+	 */
+	namespace internal
+	{
+		GAL_API boolean_type is_number(child_state& state, index_type index);
+		GAL_API boolean_type is_string(child_state& state, index_type index);
+		GAL_API boolean_type is_internal_function(child_state& state, index_type index);
+		GAL_API boolean_type is_gal_function(child_state& state, index_type index);
+		GAL_API boolean_type is_user_data(child_state& state, index_type index);
+
+		GAL_API object_type get_type(child_state& state, index_type index);
+		GAL_API string_type get_typename(child_state& state, index_type index);
+		GAL_API unsigned_type get_object_length(child_state& state, index_type index);
+
+		GAL_API boolean_type is_equal(child_state& state, index_type index1, index_type index2);
+		GAL_API boolean_type is_raw_equal(child_state& state, index_type index1, index_type index2);
+		GAL_API boolean_type is_less_than(child_state& state, index_type index1, index_type index2);
+
+		GAL_API boolean_type to_boolean(child_state& state, index_type index);
+		GAL_API number_type to_number(child_state& state, index_type index, boolean_type* converted);
+		GAL_API integer_type to_integer(child_state& state, index_type index, boolean_type* converted);
+		GAL_API unsigned_type to_unsigned(child_state& state, index_type index, boolean_type* converted);
+		GAL_API string_type to_string(child_state& state, index_type index, size_t* length);
+		GAL_API string_type to_string_atomic(child_state& state, index_type index, int* atomic);
+		GAL_API string_type to_named_call_atomic(child_state& state, int* atomic);
+		GAL_API internal_function_type to_internal_function(child_state& state, index_type index);
+		GAL_API child_state* to_thread(child_state& state, index_type index);
+		GAL_API const void* to_pointer(child_state& state, index_type index);
+
+		GAL_API user_data_type to_user_data(child_state& state, index_type index);
+		GAL_API user_data_type to_user_data_tagged(child_state& state, index_type index, user_data_tag_type tag);
+		GAL_API user_data_tag_type get_user_data_tag(child_state& state, index_type index);
+
+		GAL_API void push_null(child_state& state);
+		GAL_API void push_boolean(child_state& state, boolean_type boolean);
+		GAL_API void push_number(child_state& state, number_type number);
+		GAL_API void push_integer(child_state& state, integer_type integer);
+		GAL_API void push_unsigned(child_state& state, unsigned_type u);
+		GAL_API void push_string_sized(child_state& state, string_type string, size_t length);
+		GAL_API void push_string(child_state& state, string_type string);
+		GAL_API void push_closure(child_state& state, internal_function_type function, string_type debug_name, unsigned_type num_params, continuation_function_type continuation);
+		GAL_API void push_light_user_data(child_state& state, user_data_type user_data);
+		GAL_API boolean_type push_thread(child_state& state);
+	}// namespace internal
 
 	namespace debug
 	{

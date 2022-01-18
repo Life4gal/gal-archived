@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <utils/macro.hpp>
 #include <ranges>
+#include <vm/exception.hpp>
+#include <source/chunk.hpp>
 
 namespace
 {
@@ -759,6 +761,33 @@ namespace gal::vm
 				                      }
 			                      });
 		}
+	}
+
+	void child_state::push_error(object_string::data_type&& data)
+	{
+		const auto& call = call_infos_[current_call_info_];
+		if (call.function->is_function() && not call.function->as_function()->is_internal())
+		{
+			constexpr auto reserve_size = max_id_size + sizeof(" (FROM: :)") + 2;
+
+			const auto* prototype = call.function->as_function()->get_prototype();
+
+			object_string::data_type str{std::move(data)};
+			str.reserve(str.size() + reserve_size);
+
+			str.append(" (FROM: ");
+			// add file:line information
+			get_chunk_id(str.data() + str.size(), prototype->get_source()->get_raw_data(), max_id_size);
+			std_format::format_to(std::back_inserter(str), ":{})", prototype->get_line(call));
+			push_string(std::move(str));
+		}
+		else { push_string(std::move(data)); }
+	}
+
+	void child_state::runtime_error(object_string::data_type&& data)
+	{
+		push_error(std::move(data));
+		throw vm_exception{parent_, thread_status::error_run};
 	}
 
 	void main_state::mark_meta_table()

@@ -36,6 +36,11 @@ namespace gal::vm
 		  atomic_{0},
 		  data_{data, size, {state}} { state.add_string_into_table(*this); }
 
+	object_string::object_string(main_state& state, data_type&& data)
+		: object{object_type::string},
+		  atomic_{0},
+		  data_{std::move(data)} { state.add_string_into_table(*this); }
+
 	object_prototype::object_prototype(main_state& state)
 		: object{object_type::prototype},
 		  constants_{{state}},
