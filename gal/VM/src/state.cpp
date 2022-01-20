@@ -629,10 +629,10 @@ namespace gal::vm
 		open_upvalue_ = dynamic_cast<object_upvalue*>(open_upvalue_)->close_until(parent_, stack_.data());
 		gal_assert(open_upvalue_ == nullptr);
 
+		clear_stack();
+
 		if (const auto& callback = parent_.get_callback_info();
 			callback.user_thread) { callback.user_thread(nullptr, *this); }
-
-		destroy(parent_, this);
 
 		(void)state;
 	}
@@ -814,19 +814,24 @@ namespace gal::vm
 	}
 
 	main_state::main_state()
-		: gc_{&main_thread_},
-		  current_white_{object::mark_white_bits_mask},
-		  main_thread_{*this},
-		  registry_(object::create<object_table>(
-				  *this,
-				  #ifndef GAL_ALLOCATOR_NO_TRACE
-				  std_source_location::current(),
-				  #endif
-				  *this
-				  )->operator magic_value()),
-		  registry_free_{0},
-		  callback_{}
+		:
+		// gc_{&main_thread_},
+		gc_{reinterpret_cast<child_state*>(fake_main_thread_)},
+		current_white_{object::mark_white_bits_mask},
+		// main_thread_{*this},
+		main_thread_{*reinterpret_cast<child_state*>(fake_main_thread_)},
+		registry_(object::create<object_table>(
+				*this,
+				#ifndef GAL_ALLOCATOR_NO_TRACE
+				std_source_location::current(),
+				#endif
+				*this
+				)->operator magic_value()),
+		registry_free_{0},
+		callback_{}
 	{
+		std::construct_at(reinterpret_cast<child_state*>(fake_main_thread_), *this);
+
 		for (decltype(type_name_.size()) i = 0; i < type_name_.size(); ++i)
 		{
 			type_name_[i] = object::create<object_string>(
@@ -912,13 +917,12 @@ namespace gal::vm
 		gal_assert(main_thread_.global_table_.is_table());
 		object::destroy(*this, main_thread_.global_table_.as_table());
 
+		main_thread_.clear_stack();
+		std::destroy_at(reinterpret_cast<child_state*>(fake_main_thread_));
+
 		gal_assert(std::ranges::all_of(gc_.free_pages, [](const auto* page) { return page == nullptr; }));
 
-		// gal_assert(gc_.total_bytes == sizeof(main_state));
-
-		#ifndef GAL_ALLOCATOR_NO_TRACE
-		raw_memory::print_trace_log();
-		#endif
+		gal_assert(gc_.total_bytes == sizeof(main_state));
 	}
 
 	child_state* main_state::create_child()
@@ -957,7 +961,13 @@ namespace gal::vm
 	{
 		[[nodiscard]] main_state* new_state() { return new main_state{}; }
 
-		void destroy_state(main_state& state) { delete &state; }
+		void destroy_state(main_state& state)
+		{
+			delete &state;
+			#ifndef GAL_ALLOCATOR_NO_TRACE
+			raw_memory::print_trace_log();
+			#endif
+		}
 
 		[[nodiscard]] child_state* new_thread(main_state& state)
 		{

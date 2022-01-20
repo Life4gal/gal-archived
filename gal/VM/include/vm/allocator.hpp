@@ -39,10 +39,13 @@ namespace gal::vm
 		{
 			#ifndef GAL_ALLOCATOR_NO_TRACE
 			std::clog << std_format::format(
-					"Allocate {} object(s) ({} byte(s) per object, totally: {} bytes).",
+					"Allocate {:>{}} object(s) ({:>{}} byte(s) per object, totally: {:>{}} bytes).",
 					n,
+					raw_memory::object_amount_width,
 					sizeof(value_type),
-					sizeof(value_type) * n);
+					raw_memory::memory_use_width,
+					sizeof(value_type) * n,
+					raw_memory::memory_use_width);
 			return static_cast<T*>(raw_memory::allocate(
 					state,
 					sizeof(value_type) * n,
@@ -63,11 +66,15 @@ namespace gal::vm
 		{
 			#ifndef GAL_ALLOCATOR_NO_TRACE
 			std::clog << std_format::format(
-					"Deallocate {} object(s) at {} ({} byte(s) per object, totally: {} bytes).",
+					"Deallocate {:>{}} object(s) at {:>{}} ({:>{}} byte(s) per object, totally: {:>{}} bytes).",
 					n,
+					raw_memory::object_amount_width,
 					static_cast<void*>(p),
+					raw_memory::pointer_address_width,
 					sizeof(value_type),
-					sizeof(value_type) * n);
+					raw_memory::memory_use_width,
+					sizeof(value_type) * n,
+					raw_memory::memory_use_width);
 
 			raw_memory::deallocate(state, p, sizeof(value_type) * n, location);
 			#else

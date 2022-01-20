@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <vm/state.hpp>
 #include <charconv>
+#include <utils/function.hpp>
 
 namespace gal::vm
 {
@@ -291,7 +292,7 @@ namespace gal::vm
 		return work;
 	}
 
-	bool magic_value::raw_equal(const magic_value& other) const
+	bool magic_value::raw_equal(const magic_value& other) const noexcept
 	{
 		if (is_null()) { return other.is_null(); }
 		if (is_boolean()) { return as_boolean() == other.as_boolean(); }
@@ -308,16 +309,13 @@ namespace gal::vm
 
 	bool magic_value::equal(const magic_value& other) const
 	{
-		if (not is_object() || not(is_user_data() && other.is_user_data()) || not(is_table() && other.is_table()))
-		{
-			return raw_equal(other);
-		}
+		if (not is_object() || not(is_user_data() && other.is_user_data()) || not(is_table() && other.is_table())) { return raw_equal(other); }
 
 		// todo
 		return false;
 	}
 
-	number_type magic_value::object_to_number() const
+	number_type magic_value::to_number() const noexcept
 	{
 		if (is_number()) { return as_number(); }
 
@@ -329,5 +327,35 @@ namespace gal::vm
 			if (ptr == data.data() + data.size() && err == std::errc{}) { return num; }
 		}
 		return magic_value_null.as_number();
+	}
+
+	object_string* magic_value::to_string(main_state& state) const
+	{
+		if (is_string()) { return as_string(); }
+
+		if (is_number())
+		{
+			constexpr auto log10_ceil = utils::y_combinator{
+					[]<std::integral T>(auto&& self, const T num) constexpr noexcept -> int { return num < 10 ? 1 : 1 + self(num / 10); }};
+
+			constexpr auto length =
+					5 +
+					std::numeric_limits<number_type>::max_digits10 +
+					std::ranges::max(2, log10_ceil(std::numeric_limits<number_type>::max_exponent10));
+
+			// object_string::data_type str{length, 0, {state}};
+			object_string::data_type str{{state}};
+			str.resize(length);
+			std::to_chars(str.data(), str.data() + str.size(), as_number(), std::chars_format::scientific);
+			return object::create<object_string>(
+					state,
+					#ifndef GAL_ALLOCATOR_NO_TRACE
+					std_source_location::current(),
+					#endif
+					state,
+					std::move(str));
+		}
+
+		return nullptr;
 	}
 }

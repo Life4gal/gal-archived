@@ -324,6 +324,12 @@ namespace gal::vm
 
 		void grow_call_infos();
 
+		constexpr void clear_stack() noexcept
+		{
+			stack_type{{parent_}}.swap(stack_);
+			call_info_container_type{{parent_}}.swap(call_infos_);
+		}
+
 	public:
 		explicit child_state(main_state& parent);
 
@@ -389,12 +395,20 @@ namespace gal::vm
 
 		GAL_ASSERT_CONSTEXPR void set_current_environment(const object& env) noexcept;
 
+		[[nodiscard]] constexpr const object_string* get_named_call() const noexcept { return named_call_; }
+
 		/**
 		 * @brief basic error handler manipulation below
 		 */
 
 
 		void push_error(object_string::data_type&& data);
+
+		[[noreturn]] void runtime_error(const object_string::data_type::value_type* data)
+		{
+			// runtime_error(object_string::data_type{data, {parent_}});
+			runtime_error(object_string::data_type{data, object_string::data_type::traits_type::length(data), {parent_}});
+		}
 
 		[[noreturn]] void runtime_error(object_string::data_type&& data);
 
@@ -546,7 +560,10 @@ namespace gal::vm
 
 		object::mark_type current_white_;
 
-		child_state main_thread_;
+		// for detect memory leak :(
+		// todo: After stack/call_info is using a vector, size/capacity allocation is dynamic, which means we always deallocate them after leaving ~main_state, but we want to make sure free_pages is cleared before that.
+		char fake_main_thread_[sizeof(child_state)];
+		child_state& main_thread_;
 
 		// head of double-linked list of all open upvalues
 		object_upvalue upvalue_head_;

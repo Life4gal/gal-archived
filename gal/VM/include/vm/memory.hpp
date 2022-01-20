@@ -15,6 +15,11 @@ namespace gal::vm
 
 	struct raw_memory
 	{
+		// for format
+		constexpr static auto object_amount_width	= 4;
+		constexpr static auto memory_use_width		 = 8;
+		constexpr static auto pointer_address_width = 16;
+
 		/**
 		 * @brief Allocate raw memory on the heap.
 		 */

@@ -84,7 +84,7 @@ namespace gal::vm
 			from.move_stack_element(to, num);
 		}
 
-		void exchange_push(child_state& from, child_state& to, index_type index)
+		void exchange_push(const child_state& from, child_state& to, const index_type index)
 		{
 			gal_assert(from.is_brother(to));
 
@@ -96,33 +96,33 @@ namespace gal::vm
 
 	namespace internal
 	{
-		[[nodiscard]] boolean_type is_number(const child_state& state, const index_type index) { return state.get_stack_element(index).object_is_number(); }
+		[[nodiscard]] boolean_type is_number(const child_state& state, const index_type index) noexcept { return state.get_stack_element(index).number_convertible(); }
 
-		[[nodiscard]] boolean_type is_string(const child_state& state, const index_type index)
+		[[nodiscard]] boolean_type is_string(const child_state& state, const index_type index) noexcept
 		{
 			const auto v = state.get_stack_element(index);
 			return v.is_number() || v.is_string();
 		}
 
-		[[nodiscard]] boolean_type is_internal_function(const child_state& state, const index_type index)
+		[[nodiscard]] boolean_type is_internal_function(const child_state& state, const index_type index) noexcept
 		{
 			const auto v = state.get_stack_element(index);
 			return v.is_function() && v.as_function()->is_internal();
 		}
 
-		[[nodiscard]] boolean_type is_gal_function(const child_state& state, const index_type index)
+		[[nodiscard]] boolean_type is_gal_function(const child_state& state, const index_type index) noexcept
 		{
 			const auto v = state.get_stack_element(index);
 			return v.is_function() && not v.as_function()->is_internal();
 		}
 
-		[[nodiscard]] boolean_type is_user_data(const child_state& state, const index_type index)
+		[[nodiscard]] boolean_type is_user_data(const child_state& state, const index_type index) noexcept
 		{
 			const auto v = state.get_stack_element(index);
 			return v.is_user_data();
 		}
 
-		object_type get_type(const child_state& state, const index_type index)
+		object_type get_type(const child_state& state, const index_type index) noexcept
 		{
 			const auto v = state.get_stack_element(index);
 			if (v.is_null()) { return object_type::null; }
@@ -136,7 +136,7 @@ namespace gal::vm
 			return static_cast<object_type>(unknown_object_type);
 		}
 
-		[[nodiscard]] string_type get_typename(const child_state& state, const object_type type)
+		[[nodiscard]] string_type get_typename(const object_type type) noexcept
 		{
 			static_assert(std::is_unsigned_v<std::underlying_type_t<object_type>>);
 			return
@@ -145,18 +145,126 @@ namespace gal::vm
 						: gal_typename[static_cast<std::underlying_type_t<object_type>>(type)].data();
 		}
 
-		[[nodiscard]] boolean_type is_equal(const child_state& state, const index_type index1, index_type index2)
+		[[nodiscard]] unsigned_type get_object_length(const child_state& state, const index_type index)
+		{
+			const auto v = state.get_stack_element(index);
+			if (v.is_number())
+			{
+				const auto string = v.to_string(state.get_parent());
+				return string ? static_cast<unsigned_type>(string->size()) : 0;
+			}
+			if (v.is_string()) { return static_cast<unsigned_type>(v.as_string()->size()); }
+			if (v.is_user_data()) { return static_cast<unsigned_type>(v.as_user_data()->size()); }
+			if (v.is_table()) { return static_cast<unsigned_type>(v.as_table()->size()); }
+			return 0;
+		}
+
+		[[nodiscard]] boolean_type is_equal(const child_state& state, const index_type index1, const index_type index2)
 		{
 			const auto v1 = state.get_stack_element(index1);
 			const auto v2 = state.get_stack_element(index2);
 			return v1.equal(v2);
 		}
 
-		[[nodiscard]] boolean_type is_raw_equal(const child_state& state, const index_type index1, const index_type index2)
+		[[nodiscard]] boolean_type is_raw_equal(const child_state& state, const index_type index1, const index_type index2) noexcept
 		{
 			const auto v1 = state.get_stack_element(index1);
 			const auto v2 = state.get_stack_element(index2);
 			return v1.raw_equal(v2);
+		}
+
+		[[nodiscard]] boolean_type to_boolean(const child_state& state, const index_type index) noexcept
+		{
+			const auto v = state.get_stack_element(index);
+			return v.as_boolean();
+		}
+
+		[[nodiscard]] number_type to_number(const child_state& state, const index_type index, boolean_type* converted) noexcept
+		{
+			const auto v = state.get_stack_element(index);
+			if (const auto result = v.to_number();
+				magic_value{result} != magic_value_null)
+			{
+				if (converted) { *converted = true; }
+				return result;
+			}
+			else
+			{
+				if (converted) { *converted = false; }
+				return 0;
+			}
+		}
+
+		[[nodiscard]] string_type to_string(child_state& state, const index_type index, size_t* length)
+		{
+			const auto v = state.get_stack_element(index);
+
+			object_string* string;
+
+			if (v.is_string()) { string = v.as_string(); }
+			else
+			{
+				state.wake_me();
+
+				string = v.to_string(state.get_parent());
+				// conversion failed?
+				if (not string)
+				{
+					if (length) { *length = 0; }
+					return nullptr;
+				}
+			}
+
+			if (length) { *length = string->size(); }
+			return string->get_raw_data();
+		}
+
+		[[nodiscard]] string_type to_string_atomic(const child_state& state, const index_type index, int* atomic) noexcept
+		{
+			const auto v = state.get_stack_element(index);
+
+			if (not v.is_string()) { return nullptr; }
+
+			const auto* string = v.as_string();
+			if (atomic) { *atomic = string->get_atomic(); }
+			return string->get_raw_data();
+		}
+
+		[[nodiscard]] string_type to_named_call_atomic(const child_state& state, int* atomic) noexcept
+		{
+			const auto* call = state.get_named_call();
+			if (not call) { return nullptr; }
+
+			if (atomic) { *atomic = call->get_atomic(); }
+			return call->get_raw_data();
+		}
+
+		[[nodiscard]] internal_function_type to_internal_function(const child_state& state, const index_type index) noexcept
+		{
+			const auto v = state.get_stack_element(index);
+			return v.is_function() ? v.as_function()->get_internal_function() : nullptr;
+		}
+
+		[[nodiscard]] child_state* to_thread(const child_state& state, const index_type index) noexcept
+		{
+			const auto v = state.get_stack_element(index);
+			return v.is_thread() ? v.as_thread() : nullptr;
+		}
+
+		GAL_API [[nodiscard]] const void* to_pointer(const child_state& state, const index_type index) noexcept
+		{
+			const auto v = state.get_stack_element(index);
+			if (v.is_function()) { return v.as_function(); }
+			if (v.is_user_data()) { return to_user_data(state, index); }
+			if (v.is_table()) { return v.as_table(); }
+			if (v.is_user_data()) { return v.as_user_data(); }
+			return nullptr;
+		}
+
+		[[nodiscard]] user_data_type to_user_data(const child_state& state, const index_type index) noexcept
+		{
+			const auto v = state.get_stack_element(index);
+			return v.is_user_data() ? v.as_user_data()->get_data() : nullptr;
 		}
 	}
 }

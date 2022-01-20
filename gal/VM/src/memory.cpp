@@ -90,10 +90,13 @@ namespace
 			if (it->second.first != size)
 			{
 				trace_errors.emplace_back(std_format::format(
-						"{} bytes of memory were allocated at {}, but only {} bytes were deallocate!\n",
+						"{:>{}} bytes of memory were allocated at {:>{}}, but only {:>{}} bytes were deallocate!\n",
 						it->second.first,
+						raw_memory::memory_use_width,
 						it->first,
-						size));
+						raw_memory::pointer_address_width,
+						size,
+						raw_memory::memory_use_width));
 			}
 
 			// remove it
@@ -105,7 +108,11 @@ namespace
 	{
 		std::scoped_lock lock{trace_mutex};
 
-		if (trace_mapping.empty() && trace_errors.empty()) { std::clog << "\ntrace log: nothing interesting\n"; return; }
+		if (trace_mapping.empty() && trace_errors.empty())
+		{
+			std::clog << "\ntrace log: nothing interesting\n";
+			return;
+		}
 
 		std::clog <<
 				"\n====================================================\n"
@@ -118,9 +125,11 @@ namespace
 			                      const auto& [size, location] = pair.second;
 
 			                      std::clog << std_format::format(
-					                      "An object(located at: {}, memory used: {}) may not have been freed! Required from: [file:{}][line:{}, column: {}][function:{}]\n",
+					                      "An object(located at: {:>{}}, memory used: {:>{}} byte(s)) may not have been freed! Required from: [file:{}][line:{}, column: {}][function:{}]\n",
 					                      pair.first,
+					                      raw_memory::pointer_address_width,
 					                      size,
+					                      raw_memory::memory_use_width,
 					                      location.file_name(),
 					                      location.line(),
 					                      location.column(),
@@ -131,13 +140,15 @@ namespace
 		if (not trace_mapping.empty())
 		{
 			std::clog << std_format::format(
-					"{} times memory leaks, leak about {} byte(s) in total.\n",
+					"{:>{}} times memory leaks, leak about {:>{}} byte(s) in total.\n",
 					trace_mapping.size(),
+					raw_memory::memory_use_width,
 					std::reduce(
 							trace_mapping.begin(),
 							trace_mapping.end(),
 							std::size_t{0},
-							[](const auto sum, const auto& pair) { return sum + pair.second.first; }));
+							[](const auto sum, const auto& pair) { return sum + pair.second.first; }),
+					raw_memory::memory_use_width);
 		}
 
 		if (not trace_errors.empty())
@@ -347,9 +358,11 @@ namespace gal::vm
 		trace(block, size, location);
 
 		std::clog << std_format::format(
-				"Target at {}, memory usage now: {}. Required from: [file:{}][line:{}, column: {}][function:{}].\n",
+				"Target at {:>{}}, memory usage now: {:>{}}. Required from: [file:{}][line:{}, column: {}][function:{}].\n",
 				block,
+				pointer_address_width,
 				state.get_gc_handler().total_bytes,
+				memory_use_width,
 				location.file_name(),
 				location.line(),
 				location.column(),
@@ -381,9 +394,11 @@ namespace gal::vm
 		trace(ptr, size, location);
 
 		std::clog << std_format::format(
-				"Target at {}, memory usage now: {}. Required from: [file:{}][line:{}, column: {}][function:{}].\n",
+				"Target at {:>{}}, memory usage now: {:>{}}. Required from: [file:{}][line:{}, column: {}][function:{}].\n",
 				ptr,
+				pointer_address_width,
 				state.get_gc_handler().total_bytes,
+				memory_use_width,
 				location.file_name(),
 				location.line(),
 				location.column(),
@@ -437,10 +452,13 @@ namespace gal::vm
 		trace(result, needed_size, location);
 
 		std::clog << std_format::format(
-				"Previous at {}, Result at{}, memory usage now: {}. Required from: [file:{}][line:{}, column: {}][function:{}].\n",
+				"Previous at {:>{}}, Result at{:>{}}, memory usage now: {:>{}}. Required from: [file:{}][line:{}, column: {}][function:{}].\n",
 				ptr,
+				pointer_address_width,
 				result,
+				pointer_address_width,
 				state.get_gc_handler().total_bytes,
+				memory_use_width,
 				location.file_name(),
 				location.line(),
 				location.column(),

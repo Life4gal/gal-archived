@@ -385,7 +385,7 @@ namespace gal::vm
 		 * @brief Returns true if [lhs] and [rhs] are strictly the same value. This is identity
 		 * for object values, and value equality for un-boxed values.
 		 */
-		friend bool operator==(const magic_value& lhs, const magic_value& rhs)
+		[[nodiscard]] friend constexpr bool operator==(const magic_value& lhs, const magic_value& rhs)
 		{
 			/**
 			 * @brief Value types have unique bit representations and we compare object types
@@ -399,7 +399,7 @@ namespace gal::vm
 		 * (null, booleans, numbers) are equal if they have the
 		 * same data. All other values are equal if they are identical objects.
 		 */
-		[[nodiscard]] bool		  raw_equal(const magic_value& other) const;
+		[[nodiscard]] bool raw_equal(const magic_value& other) const noexcept;
 
 		/**
 		 * @brief Returns true if [this] and [other] are equivalent. Immutable values
@@ -408,9 +408,11 @@ namespace gal::vm
 		 */
 		[[nodiscard]] bool equal(const magic_value& other) const;
 
-		[[nodiscard]] bool		  object_is_number() const;
+		[[nodiscard]] bool number_convertible() const noexcept { return magic_value{to_number()}.is_null(); }
+		[[nodiscard]] bool string_convertible() const noexcept { return is_string() || is_number(); }
 
-		[[nodiscard]] number_type object_to_number() const;
+		[[nodiscard]] number_type to_number() const noexcept;
+		[[nodiscard]] object_string* to_string(main_state& state) const;
 	};
 
 	constexpr magic_value magic_value_null{magic_value::null_val};
@@ -463,6 +465,8 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr const auto* get_raw_data() const noexcept { return data_.data(); }
 
+		[[nodiscard]] constexpr auto size() const noexcept { return data_.size(); }
+
 		constexpr void mark() noexcept { set_mark_white_to_gray(); }
 	};
 
@@ -499,6 +503,8 @@ namespace gal::vm
 		[[nodiscard]] constexpr data_type* get_data() noexcept { return data_.data(); }
 
 		[[nodiscard]] constexpr const data_type* get_data() const noexcept { return data_.data(); }
+
+		[[nodiscard]] constexpr auto size() const noexcept { return data_.size(); }
 
 		constexpr void set_meta_table(object_table* meta_table) { meta_table_ = meta_table; }
 	};
@@ -676,10 +682,7 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(object_upvalue); }
 
-		constexpr void						redirect_stack_index(magic_value* new_value) noexcept
-		{
-			value_ = new_value;
-		}
+		constexpr void redirect_stack_index(magic_value* new_value) noexcept { value_ = new_value; }
 
 		[[nodiscard]] constexpr magic_value* get_index() noexcept { return value_; }
 
@@ -890,10 +893,13 @@ namespace gal::vm
 			return &function_.internal.upvalues[index - 1];
 		}
 
-		constexpr void set_environment(object_table* environment) noexcept
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR internal_function_type get_internal_function() const noexcept
 		{
-			environment_ = environment;
+			gal_assert(is_internal());
+			return function_.internal.function;
 		}
+
+		constexpr void set_environment(object_table* environment) noexcept { environment_ = environment; }
 
 		[[nodiscard]] constexpr auto* get_environment() noexcept { return environment_; }
 
@@ -1006,6 +1012,12 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr const object* get_gc_list() const noexcept { return gc_list_; }
 
+		[[nodiscard]] auto size() const noexcept
+		{
+			// todo
+			return nodes_.size();
+		}
+
 		void traverse(main_state& state, bool weak_key, bool weak_value);
 
 		/**
@@ -1076,12 +1088,6 @@ namespace gal::vm
 		gal_assert(is_user_data());
 		return dynamic_cast<object_user_data*>(as_object());
 	}
-
-	inline bool magic_value::object_is_number() const
-	{
-		return magic_value{object_to_number()}.is_null();
-	}
-
 }
 
 #endif // GAL_LANG_VM_OBJECT_HPP

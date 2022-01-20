@@ -120,7 +120,7 @@ namespace gal::vm
 		GAL_API void raw_check(child_state& state, stack_size_type size);
 
 		GAL_API void exchange_move(child_state& from, child_state& to, stack_size_type num);
-		GAL_API void exchange_push(child_state& from, child_state& to, index_type index);
+		GAL_API void exchange_push(const child_state& from, child_state& to, index_type index);
 	}// namespace stack
 
 	/**
@@ -128,32 +128,30 @@ namespace gal::vm
 	 */
 	namespace internal
 	{
-		GAL_API [[nodiscard]] boolean_type is_number(const child_state& state, index_type index);
-		GAL_API [[nodiscard]] boolean_type is_string(const child_state& state, index_type index);
-		GAL_API [[nodiscard]] boolean_type is_internal_function(const child_state& state, index_type index);
-		GAL_API [[nodiscard]] boolean_type is_gal_function(const child_state& state, index_type index);
-		GAL_API [[nodiscard]] boolean_type is_user_data(const child_state& state, index_type index);
+		GAL_API [[nodiscard]] boolean_type is_number(const child_state& state, index_type index) noexcept;
+		GAL_API [[nodiscard]] boolean_type	is_string(const child_state& state, index_type index) noexcept;
+		GAL_API [[nodiscard]] boolean_type	is_internal_function(const child_state& state, index_type index) noexcept;
+		GAL_API [[nodiscard]] boolean_type	is_gal_function(const child_state& state, index_type index) noexcept;
+		GAL_API [[nodiscard]] boolean_type	is_user_data(const child_state& state, index_type index) noexcept;
 
-		GAL_API [[nodiscard]] object_type get_type(const child_state& state, index_type index);
-		GAL_API [[nodiscard]] string_type get_typename(const child_state& state, object_type type);
-		GAL_API [[nodiscard]] unsigned_type get_object_length(child_state& state, index_type index);
+		GAL_API [[nodiscard]] object_type	get_type(const child_state& state, index_type index) noexcept;
+		GAL_API [[nodiscard]] string_type	get_typename(object_type type) noexcept;
+		GAL_API [[nodiscard]] unsigned_type get_object_length(const child_state& state, index_type index);
 
 		GAL_API [[nodiscard]] boolean_type is_equal(const child_state& state, index_type index1, index_type index2);
-		GAL_API [[nodiscard]] boolean_type is_raw_equal(const child_state& state, index_type index1, index_type index2);
+		GAL_API [[nodiscard]] boolean_type	is_raw_equal(const child_state& state, index_type index1, index_type index2) noexcept;
 		GAL_API [[nodiscard]] boolean_type is_less_than(child_state& state, index_type index1, index_type index2);
 
-		GAL_API boolean_type to_boolean(child_state& state, index_type index);
-		GAL_API number_type to_number(child_state& state, index_type index, boolean_type* converted);
-		GAL_API integer_type to_integer(child_state& state, index_type index, boolean_type* converted);
-		GAL_API unsigned_type to_unsigned(child_state& state, index_type index, boolean_type* converted);
-		GAL_API string_type to_string(child_state& state, index_type index, size_t* length);
-		GAL_API string_type to_string_atomic(child_state& state, index_type index, int* atomic);
-		GAL_API string_type to_named_call_atomic(child_state& state, int* atomic);
-		GAL_API internal_function_type to_internal_function(child_state& state, index_type index);
-		GAL_API child_state* to_thread(child_state& state, index_type index);
-		GAL_API const void* to_pointer(child_state& state, index_type index);
+		GAL_API [[nodiscard]] boolean_type	to_boolean(const child_state& state, index_type index) noexcept;
+		GAL_API [[nodiscard]] number_type	to_number(const child_state& state, index_type index, boolean_type* converted) noexcept;
+		GAL_API [[nodiscard]] string_type	to_string(child_state& state, index_type index, size_t* length);
+		GAL_API [[nodiscard]] string_type to_string_atomic(const child_state& state, index_type index, int* atomic) noexcept;
+		GAL_API [[nodiscard]] string_type to_named_call_atomic(const child_state& state, int* atomic) noexcept;
+		GAL_API [[nodiscard]] internal_function_type to_internal_function(const child_state& state, index_type index) noexcept;
+		GAL_API [[nodiscard]] child_state*			 to_thread(const child_state& state, index_type index) noexcept;
+		GAL_API [[nodiscard]] const void*			 to_pointer(const child_state& state, index_type index) noexcept;
 
-		GAL_API user_data_type to_user_data(child_state& state, index_type index);
+		GAL_API [[nodiscard]] user_data_type		 to_user_data(const child_state& state, index_type index) noexcept;
 		GAL_API user_data_type to_user_data_tagged(child_state& state, index_type index, user_data_tag_type tag);
 		GAL_API user_data_tag_type get_user_data_tag(child_state& state, index_type index);
 

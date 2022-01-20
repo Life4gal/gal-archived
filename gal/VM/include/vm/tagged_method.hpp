@@ -3,6 +3,7 @@
 #ifndef GAL_LANG_VM_TAGGED_METHOD_HPP
 #define GAL_LANG_VM_TAGGED_METHOD_HPP
 
+#include <gal.hpp>
 #include <string_view>
 
 namespace gal::vm
