@@ -66,7 +66,7 @@ namespace gal
 		/**
 		 * @brief The number of stack slots that a internal function can use
 		 */
-		constexpr auto max_stack_size					 = 8000;
+		constexpr auto max_internal_stack_size					 = 8000;
 
 		/**
 		 * @brief The number of nested calls
@@ -76,7 +76,7 @@ namespace gal
 		/**
 		 * @brief The maximum depth for nested internal calls; this limit depends on native stack size
 		 */
-		constexpr auto max_internal_call				 = 200;
+		constexpr auto max_internal_call_size				 = 200;
 
 		/**
 		 * @brief The buffer size used for on-stack string operations; this limit depends on native stack size

@@ -7,6 +7,7 @@
 #include <vm/tagged_method.hpp>
 #include <utils/enum_utils.hpp>
 #include <array>
+#include <vector>
 #include <utils/macro.hpp>
 
 namespace gal::vm
@@ -231,10 +232,10 @@ namespace gal::vm
 		constexpr static auto basic_stack_size = 2 * min_stack_size;
 		constexpr static auto extra_stack_size = 5;
 
-		using stack_type = std::array<magic_value, basic_stack_size + extra_stack_size>;
+		using stack_type = std::vector<magic_value, vm_allocator<magic_value>>;
 		using stack_slot_type = stack_type::size_type;
 
-		using call_info_container_type = std::array<call_info, basic_call_info_size>;
+		using call_info_container_type = std::vector<call_info, vm_allocator<call_info>>;
 		using call_info_slot_type = call_info_container_type::size_type;
 
 	private:
@@ -287,6 +288,42 @@ namespace gal::vm
 
 		void do_destroy(main_state& state) override;
 
+		GAL_ASSERT_CONSTEXPR void grow_stack(const stack_size_type needed) noexcept
+		{
+			if (std::cmp_greater(get_stack_last_pos() - top_, needed)) { return; }
+
+			const auto needed_stack_size =
+					// double size is enough?
+					(std::cmp_less_equal(needed, stack_.capacity())
+						 ? 2 * stack_.capacity()
+						 : needed + stack_.capacity()) + 1 + extra_stack_size;
+
+			stack_type new_stack{needed_stack_size, stack_.get_allocator()};
+
+			// correct stack
+			for (auto* upvalue = open_upvalue_; upvalue; upvalue = upvalue->get_next())
+			{
+				gal_assert(dynamic_cast<object_upvalue*>(upvalue));
+				auto* u = dynamic_cast<object_upvalue*>(upvalue);
+				u->redirect_stack_index(new_stack.data() + (u->get_index() - stack_.data()));
+			}
+			for (decltype(current_call_info_) i = 0; i <= current_call_info_; ++i)
+			{
+				auto& [base, function, top
+							, _dummy1, _dummy2, _dummy3]
+						= call_infos_[i];
+
+				base = new_stack.data() + (base - stack_.data());
+				function = new_stack.data() + (base - stack_.data());
+				top = new_stack.data() + (base - stack_.data());
+			}
+
+			// exchange stack
+			stack_.swap(new_stack);
+		}
+
+		void grow_call_infos();
+
 	public:
 		explicit child_state(main_state& parent);
 
@@ -305,6 +342,8 @@ namespace gal::vm
 		[[nodiscard]] constexpr bool is_reset() const noexcept { return current_call_info_ == 0 && base_ == top_ && base_ == 0 && status_ == thread_status::ok; }
 
 		void traverse(main_state& state, bool clear_stack);
+
+		[[nodiscard]] constexpr bool is_brother(const child_state& another) const noexcept { return global_table_ == another.global_table_; }
 
 		[[nodiscard]] constexpr main_state& get_parent() const noexcept { return parent_; }
 
@@ -334,7 +373,7 @@ namespace gal::vm
 			}
 		}
 
-		[[nodiscard]] constexpr auto* get_current_environment() const noexcept
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR auto* get_current_environment() const noexcept
 		{
 			// no enclosing function?
 			if (current_call_info_ == 0)
@@ -368,6 +407,8 @@ namespace gal::vm
 
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR stack_element_type get_stack_element_address(index_type index) noexcept;
 
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR const_stack_element_type get_stack_element_address(const index_type index) const noexcept { return const_cast<child_state&>(*this).get_stack_element_address(index); }
+
 	public:
 		/**
 		 * @brief basic stack manipulation below
@@ -384,21 +425,43 @@ namespace gal::vm
 
 		constexpr void drop_stack(const stack_slot_type n) noexcept { top_ -= n; }
 
+		[[nodiscard]] constexpr stack_slot_type get_stack_last_pos() const noexcept { return stack_.capacity() - extra_stack_size - 1; }
+
 		[[nodiscard]] constexpr auto get_current_stack_size() const noexcept { return top_ - base_; }
 
-		[[nodiscard]] constexpr auto get_total_stack_size() const noexcept { return (basic_stack_size - 1) - base_; }
+		[[nodiscard]] constexpr auto get_total_stack_size() const noexcept { return get_stack_last_pos() - base_; }
 
-		[[nodiscard]] constexpr auto* get_stack_last() noexcept { return &stack_[basic_stack_size - 1]; }
+		[[nodiscard]] constexpr auto* get_stack_last() noexcept { return &stack_[get_stack_last_pos()]; }
 
-		[[nodiscard]] constexpr auto* get_stack_last() const noexcept { return &stack_[basic_stack_size - 1]; }
+		[[nodiscard]] constexpr auto* get_stack_last() const noexcept { return &stack_[get_stack_last_pos()]; }
 
-		[[nodiscard]] GAL_ASSERT_CONSTEXPR magic_value get_stack_element(index_type index) noexcept;
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR magic_value get_stack_element(index_type index) const noexcept;
 
 		GAL_ASSERT_CONSTEXPR void remove_stack_element(index_type index) noexcept;
 
 		GAL_ASSERT_CONSTEXPR void insert_stack_element(index_type index) noexcept;
 
 		GAL_ASSERT_CONSTEXPR void replace_stack_element(index_type index) noexcept;
+
+		GAL_ASSERT_CONSTEXPR void check_stack(const stack_size_type needed) noexcept
+		{
+			grow_stack(needed);
+			gal_assert(std::cmp_less_equal(top_ + needed, get_stack_last_pos()));
+			if (auto& top = call_infos_[current_call_info_].top;
+				top < &stack_[top_ + needed]) { top = &stack_[top_ + needed]; }
+		}
+
+		[[nodiscard]] constexpr bool is_stack_enough(const stack_size_type needed) const noexcept { return std::cmp_greater_equal(call_infos_[current_call_info_].top - &stack_[top_], needed); }
+
+		GAL_ASSERT_CONSTEXPR void move_stack_element(child_state& to, const stack_size_type num) noexcept
+		{
+			gal_assert(std::cmp_less_equal(num, get_current_stack_size()));
+			gal_assert(is_brother(to));
+			gal_assert(to.is_stack_enough(num));
+
+			top_ -= num;
+			for (auto index = stack_size_type{0}; index < num; ++index) { to.push_into_stack(stack_[top_ + index]); }
+		}
 
 	private:
 		// internal use only
@@ -420,9 +483,6 @@ namespace gal::vm
 
 			switch (current->type())
 			{
-				case object_type::null:
-				case object_type::boolean:
-				case object_type::number: { break; }
 				case object_type::string:
 				{
 					destroy(state, dynamic_cast<object_string*>(current));
@@ -449,6 +509,9 @@ namespace gal::vm
 					dynamic_cast<child_state*>(current)->close_upvalue();
 					break;
 				}
+				case object_type::null:
+				case object_type::boolean:
+				case object_type::number:
 				case object_type::prototype:
 				case object_type::upvalue:
 				case object_type::dead_key: { UNREACHABLE(); }
@@ -750,7 +813,7 @@ namespace gal::vm
 		}
 	}
 
-	GAL_ASSERT_CONSTEXPR magic_value child_state::get_stack_element(const index_type index) noexcept
+	GAL_ASSERT_CONSTEXPR magic_value child_state::get_stack_element(const index_type index) const noexcept
 	{
 		if (const auto address = get_stack_element_address(index); address) { return *address; }
 		return magic_value_null;
@@ -773,10 +836,34 @@ namespace gal::vm
 		address->copy_magic_value(parent_, stack_[top_]);
 	}
 
-	GAL_ASSERT_CONSTEXPR void child_state::replace_stack_element(index_type index) noexcept
+	GAL_ASSERT_CONSTEXPR void child_state::replace_stack_element(const index_type index) noexcept
 	{
-		// todo
-		(void)index;
+		// explicit test for incompatible code
+		if (index == constant::environment_index && current_call_info_ == 0) { runtime_error("no calling environment"); }
+
+		gal_assert(get_current_stack_size() >= 1);
+
+		const auto address = get_stack_element_address(index);
+		gal_assert(address);
+
+		gal_assert(call_infos_[current_call_info_].function->is_function());
+		auto* function = call_infos_[current_call_info_].function->as_function();
+
+
+		if (index == constant::environment_index)
+		{
+			gal_assert(stack_[top_ - 1].is_table());
+			function->set_environment(stack_[top_ - 1].as_table());
+
+			parent_.barrier(*function, stack_[top_ - 1]);
+		}
+		else
+		{
+			address->copy_magic_value(parent_, stack_[top_ - 1]);
+			// function upvalue?
+			if (is_upvalue_index(index)) { parent_.barrier(*function, stack_[top_ - 1]); }
+		}
+		--top_;
 	}
 
 	constexpr void child_state::wake_me() noexcept { parent_.wake_child(*this); }

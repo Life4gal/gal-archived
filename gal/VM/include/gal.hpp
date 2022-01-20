@@ -33,10 +33,11 @@ namespace gal::vm
 		constexpr index_type global_safe_index = -1002;
 	}// namespace constant
 
-	constexpr auto get_upvalue_index(const index_type i) noexcept { return constant::global_safe_index - i; }
+	[[nodiscard]] constexpr bool is_upvalue_index(const index_type i) noexcept { return i < constant::global_safe_index; }
 
-	constexpr bool is_pseudo(const index_type i) noexcept { return i <= constant::registry_index; }
+	[[nodiscard]] constexpr auto get_upvalue_index(const index_type i) noexcept { return constant::global_safe_index - i; }
 
+	[[nodiscard]] constexpr bool is_pseudo(const index_type i) noexcept { return i <= constant::registry_index; }
 
 	enum class thread_status
 	{
@@ -112,7 +113,7 @@ namespace gal::vm
 		GAL_API void insert(child_state& state, index_type index) noexcept;
 		GAL_API void replace(child_state& state, index_type index) noexcept;
 
-		GAL_API boolean_type check(child_state& state, stack_size_type size);
+		GAL_API boolean_type check(child_state& state, stack_size_type size) noexcept;
 		/**
 		 * @brief Allows for unlimited stack frames
 		 */
@@ -127,19 +128,19 @@ namespace gal::vm
 	 */
 	namespace internal
 	{
-		GAL_API boolean_type is_number(child_state& state, index_type index);
-		GAL_API boolean_type is_string(child_state& state, index_type index);
-		GAL_API boolean_type is_internal_function(child_state& state, index_type index);
-		GAL_API boolean_type is_gal_function(child_state& state, index_type index);
-		GAL_API boolean_type is_user_data(child_state& state, index_type index);
+		GAL_API [[nodiscard]] boolean_type is_number(const child_state& state, index_type index);
+		GAL_API [[nodiscard]] boolean_type is_string(const child_state& state, index_type index);
+		GAL_API [[nodiscard]] boolean_type is_internal_function(const child_state& state, index_type index);
+		GAL_API [[nodiscard]] boolean_type is_gal_function(const child_state& state, index_type index);
+		GAL_API [[nodiscard]] boolean_type is_user_data(const child_state& state, index_type index);
 
-		GAL_API object_type get_type(child_state& state, index_type index);
-		GAL_API string_type get_typename(child_state& state, index_type index);
-		GAL_API unsigned_type get_object_length(child_state& state, index_type index);
+		GAL_API [[nodiscard]] object_type get_type(const child_state& state, index_type index);
+		GAL_API [[nodiscard]] string_type get_typename(const child_state& state, object_type type);
+		GAL_API [[nodiscard]] unsigned_type get_object_length(child_state& state, index_type index);
 
-		GAL_API boolean_type is_equal(child_state& state, index_type index1, index_type index2);
-		GAL_API boolean_type is_raw_equal(child_state& state, index_type index1, index_type index2);
-		GAL_API boolean_type is_less_than(child_state& state, index_type index1, index_type index2);
+		GAL_API [[nodiscard]] boolean_type is_equal(const child_state& state, index_type index1, index_type index2);
+		GAL_API [[nodiscard]] boolean_type is_raw_equal(const child_state& state, index_type index1, index_type index2);
+		GAL_API [[nodiscard]] boolean_type is_less_than(child_state& state, index_type index1, index_type index2);
 
 		GAL_API boolean_type to_boolean(child_state& state, index_type index);
 		GAL_API number_type to_number(child_state& state, index_type index, boolean_type* converted);

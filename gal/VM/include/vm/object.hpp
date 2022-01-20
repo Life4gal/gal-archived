@@ -12,8 +12,6 @@
 #include <utils/enum_utils.hpp>
 #include <utils/hash.hpp>
 
-#include "object.hpp"
-
 namespace gal::vm
 {
 	class magic_value;
@@ -397,11 +395,22 @@ namespace gal::vm
 		}
 
 		/**
-		 * @brief Returns true if [this] and [other] are equivalent. Immutable values
-		 * (null, booleans, numbers, strings) are equal if they have the
+		 * @brief Returns true if [this] and [other] are equivalent. Trivial values
+		 * (null, booleans, numbers) are equal if they have the
 		 * same data. All other values are equal if they are identical objects.
 		 */
+		[[nodiscard]] bool		  raw_equal(const magic_value& other) const;
+
+		/**
+		 * @brief Returns true if [this] and [other] are equivalent. Immutable values
+		 * (null, booleans, numbers, strings) are equal if they have the
+		 * same data. All other values are equal if they are refer to the same object.
+		 */
 		[[nodiscard]] bool equal(const magic_value& other) const;
+
+		[[nodiscard]] bool		  object_is_number() const;
+
+		[[nodiscard]] number_type object_to_number() const;
 	};
 
 	constexpr magic_value magic_value_null{magic_value::null_val};
@@ -667,6 +676,11 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override { return sizeof(object_upvalue); }
 
+		constexpr void						redirect_stack_index(magic_value* new_value) noexcept
+		{
+			value_ = new_value;
+		}
+
 		[[nodiscard]] constexpr magic_value* get_index() noexcept { return value_; }
 
 		[[nodiscard]] constexpr const magic_value* get_index() const noexcept { return value_; }
@@ -876,6 +890,11 @@ namespace gal::vm
 			return &function_.internal.upvalues[index - 1];
 		}
 
+		constexpr void set_environment(object_table* environment) noexcept
+		{
+			environment_ = environment;
+		}
+
 		[[nodiscard]] constexpr auto* get_environment() noexcept { return environment_; }
 
 		[[nodiscard]] constexpr const auto* get_environment() const noexcept { return environment_; }
@@ -1057,6 +1076,12 @@ namespace gal::vm
 		gal_assert(is_user_data());
 		return dynamic_cast<object_user_data*>(as_object());
 	}
+
+	inline bool magic_value::object_is_number() const
+	{
+		return magic_value{object_to_number()}.is_null();
+	}
+
 }
 
 #endif // GAL_LANG_VM_OBJECT_HPP

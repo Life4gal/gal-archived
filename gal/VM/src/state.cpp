@@ -637,16 +637,31 @@ namespace gal::vm
 		(void)state;
 	}
 
+	void child_state::grow_call_infos()
+	{
+		if (call_infos_.capacity() > max_call_size)
+		{
+			// overflow while handling overflow?
+			throw vm_exception{parent_, thread_status::error_error};
+		}
+
+		// just grow
+		call_infos_.resize(call_infos_.capacity() * 2);
+		if (call_infos_.capacity() > max_call_size) { runtime_error("stack overflow"); }
+		++current_call_info_;
+	}
+
 	child_state::child_state(main_state& parent)
 		: object{object_type::thread, mark_white_bit0_mask | mark_fixed_bit_mask},
 		  parent_{parent},
 		  status_{0},
 		  stack_state_{0},
 		  single_step_{false},
+		  stack_{basic_stack_size + extra_stack_size, {parent_}},
 		  // function entry for this call info
 		  top_{1},
 		  base_{1},
-		  call_infos_{},
+		  call_infos_{basic_call_info_size, {parent_}},
 		  current_call_info_{0},
 		  num_internal_calls_{0},
 		  base_internal_calls_{0},
@@ -669,7 +684,7 @@ namespace gal::vm
 				.base = &stack_[0],
 				.function = &stack_[0],
 				.top = &stack_[min_stack_size],
-				.saved_pc = 0,
+				.saved_pc = nullptr,
 				.num_returns = 0,
 				.flags = 0};
 
@@ -683,10 +698,11 @@ namespace gal::vm
 		  status_{0},
 		  stack_state_{0},
 		  single_step_{brother.single_step_},
+		  stack_{basic_stack_size + extra_stack_size, {parent_}},
 		  // function entry for this call info
 		  top_{1},
 		  base_{1},
-		  call_infos_{},
+		  call_infos_{basic_call_info_size, {parent_}},
 		  current_call_info_{0},
 		  num_internal_calls_{0},
 		  base_internal_calls_{0},
@@ -701,7 +717,7 @@ namespace gal::vm
 				.base = &stack_[0],
 				.function = &stack_[0],
 				.top = &stack_[min_stack_size],
-				.saved_pc = 0,
+				.saved_pc = nullptr,
 				.num_returns = 0,
 				.flags = 0};
 
@@ -898,7 +914,7 @@ namespace gal::vm
 
 		gal_assert(std::ranges::all_of(gc_.free_pages, [](const auto* page) { return page == nullptr; }));
 
-		gal_assert(gc_.total_bytes == sizeof(main_state));
+		// gal_assert(gc_.total_bytes == sizeof(main_state));
 
 		#ifndef GAL_ALLOCATOR_NO_TRACE
 		raw_memory::print_trace_log();

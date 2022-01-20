@@ -1,6 +1,7 @@
 #include<vm/object.hpp>
 #include <algorithm>
 #include <vm/state.hpp>
+#include <charconv>
 
 namespace gal::vm
 {
@@ -288,5 +289,45 @@ namespace gal::vm
 		}
 
 		return work;
+	}
+
+	bool magic_value::raw_equal(const magic_value& other) const
+	{
+		if (is_null()) { return other.is_null(); }
+		if (is_boolean()) { return as_boolean() == other.as_boolean(); }
+		if (is_number())
+		{
+			constexpr auto float_eq = [](const number_type a, const number_type b) constexpr noexcept { return a - b < std::numeric_limits<number_type>::epsilon() && b - a < std::numeric_limits<number_type>::epsilon(); };
+
+			return float_eq(as_number(), other.as_number());
+		}
+
+		gal_assert(is_object() && other.is_object());
+		return as_object() == other.as_object();
+	}
+
+	bool magic_value::equal(const magic_value& other) const
+	{
+		if (not is_object() || not(is_user_data() && other.is_user_data()) || not(is_table() && other.is_table()))
+		{
+			return raw_equal(other);
+		}
+
+		// todo
+		return false;
+	}
+
+	number_type magic_value::object_to_number() const
+	{
+		if (is_number()) { return as_number(); }
+
+		if (is_string())
+		{
+			const auto& data = as_string()->get_data();
+			number_type num;
+			const auto [ptr, err] = std::from_chars(data.data(), data.data() + data.size(), num);
+			if (ptr == data.data() + data.size() && err == std::errc{}) { return num; }
+		}
+		return magic_value_null.as_number();
 	}
 }
