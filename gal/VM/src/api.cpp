@@ -1,7 +1,7 @@
 #include <gal.hpp>
 #include <vm/state.hpp>
 #include <utils/assert.hpp>
-#include <vm/tagged_method.hpp>
+#include <vm/meta_method.hpp>
 
 namespace gal::vm
 {
@@ -64,7 +64,11 @@ namespace gal::vm
 				return false;
 			}
 
-			if (size > 0) { state.check_stack(size); }
+			if (size > 0)
+			{
+				state.check_stack(size);
+				state.expand_stack_limit(size);
+			}
 
 			return true;
 		}
@@ -73,6 +77,7 @@ namespace gal::vm
 		{
 			gal_assert(size > 0);
 			state.check_stack(size);
+			state.expand_stack_limit(size);
 		}
 
 		void exchange_move(child_state& from, child_state& to, const stack_size_type num)
@@ -122,19 +127,7 @@ namespace gal::vm
 			return v.is_user_data();
 		}
 
-		object_type get_type(const child_state& state, const index_type index) noexcept
-		{
-			const auto v = state.get_stack_element(index);
-			if (v.is_null()) { return object_type::null; }
-			if (v.is_boolean()) { return object_type::boolean; }
-			if (v.is_number()) { return object_type::number; }
-			if (v.is_string()) { return object_type::string; }
-			if (v.is_table()) { return object_type::table; }
-			if (v.is_function()) { return object_type::function; }
-			if (v.is_user_data()) { return object_type::user_data; }
-			if (v.is_thread()) { return object_type::thread; }
-			return static_cast<object_type>(unknown_object_type);
-		}
+		object_type get_type(const child_state& state, const index_type index) noexcept { return state.get_stack_element(index).get_type(); }
 
 		[[nodiscard]] string_type get_typename(const object_type type) noexcept
 		{
@@ -159,11 +152,11 @@ namespace gal::vm
 			return 0;
 		}
 
-		[[nodiscard]] boolean_type is_equal(const child_state& state, const index_type index1, const index_type index2)
+		[[nodiscard]] boolean_type is_equal(child_state& state, const index_type index1, const index_type index2)
 		{
 			const auto v1 = state.get_stack_element(index1);
 			const auto v2 = state.get_stack_element(index2);
-			return v1.equal(v2);
+			return v1.equal(state, v2);
 		}
 
 		[[nodiscard]] boolean_type is_raw_equal(const child_state& state, const index_type index1, const index_type index2) noexcept
@@ -265,6 +258,92 @@ namespace gal::vm
 		{
 			const auto v = state.get_stack_element(index);
 			return v.is_user_data() ? v.as_user_data()->get_data() : nullptr;
+		}
+
+		[[nodiscard]] user_data_type to_user_data_tagged(const child_state& state, const index_type index, const user_data_tag_type tag) noexcept
+		{
+			if (const auto v = state.get_stack_element(index);
+				v.is_user_data()) { if (auto* data = v.as_user_data(); data->get_tag() == tag) { return data; } }
+			return nullptr;
+		}
+
+		[[nodiscard]] user_data_tag_type get_user_data_tag(const child_state& state, const index_type index) noexcept
+		{
+			const auto v = state.get_stack_element(index);
+			return v.is_user_data() ? v.as_user_data()->get_tag() : user_data_tag_invalid;
+		}
+
+		void push_null(child_state& state) noexcept { state.push_into_stack_no_check(magic_value_null); }
+
+		void push_boolean(child_state& state, const boolean_type boolean) noexcept { state.push_into_stack_no_check(boolean ? magic_value_true : magic_value_false); }
+
+		void push_number(child_state& state, const number_type number) noexcept { state.push_into_stack(magic_value{number}); }
+
+		void push_string_sized(child_state& state, string_type string, size_t length)
+		{
+			state.get_parent().check_gc();
+			state.wake_me();
+
+			state.push_into_stack(
+					CREATE_OBJECT(
+							object_string,
+							state.get_parent(),
+							state.get_parent(),
+							string,
+							length)->operator magic_value());
+		}
+
+		void push_string(child_state& state, const string_type string)
+		{
+			if (string) { push_string_sized(state, string, std::strlen(string)); }
+			else { push_null(state); }
+		}
+
+		void push_internal_closure(child_state& state, stack_size_type num_params, internal_function_type function, continuation_function_type continuation, string_type debug_name)
+		{
+			state.get_parent().check_gc();
+			state.wake_me();
+			gal_assert(state.is_stack_enough(num_params));
+
+			auto* closure = CREATE_OBJECT(
+					object_closure,
+					state.get_parent(),
+					state.get_parent(),
+					num_params,
+					state.get_current_environment(),
+					function,
+					continuation,
+					debug_name)			;
+
+			for (index_type i = 1; i < num_params + 1; ++i)
+			{
+				const auto upvalue = state.peek_stack_element(i);
+				state.get_parent().check_alive(upvalue);
+				closure->push_upvalue(upvalue);
+			}
+
+			gal_assert(closure->is_mark_white());
+			state.push_into_stack(closure->operator magic_value());
+		}
+
+		boolean_type push_thread(child_state& state) noexcept
+		{
+			state.wake_me();
+			state.push_into_stack(state.operator magic_value());
+			return state.is_oldest_child();
+		}
+	}
+
+	namespace interface
+	{
+		void get_table(child_state& state, const index_type index)
+		{
+			state.wake_me();
+
+			const auto v = state.get_stack_element(index);
+			gal_assert(v != magic_value_null);
+
+			// todo
 		}
 	}
 }

@@ -107,7 +107,7 @@ namespace gal::vm
 				{
 					thread->traverse(state, true);
 
-					thread->make_stack_sleep();
+					thread->make_thread_sleep();
 				}
 				else
 				{
@@ -204,7 +204,7 @@ namespace gal::vm
 				// sweep open upvalues
 				sweep_list(state, thread->open_upvalue_, traversed_count);
 
-				if (alive) { thread->make_stack_wake(); }
+				if (alive) { thread->make_thread_wake(); }
 			}
 
 			if (alive)
@@ -642,12 +642,12 @@ namespace gal::vm
 		if (call_infos_.capacity() > max_call_size)
 		{
 			// overflow while handling overflow?
-			throw vm_exception{parent_, thread_status::error_error};
+			throw vm_exception{*this, thread_status::error_error};
 		}
 
 		// just grow
 		call_infos_.resize(call_infos_.capacity() * 2);
-		if (call_infos_.capacity() > max_call_size) { runtime_error("stack overflow"); }
+		if (call_infos_.capacity() > max_call_size) { error_runtime("stack overflow"); }
 		++current_call_info_;
 	}
 
@@ -667,11 +667,9 @@ namespace gal::vm
 		  base_internal_calls_{0},
 		  cached_slot_{0},
 		  global_table_(
-				  create<object_table>(
+				  CREATE_OBJECT(
+						  object_table,
 						  parent,
-						  #ifndef GAL_ALLOCATOR_NO_TRACE
-						  std_source_location::current(),
-						  #endif
 						  parent
 						  )->operator magic_value()),
 		  open_upvalue_{nullptr},
@@ -800,10 +798,139 @@ namespace gal::vm
 		else { push_string(std::move(data)); }
 	}
 
-	void child_state::runtime_error(object_string::data_type&& data)
+	void child_state::error_type(const magic_value value, const object_string::data_type::value_type* operand)
+	{
+		constexpr char format[] = "attempt to {} a(n) {} value.";
+
+		object_string::data_type data{{parent_}};
+		data.reserve(sizeof(format) + 25);
+		std_format::format_to(std::back_inserter(data), format, operand, parent_.get_type_name(value).get_data());
+		error_runtime(std::move(data));
+	}
+
+	void child_state::error_for(const magic_value value, const object_string::data_type::value_type* what)
+	{
+		constexpr char format[] = "invalid 'for' {} (number expected, but got {}).";
+
+		object_string::data_type data{{parent_}};
+		data.reserve(sizeof(format) + 25);
+		std_format::format_to(std::back_inserter(data), format, what, parent_.get_type_name(value).get_data());
+
+		error_runtime(std::move(data));
+	}
+
+	void child_state::error_arithmetic(const magic_value lhs, const magic_value rhs, const meta_method_type operand)
+	{
+		const auto& lhs_name = parent_.get_type_name(lhs);
+		const auto& rhs_name = parent_.get_type_name(rhs);
+		const auto& operand_name = get_gal_raw_event_name(operand);
+
+		constexpr char format[] = "attempt to perform arithmetic ({}) on {}{}{}.";
+
+		object_string::data_type data{{parent_}};
+		data.reserve(sizeof(format) + 60);
+		std_format::format_to(
+				std::back_inserter(data),
+				format,
+				operand_name,
+				lhs_name.get_data(),
+				&lhs_name != &rhs_name ? " and " : "",
+				&lhs_name != &rhs_name ? rhs_name.get_raw_data() : "");
+
+		error_runtime(std::move(data));
+	}
+
+	void child_state::error_order(const magic_value lhs, const magic_value rhs, const meta_method_type operand)
+	{
+		const auto& lhs_name = parent_.get_type_name(lhs);
+		const auto& rhs_name = parent_.get_type_name(rhs);
+		const auto* operand_name =
+				(operand == meta_method_type::less_than)
+					? "<"
+					: (operand == meta_method_type::less_equal)
+					? "<="
+					: "==";
+		constexpr char format[] = "attempt to compare {} {} {}.";
+
+		object_string::data_type data{{parent_}};
+		data.reserve(sizeof(format) + 60);
+		std_format::format_to(
+				std::back_inserter(data),
+				format,
+				lhs_name.get_data(),
+				operand_name,
+				rhs_name.get_data());
+
+		error_runtime(std::move(data));
+	}
+
+	void child_state::error_index(const magic_value lhs, const magic_value rhs)
+	{
+		const auto& lhs_name = parent_.get_type_name(lhs);
+		const auto& rhs_name = parent_.get_type_name(rhs);
+
+		constexpr char format[] = "attempt to index {} with {}{}{}{}.";
+
+		object_string::data_type data{{parent_}};
+		data.reserve(sizeof(format) + 40 + (rhs.is_string() ? (rhs.as_string()->size() + 2) : 0));
+		std_format::format_to(
+				std::back_inserter(data),
+				format,
+				lhs_name.get_data(),
+				rhs_name.get_data(),
+				rhs.is_string() ? "(" : "",
+				rhs.is_string() ? rhs.as_string()->get_raw_data() : "",
+				rhs.is_string() ? ")" : "");
+
+		error_runtime(std::move(data));
+	}
+
+	void child_state::error_runtime(object_string::data_type&& data)
 	{
 		push_error(std::move(data));
-		throw vm_exception{parent_, thread_status::error_run};
+		throw vm_exception{*this, thread_status::error_run};
+	}
+
+	void child_state::call(stack_element_type function, const stack_size_type num_results)
+	{
+		if (++num_internal_calls_ >= max_internal_call_size)
+		{
+			if (num_internal_calls_ == max_internal_call_size)
+			{
+				error_runtime("Internal stack overflow!");
+			}
+
+			if (num_internal_calls_ >= (max_internal_call_size + (max_internal_call_size >> 3)))
+			{
+				// error while handing stack error
+				throw vm_exception{*this, thread_status::error_error};
+			}
+		}
+
+		if (prepare_call(function, num_results) == prepare_call_result::gal)
+		{
+			// execute will stop after returning from the stack frame
+			call_infos_[current_call_info_].flags |= call_info::flag_return;
+
+			const auto previous_stack_active = is_thread_active();
+			make_thread_active();
+			wake_me();
+
+			// call it
+			execute();
+
+			if (previous_stack_active)
+			{
+				make_thread_inactive();
+			}
+		}
+		else
+		{
+			execute();
+		}
+
+		--num_internal_calls_;
+		parent_.check_gc();
 	}
 
 	void main_state::mark_meta_table()
@@ -818,15 +945,15 @@ namespace gal::vm
 		// gc_{&main_thread_},
 		gc_{reinterpret_cast<child_state*>(fake_main_thread_)},
 		current_white_{object::mark_white_bits_mask},
+		fake_main_thread_{},
 		// main_thread_{*this},
 		main_thread_{*reinterpret_cast<child_state*>(fake_main_thread_)},
-		registry_(object::create<object_table>(
-				*this,
-				#ifndef GAL_ALLOCATOR_NO_TRACE
-				std_source_location::current(),
-				#endif
-				*this
-				)->operator magic_value()),
+		registry_(
+				CREATE_OBJECT(
+						object_table,
+						*this,
+						*this
+						)->operator magic_value()),
 		registry_free_{0},
 		callback_{}
 	{
@@ -834,47 +961,39 @@ namespace gal::vm
 
 		for (decltype(type_name_.size()) i = 0; i < type_name_.size(); ++i)
 		{
-			type_name_[i] = object::create<object_string>(
+			type_name_[i] = CREATE_OBJECT(
+					object_string,
 					*this,
-					#ifndef GAL_ALLOCATOR_NO_TRACE
-					std_source_location::current(),
-					#endif
 					*this,
 					gal_typename[i].data(),
-					gal_typename[i].size());
+					gal_typename[i].size())			;
 			// never collect these names
 			type_name_[i]->set_mark_fix();
 		}
 
-		for (decltype(tagged_method_name_.size()) i = 0; i < tagged_method_name_.size(); ++i)
+		for (decltype(meta_method_name_.size()) i = 0; i < meta_method_name_.size(); ++i)
 		{
-			tagged_method_name_[i] = object::create<object_string>(
+			meta_method_name_[i] = CREATE_OBJECT(
+					object_string,
 					*this,
-					#ifndef GAL_ALLOCATOR_NO_TRACE
-					std_source_location::current(),
-					#endif
 					*this,
 					gal_event_name[i].data(),
-					gal_event_name[i].size());
+					gal_event_name[i].size())			;
 			// never collect these names
-			tagged_method_name_[i]->set_mark_fix();
+			meta_method_name_[i]->set_mark_fix();
 		}
 
 		// pin to make sure we can always throw these error
-		(void)object::create<object_string>(
+		(void)CREATE_OBJECT(
+				object_string,
 				*this,
-				#ifndef GAL_ALLOCATOR_NO_TRACE
-				std_source_location::current(),
-				#endif
 				*this,
-				"Out of memory");
-		(void)object::create<object_string>(
+				"Out of memory")		;
+		(void)CREATE_OBJECT(
+				object_string,
 				*this,
-				#ifndef GAL_ALLOCATOR_NO_TRACE
-				std_source_location::current(),
-				#endif
 				*this,
-				"Error in error handling");
+				"Error in error handling")		;
 
 		gc_.gc_threshold = 4 * gc_.total_bytes;
 	}

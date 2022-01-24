@@ -10,11 +10,11 @@ namespace gal::vm
 	class vm_exception final : public std::exception
 	{
 	private:
-		main_state& state_;
+		child_state& state_;
 		thread_status status_;
 
 	public:
-		vm_exception(main_state& state, const thread_status status)
+		vm_exception(child_state& state, const thread_status status)
 			: state_{state},
 			  status_{status} {}
 

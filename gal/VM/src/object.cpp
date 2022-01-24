@@ -166,15 +166,13 @@ namespace gal::vm
 			else { current = nullptr; }
 		}
 
-		auto* ret = create<object_upvalue>(
+		auto* ret = CREATE_OBJECT(
+				object_upvalue,
 				state,
-				#ifndef GAL_ALLOCATOR_NO_TRACE
-				std_source_location::current(),
-				#endif
 				// current value lives in the stack
 				level,
-				nullptr
-				);
+				nullptr)		;
+
 		ret->set_mark(state.get_white());
 		// chain it in the proper position
 		ret->link_next(current);
@@ -185,7 +183,7 @@ namespace gal::vm
 		return ret;
 	}
 
-	object_closure::object_closure(main_state& state, const compiler::operand_abc_underlying_type num_elements, object_table* environment, object_prototype& prototype)
+	object_closure::object_closure(main_state& state, const size_type num_elements, object_table* environment, object_prototype& prototype)
 		: object{object_type::function},
 		  is_internal_{0},
 		  stack_size_{prototype.get_stack_capacity()},
@@ -201,21 +199,31 @@ namespace gal::vm
 		state.link_object(*this);
 	}
 
-	object_closure::object_closure(main_state& state, const compiler::operand_abc_underlying_type num_elements, object_table* environment)
+	object_closure::object_closure(
+			main_state& state,
+			size_type num_elements,
+			object_table* environment,
+			internal_function_type function,
+			continuation_function_type continuation,
+			string_type debug_name)
 		: object{object_type::function},
 		  is_internal_{1},
 		  stack_size_{min_stack_size},
 		  is_preload_{0},
 		  gc_list_{nullptr},
 		  environment_{environment},
-		  function_{num_elements}
+		  function_{.num = num_elements}
 	// function_{.internal = {
-	// 		  .function = nullptr,
-	// 		  .continuation = nullptr,
-	// 		  .debug_name = nullptr,
-	// 		  .upvalues = {num_elements, magic_value_null, {state}
-	// 		  }}}
+	//   .function = function,
+	//   .continuation = continuation,
+	//   .debug_name = debug_name,
+	//   .upvalues = internal_type::upvalue_container_type{internal_type::upvalue_container_type::allocator_type{state}}
+	// }}
 	{
+		(void)function;
+		(void)continuation;
+		(void)debug_name;
+		// function_.internal.upvalues.reserve(num_elements);
 		state.link_object(*this);
 	}
 
@@ -292,7 +300,7 @@ namespace gal::vm
 		return work;
 	}
 
-	bool magic_value::raw_equal(const magic_value& other) const noexcept
+	bool magic_value::raw_equal(const magic_value other) const noexcept
 	{
 		if (is_null()) { return other.is_null(); }
 		if (is_boolean()) { return as_boolean() == other.as_boolean(); }
@@ -307,13 +315,43 @@ namespace gal::vm
 		return as_object() == other.as_object();
 	}
 
-	bool magic_value::equal(const magic_value& other) const
+	bool magic_value::equal(child_state& state, const magic_value other) const
 	{
 		if (not is_object() || not(is_user_data() && other.is_user_data()) || not(is_table() && other.is_table())) { return raw_equal(other); }
 
-		// todo
-		return false;
+		return state.meta_method_compare(*this, other, meta_method_type::equal).as_boolean();
 	}
+
+	namespace
+	{
+		template<bool HasEqual>
+		bool magic_value_compare(child_state& state, const magic_value lhs, const magic_value rhs)
+		{
+			if (lhs.get_type() != rhs.get_type()) { state.error_order(lhs, rhs, meta_method_type::less_than); }
+
+			if (lhs.is_number())
+			{
+				if constexpr (HasEqual) { return lhs.as_number() <= rhs.as_number(); }
+				else { return lhs.as_number() < rhs.as_number(); }
+			}
+
+			if (lhs.is_string()) { return *lhs.as_string() < *rhs.as_string(); }
+
+			if (auto result = state.meta_method_order(lhs, rhs, meta_method_type::less_than);
+				result != magic_value_undefined) { return result.as_boolean(); }
+			else if constexpr (HasEqual)
+			{
+				if (result = state.meta_method_order(lhs, rhs, meta_method_type::less_equal);
+					result != magic_value_undefined) { return result.as_boolean(); }
+			}
+
+			state.error_order(lhs, rhs, meta_method_type::less_equal);
+		}
+	}
+
+	bool magic_value::less_than(child_state& state, const magic_value other) const { return magic_value_compare<false>(state, *this, other); }
+
+	bool magic_value::less_equal(child_state& state, const magic_value other) const { return magic_value_compare<true>(state, *this, other); }
 
 	number_type magic_value::to_number() const noexcept
 	{
@@ -347,13 +385,11 @@ namespace gal::vm
 			object_string::data_type str{{state}};
 			str.resize(length);
 			std::to_chars(str.data(), str.data() + str.size(), as_number(), std::chars_format::scientific);
-			return object::create<object_string>(
+			return CREATE_OBJECT(
+					object_string,
 					state,
-					#ifndef GAL_ALLOCATOR_NO_TRACE
-					std_source_location::current(),
-					#endif
 					state,
-					std::move(str));
+					std::move(str))			;
 		}
 
 		return nullptr;

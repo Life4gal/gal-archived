@@ -242,7 +242,7 @@ namespace gal::vm
 			gal_assert(size_class < size_classes);
 
 			auto* page = static_cast<memory_page*>(std::malloc(per_page_size));
-			if (not page) { throw vm_exception{state, thread_status::error_memory}; }
+			if (not page) { throw vm_exception{state.main_thread_, thread_status::error_memory}; }
 
 			// default construct page :)
 			std::construct_at(page);
@@ -350,7 +350,7 @@ namespace gal::vm
 			              ? memory_page::create_block(state, n_class)
 			              : std::malloc(size);
 
-		if (not block && n_class > 0) { throw vm_exception{state, thread_status::error_memory}; }
+		if (not block && n_class > 0) { throw vm_exception{state.main_thread_, thread_status::error_memory}; }
 
 		state.get_gc_handler().total_bytes += size;
 
@@ -430,7 +430,7 @@ namespace gal::vm
 				         ? memory_page::create_block(state, n_class)
 				         : std::malloc(needed_size);
 
-			if (not result && needed_size != 0) { throw vm_exception{state, thread_status::error_memory}; }
+			if (not result && needed_size != 0) { throw vm_exception{state.main_thread_, thread_status::error_memory}; }
 
 			if (current_size != 0 && needed_size != 0) { std::memcpy(result, ptr, std::ranges::min(current_size, needed_size)); }
 
@@ -440,7 +440,7 @@ namespace gal::vm
 		else
 		{
 			result = std::realloc(ptr, needed_size);
-			if (not result && needed_size != 0) { throw vm_exception{state, thread_status::error_memory}; }
+			if (not result && needed_size != 0) { throw vm_exception{state.main_thread_, thread_status::error_memory}; }
 		}
 
 		gal_assert((needed_size == 0) == (result == nullptr));

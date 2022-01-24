@@ -8,9 +8,16 @@
 #include <utils/assert.hpp>
 #include <utils/hash_container.hpp>
 #include <vector>
-#include <vm/tagged_method.hpp>
+#include <vm/meta_method.hpp>
 #include <utils/enum_utils.hpp>
 #include <utils/hash.hpp>
+
+// macro :(
+#ifndef GAL_ALLOCATOR_NO_TRACE
+#define CREATE_OBJECT(type, state, ...) object::create<type>(state, std_source_location::current(), ##__VA_ARGS__)
+#else
+		#define CREATE_OBJECT(type, state, ...) object::create<type>(state, ##__VA_ARGS__)
+#endif
 
 namespace gal::vm
 {
@@ -377,6 +384,19 @@ namespace gal::vm
 		[[nodiscard]] inline object_user_data* as_user_data() const noexcept;
 		[[nodiscard]] inline child_state* as_thread() const noexcept;
 
+		[[nodiscard]] constexpr object_type get_type() const noexcept
+		{
+			if (is_null()) { return object_type::null; }
+			if (is_boolean()) { return object_type::boolean; }
+			if (is_number()) { return object_type::number; }
+			if (is_string()) { return object_type::string; }
+			if (is_table()) { return object_type::table; }
+			if (is_function()) { return object_type::function; }
+			if (is_user_data()) { return object_type::user_data; }
+			if (is_thread()) { return object_type::thread; }
+			return static_cast<object_type>(unknown_object_type);
+		}
+
 		GAL_ASSERT_CONSTEXPR void copy_magic_value(const main_state& state, magic_value target) noexcept;
 
 		constexpr void mark(main_state& state) const noexcept { if (is_object()) { as_object()->try_mark(state); } }
@@ -395,18 +415,27 @@ namespace gal::vm
 		}
 
 		/**
+		 * @note Raw compare is not allowed
+		 */
+		auto operator<=>(const magic_value&) const = delete;
+
+		/**
 		 * @brief Returns true if [this] and [other] are equivalent. Trivial values
 		 * (null, booleans, numbers) are equal if they have the
 		 * same data. All other values are equal if they are identical objects.
 		 */
-		[[nodiscard]] bool raw_equal(const magic_value& other) const noexcept;
+		[[nodiscard]] bool raw_equal(magic_value other) const noexcept;
 
 		/**
 		 * @brief Returns true if [this] and [other] are equivalent. Immutable values
 		 * (null, booleans, numbers, strings) are equal if they have the
 		 * same data. All other values are equal if they are refer to the same object.
 		 */
-		[[nodiscard]] bool equal(const magic_value& other) const;
+		[[nodiscard]] bool equal(child_state& state, magic_value other) const;
+
+		[[nodiscard]] bool less_than(child_state& state, magic_value other) const;
+
+		[[nodiscard]] bool less_equal(child_state& state, magic_value other) const;
 
 		[[nodiscard]] bool number_convertible() const noexcept { return magic_value{to_number()}.is_null(); }
 		[[nodiscard]] bool string_convertible() const noexcept { return is_string() || is_number(); }
@@ -468,6 +497,10 @@ namespace gal::vm
 		[[nodiscard]] constexpr auto size() const noexcept { return data_.size(); }
 
 		constexpr void mark() noexcept { set_mark_white_to_gray(); }
+
+		[[nodiscard]] constexpr bool operator==(const object_string& other) const noexcept { return data_ == other.data_; }
+
+		[[nodiscard]] constexpr auto operator<=>(const object_string& other) const noexcept { return data_ <=> other.data_; }
 	};
 
 	class object_user_data final : public object
@@ -506,7 +539,13 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr auto size() const noexcept { return data_.size(); }
 
-		constexpr void set_meta_table(object_table* meta_table) { meta_table_ = meta_table; }
+		[[nodiscard]] constexpr bool has_meta_table() const noexcept { return meta_table_; }
+
+		[[nodiscard]] constexpr object_table* get_meta_table() noexcept { return meta_table_; }
+
+		[[nodiscard]] constexpr const object_table* get_meta_table() const noexcept { return meta_table_; }
+
+		constexpr void set_meta_table(object_table* meta_table) noexcept { meta_table_ = meta_table; }
 	};
 
 	/**
@@ -770,7 +809,7 @@ namespace gal::vm
 
 			internal_function_type function{nullptr};
 			continuation_function_type continuation{nullptr};
-			const char* debug_name{nullptr};
+			string_type debug_name{nullptr};
 			upvalue_container_type upvalues;
 		};
 
@@ -798,7 +837,7 @@ namespace gal::vm
 		// force function_type to be an aggregate type
 		union function_type// NOLINT(cppcoreguidelines-special-member-functions)
 		{
-			compiler::operand_abc_underlying_type num{};
+			size_type num{};
 			// todo: gal / internal init will case an ice
 			gal_type gal;
 			internal_type internal;
@@ -825,9 +864,15 @@ namespace gal::vm
 		}
 
 	public:
-		object_closure(main_state& state, compiler::operand_abc_underlying_type num_elements, object_table* environment, object_prototype& prototype);
+		object_closure(main_state& state, size_type num_elements, object_table* environment, object_prototype& prototype);
 
-		object_closure(main_state& state, compiler::operand_abc_underlying_type num_elements, object_table* environment);
+		object_closure(
+				main_state& state,
+				size_type num_elements,
+				object_table* environment,
+				internal_function_type function,
+				continuation_function_type continuation,
+				string_type debug_name);
 
 		[[nodiscard]] constexpr std::size_t memory_usage() const noexcept override
 		{
@@ -875,27 +920,39 @@ namespace gal::vm
 			return is_internal() ? function_.internal.upvalues.size() : function_.gal.upreferences.size();
 		}
 
+		/**
+		 * @note The function does not check whether the pushed parameters are valid (still alive)
+		 */
+		GAL_ASSERT_CONSTEXPR void push_upvalue(const magic_value value)
+		{
+			gal_assert(is_internal(), "Not an internal function!");
+			function_.internal.upvalues.push_back(value);
+		}
+
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR auto get_upvalue(const size_type index) const noexcept
 		{
-			gal_assert(is_internal());
+			gal_assert(is_internal(), "Not an internal function!");
+			gal_assert(index < function_.internal.upvalues.size(), "Index out of bound!");
 			return function_.internal.upvalues[index - 1];
 		}
 
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR auto* get_upvalue_address(const size_type index) noexcept
 		{
-			gal_assert(is_internal());
+			gal_assert(is_internal(), "Not an internal function!");
+			gal_assert(index < function_.internal.upvalues.size(), "Index out of bound!");
 			return &function_.internal.upvalues[index - 1];
 		}
 
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR const auto* get_upvalue_address(const size_type index) const noexcept
 		{
-			gal_assert(is_internal());
+			gal_assert(is_internal(), "Not an internal function!");
+			gal_assert(index < function_.internal.upvalues.size(), "Index out of bound!");
 			return &function_.internal.upvalues[index - 1];
 		}
 
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR internal_function_type get_internal_function() const noexcept
 		{
-			gal_assert(is_internal());
+			gal_assert(is_internal(), "Not an internal function!");
 			return function_.internal.function;
 		}
 
@@ -907,11 +964,11 @@ namespace gal::vm
 
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR const auto* get_prototype() const noexcept
 		{
-			gal_assert(not is_internal());
+			gal_assert(not is_internal(), "Not a GAL function!");
 			return function_.gal.prototype;
 		}
 	};
-}// namespace gal::vm_dev
+}// namespace gal::vm
 
 template<>
 struct std::hash<::gal::vm::magic_value>
@@ -939,6 +996,9 @@ struct std::hash<::gal::vm::magic_value>
 
 namespace gal::vm
 {
+	/**
+	 * @todo The final design of table should be a continuous array, which stores the continuous hash arrangement. When inserting elements, hash the key first, and then find a suitable position in the array. If an element already exists in that position, the new element will be placed in the head of object_chain of that element.
+	 */
 	class object_table final : public object
 	{
 		friend class object;
@@ -996,7 +1056,7 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr bool check_flag(const flag_type flag) const noexcept { return flags_ & (1 << flag); }
 
-		[[nodiscard]] constexpr bool check_flag(const tagged_method_type flag) const noexcept { return check_flag(static_cast<flag_type>(flag)); }
+		[[nodiscard]] constexpr bool check_flag(const meta_method_type flag) const noexcept { return check_flag(static_cast<flag_type>(flag)); }
 
 		[[nodiscard]] constexpr bool has_meta_table() const noexcept { return meta_table_; }
 
@@ -1024,15 +1084,23 @@ namespace gal::vm
 		 * @brief Looks up [key] in [table]. If found, returns the value. Otherwise, returns
 		 * `magic_value_null`.
 		 */
-		[[nodiscard]] magic_value find(const magic_value value) const
+		[[nodiscard]] magic_value find(const magic_value key) const
 		{
-			if (const auto it = nodes_.find(value); it == nodes_.end()) { return magic_value_null; }
+			if (const auto it = nodes_.find(key); it == nodes_.end()) { return magic_value_null; }
 			else { return it->second; }
 		}
 
-		[[nodiscard]] magic_value get_tagged_method(const tagged_method_type event, const object_string& name)
+		[[nodiscard]] magic_value get_or_insert(const magic_value key, const magic_value value_if_not_exist = magic_value_null)
 		{
-			gal_assert(utils::is_enum_between_of(event, tagged_method_type::index, tagged_method_type::equal));
+			const auto [it, inserted] = nodes_.try_emplace(key, value_if_not_exist);
+			if (inserted) { return value_if_not_exist; }
+			// exist
+			return it->second;
+		}
+
+		[[nodiscard]] magic_value get_meta_method(const meta_method_type event, const object_string& name)
+		{
+			gal_assert(utils::is_enum_between_of(event, meta_method_type::index, meta_method_type::equal));
 
 			const auto tagged_method = find(name.operator magic_value());
 			if (tagged_method == magic_value_null)

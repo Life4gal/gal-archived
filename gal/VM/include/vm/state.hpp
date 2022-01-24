@@ -4,7 +4,7 @@
 #define GAL_LANG_VM_STATE_HPP
 
 #include <vm/object.hpp>
-#include <vm/tagged_method.hpp>
+#include <vm/meta_method.hpp>
 #include <utils/enum_utils.hpp>
 #include <array>
 #include <vector>
@@ -197,6 +197,18 @@ namespace gal::vm
 
 	struct call_info
 	{
+		using flag_type = std::uint32_t;
+
+		/**
+		 * @brief Should the interpreter return after returning from this call_info? first frame must have this set.
+		 */
+		constexpr static flag_type flag_return = 1 << 0;
+
+		/**
+		 * @brief Should the error thrown during execution get handled by continuation from this call_info? function must be internal type.
+		 */
+		constexpr static flag_type flag_handle = 1 << 1;
+
 		// base for this function
 		stack_element_type base;
 		// function index in the stack
@@ -209,7 +221,7 @@ namespace gal::vm
 		// expected number of results from this function
 		compiler::operand_abc_underlying_type num_returns;
 		// call frame flags
-		unsigned flags;
+		flag_type flags;
 	};
 
 	class child_state final : public object
@@ -351,6 +363,8 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr bool is_brother(const child_state& another) const noexcept { return global_table_ == another.global_table_; }
 
+		[[nodiscard]] constexpr bool is_oldest_child() const noexcept;
+
 		[[nodiscard]] constexpr main_state& get_parent() const noexcept { return parent_; }
 
 		constexpr void set_gc_list(object* list) noexcept { gc_list_ = list; }
@@ -361,11 +375,15 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr bool is_thread_active() const noexcept { return stack_state_ & thread_active_bit_mask; }
 
+		constexpr void make_thread_inactive() noexcept { stack_state_ &= ~thread_active_bit_mask; }
+
+		constexpr void make_thread_active() noexcept { stack_state_ |= thread_active_bit_mask; }
+
 		[[nodiscard]] constexpr bool is_thread_sleeping() const noexcept { return stack_state_ & thread_sleeping_bit_mask; }
 
-		constexpr void make_stack_wake() noexcept { stack_state_ &= ~thread_sleeping_bit_mask; }
+		constexpr void make_thread_wake() noexcept { stack_state_ &= ~thread_sleeping_bit_mask; }
 
-		constexpr void make_stack_sleep() noexcept { stack_state_ |= thread_sleeping_bit_mask; }
+		constexpr void make_thread_sleep() noexcept { stack_state_ |= thread_sleeping_bit_mask; }
 
 		/**
 		 * @brief Close all upvalues for this thread
@@ -397,28 +415,30 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr const object_string* get_named_call() const noexcept { return named_call_; }
 
+	private:
+		void push_error(object_string::data_type&& data);
+
 		/**
 		 * @brief basic error handler manipulation below
 		 */
 
+	public:
+		[[noreturn]] void error_type(magic_value value, const object_string::data_type::value_type* operand);
 
-		void push_error(object_string::data_type&& data);
+		[[noreturn]] void error_for(magic_value value, const object_string::data_type::value_type* what);
 
-		[[noreturn]] void runtime_error(const object_string::data_type::value_type* data)
-		{
-			// runtime_error(object_string::data_type{data, {parent_}});
-			runtime_error(object_string::data_type{data, object_string::data_type::traits_type::length(data), {parent_}});
-		}
+		[[noreturn]] void error_arithmetic(magic_value lhs, magic_value rhs, meta_method_type operand);
 
-		[[noreturn]] void runtime_error(object_string::data_type&& data);
+		[[noreturn]] void error_order(magic_value lhs, magic_value rhs, meta_method_type operand);
+
+		[[noreturn]] void error_index(magic_value lhs, magic_value rhs);
+
+		[[noreturn]] void error_runtime(const object_string::data_type::value_type* data) { error_runtime(object_string::data_type{data, object_string::data_type::traits_type::length(data), {parent_}}); }
+
+		[[noreturn]] void error_runtime(object_string::data_type&& data);
+
 
 	private:
-		GAL_ASSERT_CONSTEXPR void push_into_stack_no_check(const magic_value value) noexcept
-		{
-			gal_assert(&stack_[top_] < call_infos_[current_call_info_].top);
-			stack_[top_++] = value;
-		}
-
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR stack_element_type get_stack_element_address(index_type index) noexcept;
 
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR const_stack_element_type get_stack_element_address(const index_type index) const noexcept { return const_cast<child_state&>(*this).get_stack_element_address(index); }
@@ -428,6 +448,17 @@ namespace gal::vm
 		 * @brief basic stack manipulation below
 		 */
 
+
+		/**
+		 * @note For singleton type, use it carefully!
+		 */
+		GAL_ASSERT_CONSTEXPR void push_into_stack_no_check(const magic_value value) noexcept
+		{
+			gal_assert(value.is_null() || value.is_boolean() || value.is_number());
+
+			gal_assert(&stack_[top_] < call_infos_[current_call_info_].top);
+			stack_[top_++] = value;
+		}
 
 		GAL_ASSERT_CONSTEXPR void push_into_stack(const magic_value value) noexcept
 		{
@@ -449,6 +480,15 @@ namespace gal::vm
 
 		[[nodiscard]] constexpr auto* get_stack_last() const noexcept { return &stack_[get_stack_last_pos()]; }
 
+		/**
+		 * @brief Just peek stack
+		 */
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR magic_value peek_stack_element(const index_type index) const noexcept
+		{
+			gal_assert(index > 0 ? top_ + index < stack_.capacity() : std::cmp_greater_equal(top_, -index));
+			return stack_[top_ + index];
+		}
+
 		[[nodiscard]] GAL_ASSERT_CONSTEXPR magic_value get_stack_element(index_type index) const noexcept;
 
 		GAL_ASSERT_CONSTEXPR void remove_stack_element(index_type index) noexcept;
@@ -457,9 +497,10 @@ namespace gal::vm
 
 		GAL_ASSERT_CONSTEXPR void replace_stack_element(index_type index) noexcept;
 
-		GAL_ASSERT_CONSTEXPR void check_stack(const stack_size_type needed) noexcept
+		GAL_ASSERT_CONSTEXPR void check_stack(const stack_size_type needed) noexcept { grow_stack(needed); }
+
+		GAL_ASSERT_CONSTEXPR void expand_stack_limit(const stack_size_type needed) noexcept
 		{
-			grow_stack(needed);
 			gal_assert(std::cmp_less_equal(top_ + needed, get_stack_last_pos()));
 			if (auto& top = call_infos_[current_call_info_].top;
 				top < &stack_[top_ + needed]) { top = &stack_[top_ + needed]; }
@@ -487,6 +528,55 @@ namespace gal::vm
 
 	public:
 		constexpr void wake_me() noexcept;
+
+	private:
+		enum class prepare_call_result
+		{
+			// initiated a call to a GAL function
+			gal,
+			// did a call to a Internal function
+			internal,
+			// internal function yielded
+			yield
+		};
+
+		void execute()
+		{
+			// todo
+		}
+
+		prepare_call_result prepare_call(stack_element_type function, stack_size_type num_results)
+		{
+			// todo
+			(void)function;
+			(void)num_results;
+			return prepare_call_result::gal;
+		}
+
+	public:
+		/**
+		 * @brief invoke interface below
+		 */
+
+		/**
+		 * @brief Call a function (GAL or Internal). The function to be called is at function.
+		 * The arguments are on the stack, right after the function.
+		 * When returns, all the results are on the stack, starting at the original
+		 * function position.
+		 */
+		void call(stack_element_type function, stack_size_type num_results);
+
+
+		/**
+		 * @brief vm utils below
+		 * @note internal use only
+		 */
+
+		void meta_method_invoke(stack_element_type result, magic_value function, magic_value lhs, magic_value rhs);
+
+		[[nodiscard]] magic_value meta_method_order(magic_value lhs, magic_value rhs, meta_method_type event);
+
+		[[nodiscard]] magic_value meta_method_compare(magic_value lhs, magic_value rhs, meta_method_type event);
 	};
 
 	constexpr void object::delete_chain(main_state& state, object* end)
@@ -551,7 +641,7 @@ namespace gal::vm
 
 		using builtin_type_meta_table_type = std::array<object_table*, static_cast<std::size_t>(object_type::tagged_value_count)>;
 		using builtin_type_name_table_type = std::array<object_string*, static_cast<std::size_t>(object_type::tagged_value_count)>;
-		using tagged_method_name_table_type = std::array<object_string*, static_cast<std::size_t>(tagged_method_type::tagged_method_count)>;
+		using meta_method_name_table_type = std::array<object_string*, static_cast<std::size_t>(meta_method_type::meta_method_count)>;
 
 	private:
 		gc_handler gc_;
@@ -572,8 +662,8 @@ namespace gal::vm
 		builtin_type_meta_table_type meta_table_{};
 		// names for basic types
 		builtin_type_name_table_type type_name_{};
-		// names for tagged method
-		tagged_method_name_table_type tagged_method_name_{};
+		// names for meta method
+		meta_method_name_table_type meta_method_name_{};
 
 		// registry table
 		magic_value registry_;
@@ -644,7 +734,7 @@ namespace gal::vm
 		{
 			if (not child.is_thread_sleeping()) { return; }
 
-			child.make_stack_wake();
+			child.make_thread_wake();
 
 			if (gc_.keep_invariant())
 			{
@@ -653,23 +743,23 @@ namespace gal::vm
 			}
 		}
 
-		[[nodiscard]] child_state& get_main_state() noexcept { return main_thread_; }
+		[[nodiscard]] constexpr child_state& get_main_state() const noexcept { return main_thread_; }
 
-		[[nodiscard]] const object_string* get_table_mode(const object_table& table) const
+		[[nodiscard]] constexpr const object_string* get_table_mode(const object_table& table) const
 		{
 			return
 					table.has_meta_table()
-						? not table.check_flag(tagged_method_type::mode)
-							  ? tagged_method_name_[static_cast<std::size_t>(tagged_method_type::mode)]
+						? not table.check_flag(meta_method_type::mode)
+							  ? meta_method_name_[static_cast<std::size_t>(meta_method_type::mode)]
 							  : nullptr
 						: nullptr;
 		}
 
-		gc_handler& get_gc_handler() noexcept { return gc_; }
+		constexpr gc_handler& get_gc_handler() noexcept { return gc_; }
 
 		void check_gc() noexcept { gc_.check(main_thread_); }
 
-		void check_thread() noexcept { if (main_thread_.is_thread_sleeping()) { main_thread_.make_stack_wake(); } }
+		void check_thread() const noexcept { if (main_thread_.is_thread_sleeping()) { main_thread_.make_thread_wake(); } }
 
 		debug::callback_info& get_callback_info() noexcept { return callback_; }
 
@@ -784,7 +874,49 @@ namespace gal::vm
 		[[nodiscard]] constexpr auto* get_registry_address() noexcept { return &registry_; }
 
 		[[nodiscard]] constexpr const auto* get_registry_address() const noexcept { return &registry_; }
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR const object_string& get_type_name(object_type type) const noexcept
+		{
+			gal_assert(utils::is_enum_between_of(type, object_type::null, object_type::tagged_value_count));
+			return *type_name_[static_cast<std::size_t>(type)];
+		}
+
+		[[nodiscard]] const object_string& get_type_name(const magic_value value) const
+		{
+			if (value.is_user_data() && value.as_user_data()->get_tag() && value.as_user_data()->has_meta_table())
+			{
+				const auto* user_data = value.as_user_data();
+
+				if (const auto type = user_data->get_meta_table()->find(meta_method_name_[static_cast<std::size_t>(meta_method_type::type)]->operator magic_value());
+					type.is_string()) { return *type.as_string(); }
+			}
+			else if (const auto* table = meta_table_[static_cast<std::size_t>(value.get_type())]; table)
+			{
+				if (const auto type = table->get_meta_table()->find(meta_method_name_[static_cast<std::size_t>(meta_method_type::type)]->operator magic_value());
+					type.is_string()) { return *type.as_string(); }
+			}
+
+			return get_type_name(value.get_type());
+		}
+
+		[[nodiscard]] GAL_ASSERT_CONSTEXPR const object_string& get_meta_method_name(meta_method_type event) const noexcept
+		{
+			gal_assert(utils::is_enum_between_of(event, meta_method_type::index, meta_method_type::meta_method_count));
+			return *meta_method_name_[static_cast<std::size_t>(event)];
+		}
+
+		[[nodiscard]] magic_value get_meta_method_by_object(const magic_value value, meta_method_type event) const
+		{
+			const object_table* table;
+			if (value.is_table()) { table = value.as_table()->get_meta_table(); }
+			else if (value.is_user_data()) { table = value.as_user_data()->get_meta_table(); }
+			else { table = meta_table_[static_cast<std::size_t>(value.get_type())]; }
+
+			return table ? table->find(get_meta_method_name(event).operator magic_value()) : magic_value_null;
+		}
 	};
+
+	constexpr bool child_state::is_oldest_child() const noexcept { return &parent_.get_main_state() == this; }
 
 	GAL_ASSERT_CONSTEXPR void child_state::set_current_environment(const object& env) noexcept
 	{
@@ -856,7 +988,7 @@ namespace gal::vm
 	GAL_ASSERT_CONSTEXPR void child_state::replace_stack_element(const index_type index) noexcept
 	{
 		// explicit test for incompatible code
-		if (index == constant::environment_index && current_call_info_ == 0) { runtime_error("no calling environment"); }
+		if (index == constant::environment_index && current_call_info_ == 0) { error_runtime("no calling environment"); }
 
 		gal_assert(get_current_stack_size() >= 1);
 
@@ -884,6 +1016,90 @@ namespace gal::vm
 	}
 
 	constexpr void child_state::wake_me() noexcept { parent_.wake_child(*this); }
+
+	inline void child_state::meta_method_invoke(stack_element_type result, magic_value function, magic_value lhs, magic_value rhs)
+	{
+		// save stack
+		const auto size = result - stack_.data();
+
+		gal_assert(top_ + 3 < stack_.capacity());
+		check_stack(3);
+
+		push_into_stack(function);
+		push_into_stack(lhs);
+		push_into_stack(rhs);
+
+		call(&stack_[top_ - 1], 1);
+
+		// restore it
+		result = stack_.data() + size;
+
+		result->copy_magic_value(parent_, stack_[--top_]);
+	}
+
+	inline magic_value child_state::meta_method_order(const magic_value lhs, const magic_value rhs, const meta_method_type event)
+	{
+		// no meta method?
+		if (lhs.is_null()) { return magic_value_undefined; }
+
+		const auto lhs_meta_method = parent_.get_meta_method_by_object(lhs, event);
+		const auto rhs_meta_method = parent_.get_meta_method_by_object(rhs, event);
+
+		// different meta method?
+		if (not lhs_meta_method.raw_equal(rhs_meta_method)) { return magic_value_undefined; }
+
+		meta_method_invoke(&stack_[top_], lhs_meta_method, lhs, rhs);
+		return stack_[top_].is_false() ? magic_value_false : magic_value_true;
+	}
+
+	inline magic_value child_state::meta_method_compare(const magic_value lhs, const magic_value rhs, meta_method_type event)
+	{
+		gal_assert((lhs.is_user_data() && rhs.is_user_data()) || (lhs.is_table() && rhs.is_table()));
+
+		auto get_meta_method = [&](object_table* l, object_table* r)
+		{
+			const auto lhs_meta = l && not l->check_flag(event) ? l->get_meta_method(event, parent_.get_meta_method_name(event)) : magic_value_null;
+
+			if (lhs_meta == magic_value_null)
+			{
+				// no meta method
+				return magic_value_undefined;
+			}
+
+			if (l == r)
+			{
+				// same meta tables -> same meta methods
+				return lhs_meta;
+			}
+
+			const auto rhs_meta =
+					r && not r->check_flag(event)
+						? r->get_meta_method(event, parent_.get_meta_method_name(event))
+						: magic_value_null;
+
+			if (rhs_meta == magic_value_null)
+			{
+				// no meta method
+				return magic_value_null;
+			}
+
+			if (lhs_meta.raw_equal(rhs_meta))
+			{
+				// same meta method?
+				return lhs_meta;
+			}
+
+			return magic_value_null;
+		};
+
+		magic_value meta_method;
+
+		if (lhs.is_user_data()) { meta_method = get_meta_method(lhs.as_user_data()->get_meta_table(), rhs.as_user_data()->get_meta_table()); }
+		else { meta_method = get_meta_method(lhs.as_table()->get_meta_table(), rhs.as_table()->get_meta_table()); }
+
+		meta_method_invoke(&stack_[top_], meta_method, lhs, rhs);
+		return stack_[top_].is_false() ? magic_value_false : magic_value_true;
+	}
 
 	GAL_ASSERT_CONSTEXPR void object::mark(main_state& state)
 	{
