@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILS_STRING_POOL_HPP
-#define GAL_LANG_UTILS_STRING_POOL_HPP
+#ifndef GAL_UTILS_STRING_POOL_HPP
+#define GAL_UTILS_STRING_POOL_HPP
 
 #include <algorithm>
 #include <memory>
@@ -142,4 +142,4 @@ namespace gal::utils
 	};
 }
 
-#endif // GAL_LANG_UTILS_STRING_POOL_HPP
+#endif // GAL_UTILS_STRING_POOL_HPP

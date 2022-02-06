@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILS_HASH_HPP
-#define GAL_LANG_UTILS_HASH_HPP
+#ifndef GAL_UTILS_HASH_HPP
+#define GAL_UTILS_HASH_HPP
 
 #include <utility>
 
@@ -72,4 +72,4 @@ namespace gal::utils
 	}
 }
 
-#endif // GAL_LANG_UTILS_HASH_HPP
+#endif // GAL_UTILS_HASH_HPP

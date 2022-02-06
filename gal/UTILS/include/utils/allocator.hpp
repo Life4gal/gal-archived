@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILS_ALLOCATOR_HPP
-#define GAL_LANG_UTILS_ALLOCATOR_HPP
+#ifndef GAL_UTILS_ALLOCATOR_HPP
+#define GAL_UTILS_ALLOCATOR_HPP
 
 #ifndef GAL_ALLOCATOR_NO_TRACE
 #include <iostream> // for std::clog
@@ -34,7 +34,7 @@ namespace gal::utils
 			#ifndef GAL_ALLOCATOR_NO_TRACE
 			auto* ret = allocator_traits::allocate(allocator, n);
 			std::clog << std_format::format(
-					"allocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. allocate at: [file:{}][line:{}, column: {}][function:{}]\n",
+					"Allocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. Allocate at: [file:{}][line:{}, column: {}][function:{}]\n",
 					n,
 					static_cast<void*>(ret),
 					sizeof(value_type),
@@ -60,7 +60,7 @@ namespace gal::utils
 		{
 			#ifndef GAL_ALLOCATOR_NO_TRACE
 			std::clog << std_format::format(
-					"deallocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. allocate at: [file:{}][line:{}, column: {}][function:{}]\n",
+					"Deallocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. Deallocate at: [file:{}][line:{}, column: {}][function:{}]\n",
 					n,
 					static_cast<void*>(p),
 					sizeof(value_type),
@@ -77,23 +77,8 @@ namespace gal::utils
 		constexpr void construct(U* p, Args&&... args) { allocator_traits::construct(allocator, p, std::forward<Args>(args)...); }
 
 		template<typename U>
-		constexpr void destroy(
-				U* p
-				#ifndef GAL_ALLOCATOR_NO_TRACE
-				,
-				const std_source_location& location = std_source_location::current()
-				#endif
-				)
+		constexpr void destroy(U* p)
 		{
-			#ifndef GAL_ALLOCATOR_NO_TRACE
-			std::clog << std_format::format(
-					"destroy an object at {}. construct at: [file:{}][line:{}, column: {}][function:{}]\n",
-					static_cast<void*>(p),
-					location.file_name(),
-					location.line(),
-					location.column(),
-					location.function_name());
-			#endif
 			allocator_traits::destroy(allocator, p);
 		}
 
@@ -169,21 +154,9 @@ struct std::allocator_traits<::gal::utils::default_allocator<ValueType>>
 	constexpr static void construct(allocator_type& a, T* p, Args&&... args) { a.construct(p, std::forward<Args>(args)...); }
 
 	template<typename T>
-	constexpr static void destroy(
-			allocator_type& a,
-			T* p
-			#ifndef GAL_ALLOCATOR_NO_TRACE
-			,
-			const std_source_location& location = std_source_location::current()
-			#endif
-			)
+	constexpr static void destroy(allocator_type& a, T* p)
 	{
-		a.destroy(p
-		          #ifndef GAL_ALLOCATOR_NO_TRACE
-		          ,
-		          location
-		          #endif
-				);
+		a.destroy(p);
 	}
 
 	constexpr static size_type max_size(const allocator_type& a) noexcept { return internal_allocator_traits::max_size(a.allocator); }
@@ -191,4 +164,4 @@ struct std::allocator_traits<::gal::utils::default_allocator<ValueType>>
 	constexpr static allocator_type select_on_container_copy_construction(const allocator_type& a) { return a; }
 };// namespace std
 
-#endif // GAL_LANG_UTILS_ALLOCATOR_HPP
+#endif // GAL_UTILS_ALLOCATOR_HPP

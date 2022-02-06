@@ -18,16 +18,16 @@ set(
 )
 
 set(
-		${PROJECT_NAME}_SOURCE_VM
+		${PROJECT_NAME}_SOURCE_CORE
 		
-		test_vm/test_state.cpp
+		
 )
 
 add_executable(
 		${PROJECT_NAME}
 
 		${${PROJECT_NAME}_SOURCE_UTILS}
-		${${PROJECT_NAME}_SOURCE_VM}
+		${${PROJECT_NAME}_SOURCE_CORE}
 )
 
 if(MSVC)
@@ -51,7 +51,6 @@ target_link_libraries(
 		PRIVATE
 		gal::UTILS
 		gal::CORE
-		gal::VM
 		gtest_main
 )
 

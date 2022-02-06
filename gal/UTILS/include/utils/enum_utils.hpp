@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILS_ENUM_UTILS_HPP
-#define GAL_LANG_UTILS_ENUM_UTILS_HPP
+#ifndef GAL_UTILS_ENUM_UTILS_HPP
+#define GAL_UTILS_ENUM_UTILS_HPP
 
 namespace gal::utils
 {
@@ -106,4 +106,4 @@ namespace gal::utils
 	}
 }
 
-#endif // GAL_LANG_UTILS_ENUM_UTILS_HPP
+#endif // GAL_UTILS_ENUM_UTILS_HPP

@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILS_FUNCTION_HPP
-#define GAL_LANG_UTILS_FUNCTION_HPP
+#ifndef GAL_UTILS_FUNCTION_HPP
+#define GAL_UTILS_FUNCTION_HPP
 
 #include <type_traits>
 
@@ -28,4 +28,4 @@ namespace gal::utils
 	y_combinator(F) -> y_combinator<std::decay_t<F>>;
 }
 
-#endif // GAL_LANG_UTILS_FUNCTION_HPP
+#endif // GAL_UTILS_FUNCTION_HPP

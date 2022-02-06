@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILS_POINT_HPP
-#define GAL_LANG_UTILS_POINT_HPP
+#ifndef GAL_UTILS_POINT_HPP
+#define GAL_UTILS_POINT_HPP
 
 #include <string>
 
@@ -56,4 +56,4 @@ namespace gal::utils
 	using location = line;
 }
 
-#endif// GAL_LANG_UTILS_POINT_HPP
+#endif// GAL_UTILS_POINT_HPP

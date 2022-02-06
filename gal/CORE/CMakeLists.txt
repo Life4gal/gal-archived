@@ -6,12 +6,8 @@ project(
 set(
 		${PROJECT_NAME}_SOURCE
 
-		src/ast.cpp
-		src/lexer.cpp
-		src/parser.cpp
-		src/bytecode_builder.cpp
-		src/compiler.cpp
-		src/compile.cpp
+		src/object.cpp
+		src/object_method.cpp
 )
 
 add_library(
@@ -50,7 +46,6 @@ target_link_libraries(
 			${PROJECT_NAME}
 			PRIVATE
 			gal::UTILS
-			gal::COMMON
 )
 
 include(${GAL_MODULE_PATH}/config_build_type.cmake)

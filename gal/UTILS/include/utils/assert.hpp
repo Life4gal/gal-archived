@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILS_ASSERT_HPP
-#define GAL_LANG_UTILS_ASSERT_HPP
+#ifndef GAL_UTILS_ASSERT_HPP
+#define GAL_UTILS_ASSERT_HPP
 
 #ifndef GAL_NO_ASSERT
 #ifdef NDEBUG
@@ -37,4 +37,4 @@ namespace gal
 	#endif
 }// namespace gal
 
-#endif//GAL_LANG_ASSERT_HPP
+#endif//GAL_UTILS_ASSERT_HPP
