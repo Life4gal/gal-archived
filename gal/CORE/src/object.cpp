@@ -67,17 +67,13 @@ namespace gal::lang
 		safe_decrease_object_ref_count(tmp GAL_LANG_DO_IF_DEBUG(, reason, location));
 	}
 
+	gal_type_object::~gal_type_object() = default;
+
 	gal_type_object_type::gal_type_object_type(gal_type_object* self)
 		: gal_type_object{
 				self,
 				"type",
-				flag_default |
-				flag_have_gc |
-				flag_base_type |
-				flag_type_subclass |
-				flag_have_vectorcall,
-				"use type(object) to get an object's type.\n"
-				"use type(name, bases, metadata, **pair_args) to get a new type.\n",
+				utils::set_enum_flag_ret(flags::default_flag, flags::have_gc, flags::base_type, flags::type_subclass, flags::have_vectorcall),
 				// todo: methods
 				nullptr,
 				// todo: members
@@ -97,10 +93,7 @@ namespace gal::lang
 		: gal_type_object{
 				&gal_type_object_type::type(),
 				"object",
-				flag_default | flag_base_type,
-				"object() -- The base class of the class hierarchy.\n\n"
-				"When called, it accepts no arguments and returns a new featureless\n"
-				"instance that has no instance attributes and cannot be given any.\n",
+				utils::set_enum_flag_ret(flags::default_flag, flags::base_type),
 				// todo: methods
 				nullptr,
 				nullptr,
@@ -118,12 +111,7 @@ namespace gal::lang
 		: gal_type_object{
 				&gal_type_object_type::type(),
 				"super",
-				flag_default | flag_have_gc | flag_base_type,
-				"super() -> same as super(__class__, <first argument>)\n"
-				"super(type) -> unbound super object\n"
-				"super(type, object) -> bound super object; requires instance_of(object, type)\n"
-				"super(type, type2) -> bound super object; requires subclass_of(type2, type)\n"
-				"Typical use to call a cooperative superclass method.\n",
+				utils::set_enum_flag_ret(flags::default_flag, flags::have_gc, flags::base_type),
 				nullptr,
 				// todo: member
 				nullptr
@@ -160,9 +148,7 @@ namespace gal::lang
 		{
 				&gal_type_object_type::type(),
 				"null",
-				flag_default,
-				"undefined type which can be used in contexts"
-				"where nullptr is not suitable (since nullptr often means 'error')"
+				flags::default_flag,
 		} {}
 
 	gal_type_object_null& gal_type_object_null::type()
@@ -204,8 +190,7 @@ namespace gal::lang
 		: gal_type_object{
 				&gal_type_object_type::type(),
 				"not_implemented",
-				flag_default,
-				"current content is not implemented yet.",
+				flags::default_flag,
 				// todo: methods
 				nullptr
 		} { }

@@ -6,9 +6,7 @@ namespace gal::lang
 		: gal_type_object{
 				&gal_type_object_type::type(),
 				"internal_method",
-				flag_default | flag_have_gc | flag_have_vectorcall,
-				"internal method",
-				nullptr,
+				utils::set_enum_flag_ret(flags::default_flag, flags::have_gc, flags::have_vectorcall),
 				// todo: methods
 				nullptr,
 				// todo: members

@@ -12,7 +12,7 @@
 
 namespace gal::lang
 {
-	class gal_type_object_internal_method : public gal_type_object
+	class gal_type_object_internal_method final : public gal_type_object
 	{
 	public:
 		struct object_life_manager : traits::object_life_interface<gal_type_object_internal_method>
@@ -76,6 +76,8 @@ namespace gal::lang
 
 	public:
 		static gal_type_object_internal_method& type();
+
+		[[nodiscard]] constexpr const char* about() const noexcept override { return "internal method\n"; }
 	};
 
 	struct gal_method_define
@@ -87,29 +89,32 @@ namespace gal::lang
 
 		using flag_type = std::uint32_t;
 
-		constexpr static flag_type flag_varargs = flag_type{1} << 0;
-		constexpr static flag_type flag_pair_args = flag_type{1} << 1;
-		// flag_no_arg and flag_an_object_arg must not be combined with the flags above.
-		constexpr static flag_type flag_no_args = flag_type{1} << 2;
-		constexpr static flag_type flag_an_object_arg = flag_type{1} << 3;
-		// flag_class and flag_static are a little different; these control
-		// the construction of methods for a class.  These cannot be used for
-		// functions in modules.
-		constexpr static flag_type flag_class = flag_type{1} << 4;
-		constexpr static flag_type flag_static = flag_type{1} << 5;
-		constexpr static flag_type flag_coexist = flag_type{1} << 6;
-		constexpr static flag_type flag_fastcall = flag_type{1} << 7;
-		// flag_method means the function stores an
-		// additional reference to the class that defines it;
-		// both self and class are passed to it.
-		// It uses gal_internal_method_object instead of gal_internal_function_object.
-		// May not be combined with flag_no_args, flag_an_object_arg,
-		// flag_class or flag_static.
-		constexpr static flag_type flag_method = flag_type{1} << 8;
+		enum class flags : flag_type
+		{
+			varargs = flag_type{1} << 0,
+			pair_args = flag_type{1} << 1,
+			// flag_no_arg and flag_an_object_arg must not be combined with the flags above.
+			no_args = flag_type{1} << 2,
+			an_object_arg = flag_type{1} << 3,
+			// is_class and is_static are a little different; these control
+			// the construction of methods for a class.  These cannot be used for
+			// functions in modules.
+			is_class = flag_type{1} << 4,
+			is_static = flag_type{1} << 5,
+			coexist = flag_type{1} << 6,
+			fastcall = flag_type{1} << 7,
+			// method means the function stores an
+			// additional reference to the class that defines it;
+			// both self and class are passed to it.
+			// It uses gal_internal_method_object instead of gal_internal_function_object.
+			// May not be combined with no_args, an_object_arg,
+			// is_class or is_static.
+			method = flag_type{1} << 8,
+		};
 
 		const char* name;
 		internal_function_type method;
-		flag_type flag;
+		flags flag;
 		const char* doc;
 	};
 }

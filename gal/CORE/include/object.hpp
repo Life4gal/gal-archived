@@ -40,9 +40,8 @@
 #include <def.hpp>
 #include<object_interface.hpp>
 #include <utils/source_location.hpp>
+#include <utils/enum_utils.hpp>
 #include<type_traits>
-
-#include "object.hpp"
 
 #if defined(GAL_LANG_DEBUG)
 #include <string_view>
@@ -309,49 +308,48 @@ namespace gal::lang
 	public:
 		using flag_type = std::uint32_t;
 
-		// Set if the type object is dynamically allocated
-		constexpr static flag_type flag_heap_type = flag_type{1} << 9;
-		// Set if the type allows sub-classing
-		constexpr static flag_type flag_base_type = flag_type{1} << 10;
-		// Set if the type implements the vectorcall protocol
-		constexpr static flag_type flag_have_vectorcall = flag_type{1} << 11;
-		// Set if the type is 'ready' -- fully initialized
-		constexpr static flag_type flag_ready = flag_type{1} << 12;
-		// Set while the type is being 'readied', to prevent recursive ready calls
-		constexpr static flag_type flag_readying = flag_type{1} << 13;
-		// Objects support garbage collection (see object_impl.hpp)
-		constexpr static flag_type flag_have_gc = flag_type{1} << 14;
-		// Objects behave like an unbound method
-		constexpr static flag_type flag_method_descriptor = flag_type{1} << 17;
-		// Objects support type attribute cache
-		constexpr static flag_type flag_have_version_tag = flag_type{1} << 18;
-		constexpr static flag_type flag_valid_version_tag = flag_type{1} << 19;
-		// Type is abstract and cannot be instantiated
-		constexpr static flag_type flag_is_abstract = flag_type{1} << 20;
-		// These flags are used to determine if a type is a subclass
-		constexpr static flag_type flag_long_subclass = flag_type{1} << 24;
-		constexpr static flag_type flag_list_subclass = flag_type{1} << 25;
-		constexpr static flag_type flag_tuple_subclass = flag_type{1} << 26;
-		constexpr static flag_type flag_bytes_subclass = flag_type{1} << 27;
-		constexpr static flag_type flag_unicode_subclass = flag_type{1} << 28;
-		constexpr static flag_type flag_dictionary_subclass = flag_type{1} << 29;
-		constexpr static flag_type flag_base_exc_subclass = flag_type{1} << 30;
-		constexpr static flag_type flag_type_subclass = flag_type{1} << 31;
+		enum class flags : flag_type
+		{
+			// Set if the type object is dynamically allocated
+			heap_type = flag_type{1} << 9,
+			// Set if the type allows sub-classing
+			base_type = flag_type{1} << 10,
+			// Set if the type implements the vectorcall protocol
+			have_vectorcall = flag_type{1} << 11,
+			// Set if the type is 'ready' -- fully initialized
+			ready = flag_type{1} << 12,
+			// Set while the type is being 'readied', to prevent recursive ready calls
+			readying = flag_type{1} << 13,
+			// Objects support garbage collection (see object_impl.hpp)
+			have_gc = flag_type{1} << 14,
+			// Objects behave like an unbound method
+			method_descriptor = flag_type{1} << 17,
+			// Objects support type attribute cache
+			have_version_tag = flag_type{1} << 18,
+			valid_version_tag = flag_type{1} << 19,
+			// Type is abstract and cannot be instantiated
+			is_abstract = flag_type{1} << 20,
+			// These flags are used to determine if a type is a subclass
+			long_subclass = flag_type{1} << 24,
+			list_subclass = flag_type{1} << 25,
+			tuple_subclass = flag_type{1} << 26,
+			bytes_subclass = flag_type{1} << 27,
+			unicode_subclass = flag_type{1} << 28,
+			dictionary_subclass = flag_type{1} << 29,
+			base_exc_subclass = flag_type{1} << 30,
+			type_subclass = flag_type{1} << 31,
 
-		// default flag
-		constexpr static flag_type flag_default = flag_have_version_tag;
+			// default flag
+			default_flag = have_version_tag,
+		};
 
 		using vectorcall_function = gal_object*(*)(gal_object& callable, const gal_object* const * args, gal_size_type num_args, gal_object* pair_args);
 
 	private:
-		// For printing, in format "<module>.<name>"
 		const char* name_;
 
 		// Flags to define presence of optional/expanded features
-		flag_type flag_;
-
-		// Documentation string
-		const char* document_;
+		flags flag_;
 
 		struct gal_method_define* methods_{nullptr};
 		struct gal_member_define* members_{nullptr};
@@ -366,12 +364,11 @@ namespace gal::lang
 
 		vectorcall_function vectorcall_{nullptr};
 
-	public:
+	protected:
 		gal_type_object(
 				gal_type_object* type,
 				const char* name,
-				const flag_type flag,
-				const char* document = nullptr,
+				const flags flag,
 				gal_method_define* methods = nullptr,
 				gal_member_define* members = nullptr,
 				gal_rw_interface_define* rw_interfaces = nullptr,
@@ -380,14 +377,37 @@ namespace gal::lang
 			: gal_var_object{type},
 			  name_{name},
 			  flag_{flag},
-			  document_{document},
 			  methods_{methods},
 			  members_{members},
 			  rw_interfaces_{rw_interfaces},
 			  metadata_{metadata} {}
+
+		virtual ~gal_type_object();
+
+		gal_type_object(const gal_type_object&) = default;
+		gal_type_object& operator=(const gal_type_object&) = default;
+		gal_type_object(gal_type_object&&) = default;
+		gal_type_object& operator=(gal_type_object&&) = default;
+
+	public:
+		/**
+		 * @brief For printing, in format "<module>.<name>"
+		 */
+		[[nodiscard]] constexpr const char* who_am_i() const noexcept { return name_; }
+
+		[[nodiscard]] constexpr bool check_all_flag(std::same_as<flags> auto ... fs) const noexcept { return utils::check_all_enum_flag(flag_, fs...); }
+
+		[[nodiscard]] constexpr bool check_any_flag(std::same_as<flags> auto ... fs) const noexcept { return utils::check_any_enum_flag(flag_, fs...); }
+
+		constexpr void set_flag(std::same_as<flags> auto ... fs) noexcept { utils::set_enum_flag_set(flag_, fs...); }
+
+		/**
+		 * @brief Documentation string.
+		 */
+		[[nodiscard]] constexpr virtual const char* about() const noexcept = 0;
 	};
 
-	class gal_type_object_type : public gal_type_object
+	class gal_type_object_type final : public gal_type_object
 	{
 	public:
 		struct object_life_manager : traits::object_life_interface<gal_type_object_type>
@@ -467,9 +487,15 @@ namespace gal::lang
 
 	public:
 		static gal_type_object_type& type();
+
+		[[nodiscard]] constexpr const char* about() const noexcept override
+		{
+			return "use type(object) to get an object's type.\n"
+					"use type(name, bases, metadata, **pair_args) to get a new type.\n";
+		}
 	};
 
-	class gal_type_object_object : public gal_type_object
+	class gal_type_object_object final : public gal_type_object
 	{
 	public:
 		struct object_life_manager : traits::object_life_interface<gal_type_object_object>
@@ -534,9 +560,16 @@ namespace gal::lang
 
 	public:
 		static gal_type_object_object& type();
+
+		[[nodiscard]] constexpr const char* about() const noexcept override
+		{
+			return "object() -- The base class of the class hierarchy.\n\n"
+					"When called, it accepts no arguments and returns a new featureless\n"
+					"instance that has no instance attributes and cannot be given any.\n";
+		}
 	};
 
-	class gal_type_object_super : public gal_type_object
+	class gal_type_object_super final : public gal_type_object
 	{
 	public:
 		struct object_life_manager : traits::object_life_interface<gal_type_object_type>
@@ -604,9 +637,18 @@ namespace gal::lang
 
 	public:
 		static gal_type_object_super& type();
+
+		[[nodiscard]] constexpr const char* about() const noexcept override
+		{
+			return "super() -> same as super(__class__, <first argument>)\n"
+					"super(type) -> unbound super object\n"
+					"super(type, object) -> bound super object; requires instance_of(object, type)\n"
+					"super(type, type2) -> bound super object; requires subclass_of(type2, type)\n"
+					"Typical use to call a cooperative superclass method.\n";
+		}
 	};
 
-	class gal_type_object_null : public gal_type_object
+	class gal_type_object_null final : public gal_type_object
 	{
 	public:
 		struct object_life_manager : traits::object_life_interface<gal_type_object_null>
@@ -642,9 +684,15 @@ namespace gal::lang
 		static gal_object& instance(
 				GAL_LANG_DO_IF_DEBUG(const std_source_location& location = std_source_location::current())
 				);
+
+		[[nodiscard]] constexpr const char* about() const noexcept override
+		{
+			return "undefined type which can be used in contexts"
+					"where nullptr is not suitable (since nullptr often means 'error')";
+		}
 	};
 
-	class gal_type_object_not_implemented : public gal_type_object
+	class gal_type_object_not_implemented final : public gal_type_object
 	{
 	public:
 		struct object_life_manager : traits::object_life_interface<gal_type_object_null>
@@ -679,6 +727,8 @@ namespace gal::lang
 
 		static gal_object& instance(
 				GAL_LANG_DO_IF_DEBUG(const std_source_location& location = std_source_location::current()));
+
+		[[nodiscard]] constexpr const char* about() const noexcept override { return "current content is not implemented yet."; }
 	};
 }
 
