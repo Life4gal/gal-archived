@@ -12,76 +12,30 @@
 
 namespace gal::lang
 {
+	class gal_type_object_internal_function final : public gal_type_object
+	{
+	private:
+		gal_type_object_internal_function();
+
+	public:
+		static gal_type_object_internal_function& type();
+
+		[[nodiscard]] constexpr const char* about() const noexcept override { return "internal function or method\n"; }
+	};
+
 	class gal_type_object_internal_method final : public gal_type_object
 	{
-	public:
-		struct object_life_manager : traits::object_life_interface<gal_type_object_internal_method>
-		{
-			struct deallocate_type
-			{
-				static gal_object* call(host_class_type& self);
-			};
-		};
-
-		struct object_traverse_manager : traits::object_traverse_interface<gal_type_object_internal_method>
-		{
-			struct traverse_type
-			{
-				static bool call(host_class_type& self);
-			};
-		};
-
-		struct object_represent_manager : traits::object_represent_interface<gal_type_object_internal_method>
-		{
-			struct represent_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self);
-			};
-		};
-
-		struct object_hash_manager : traits::object_hash_interface<gal_type_object_internal_method>
-		{
-			struct hash_type : std::true_type
-			{
-				static gal_hash_type call(host_class_type& self);
-			};
-		};
-
-		struct object_invoke_manager : traits::object_invoke_interface<gal_type_object_internal_method>
-		{
-			struct invoke_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object* args, gal_object* pair_args);
-			};
-		};
-
-		struct object_attribute_manager : traits::object_attribute_interface<gal_type_object_internal_method>
-		{
-			struct object_get_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object& name);
-			};
-		};
-
-		struct object_compare_manager : traits::object_compare_interface<gal_type_object_internal_method>
-		{
-			struct compare_type : std::true_type
-			{
-				static gal_object* compare(gal_object& lhs, gal_object& rhs, compare_operand operand);
-			};
-		};
-
 	private:
 		gal_type_object_internal_method();
 
-	public:
 		static gal_type_object_internal_method& type();
 
 		[[nodiscard]] constexpr const char* about() const noexcept override { return "internal method\n"; }
 	};
 
-	struct gal_method_define
+	class gal_method_define final
 	{
+	public:
 		using internal_function_type = gal_object*(*)(gal_object& self, gal_object* args);
 		using internal_function_fast_type = gal_object*(*)(gal_object& self, const gal_object* const* args, gal_size_type num_args);
 		using internal_function_pair_arg_type = gal_object*(*)(gal_object& self, gal_object* args, gal_object* pair_args);
@@ -112,10 +66,73 @@ namespace gal::lang
 			method = flag_type{1} << 8,
 		};
 
-		const char* name;
-		internal_function_type method;
-		flags flag;
-		const char* doc;
+	private:
+		const char* name_;
+		internal_function_type method_;
+		flags flag_;
+		const char* document_;
+
+	public:
+		gal_method_define(
+				const char* name,
+				const internal_function_type method,
+				const flags flag,
+				const char* document = nullptr
+				)
+
+			: name_{name},
+			  method_{method},
+			  flag_{flag},
+			  document_{document} { }
+
+		[[nodiscard]] constexpr const char* who_am_i() const noexcept { return name_; }
+
+		[[nodiscard]] constexpr bool check_all_flag(std::same_as<flags> auto ... fs) const noexcept { return utils::check_all_enum_flag(flag_, fs...); }
+
+		[[nodiscard]] constexpr bool check_any_flag(std::same_as<flags> auto ... fs) const noexcept { return utils::check_any_enum_flag(flag_, fs...); }
+
+		constexpr void set_flag(std::same_as<flags> auto ... fs) noexcept { utils::set_enum_flag_set(flag_, fs...); }
+
+		/**
+		 * @brief Documentation string.
+		 */
+		[[nodiscard]] constexpr const char* about() const noexcept { return document_; }
+
+		[[nodiscard]] gal_object* operator()(gal_object& self, gal_object* args);
+	};
+
+	class gal_object_internal_function : public gal_object
+	{
+	protected:
+		// Description of the internal function to call
+		gal_method_define* methods_;
+		// Passed as 'self' arg to the internal, can be nullptr
+		gal_object* self_;
+		// The __module__ attribute, can be anything
+		gal_object* module_;
+		// List of weak references
+		gal_object* weak_ref_list_;
+		gal_type_object::vectorcall_function vectorcall_;
+
+	public:
+		gal_object_internal_function(
+				gal_method_define* methods,
+				gal_object*		   self,
+				gal_object*		   module = nullptr);
+	};
+
+	class gal_object_internal_method final : public gal_object_internal_function
+	{
+	private:
+		// Class that defines this method
+		gal_type_object* owner_;
+
+	public:
+		gal_object_internal_method(
+				gal_method_define* methods,
+				gal_object*		   self,
+				gal_object*		   module = nullptr,
+				gal_type_object*   owner  = nullptr);
 	};
 }
 

@@ -8,6 +8,7 @@ set(
 
 		src/object.cpp
 		src/object_method.cpp
+		src/invoker.cpp
 )
 
 add_library(

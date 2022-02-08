@@ -38,10 +38,10 @@
  */
 
 #include <def.hpp>
-#include<object_interface.hpp>
 #include <utils/source_location.hpp>
 #include <utils/enum_utils.hpp>
 #include<type_traits>
+#include <vector>
 
 #if defined(GAL_LANG_DEBUG)
 #include <string_view>
@@ -303,6 +303,63 @@ namespace gal::lang
 		}
 	};
 
+	/**
+	 * @brief Buffer interface
+	 */
+	class gal_buffer
+	{
+	public:
+		using buffer_type = std::vector<std::byte>;
+		using size_type = buffer_type::size_type;
+
+		using flag_type = std::uint32_t;
+
+		constexpr static size_type dimension_limit = 64;
+
+		enum class flags : flag_type
+		{
+			simple = 0,
+			writable = 1 << 0,
+			format = 1 << 2,
+			nd = 1 << 3,
+			strides = 1 << 4 | nd,
+			c_contiguous = 1 << 5 | strides,
+			f_contiguous = 1 << 6 | strides,
+			any_contiguous = 1 << 7 | strides,
+			indirect = 1 << 8 | strides,
+
+			read = 1 << 8,
+			write = 1 << 9,
+
+			contiguous_readonly = nd,
+			contiguous = contiguous_readonly | writable,
+
+
+			strode_readonly = strides,
+			strode = strode_readonly | writable,
+
+			records_readonly = strides | format,
+			records = records_readonly | writable,
+
+			full_readonly = indirect | format,
+			full = full_readonly | writable,
+		};
+
+	private:
+		gal_object* owner_;
+
+		buffer_type buffer_;
+
+		bool readonly_;
+		size_type num_dimension_;
+		char* format_;
+
+		size_type* shape_;
+		size_type* strides_;
+		size_type* sub_offsets_;
+		void* internal_;
+	};
+
 	class gal_type_object : public gal_var_object
 	{
 	public:
@@ -310,6 +367,8 @@ namespace gal::lang
 
 		enum class flags : flag_type
 		{
+			invalid = 0,
+
 			// Set if the type object is dynamically allocated
 			heap_type = flag_type{1} << 9,
 			// Set if the type allows sub-classing
@@ -351,12 +410,12 @@ namespace gal::lang
 		// Flags to define presence of optional/expanded features
 		flags flag_;
 
-		struct gal_method_define* methods_{nullptr};
-		struct gal_member_define* members_{nullptr};
-		struct gal_rw_interface_define* rw_interfaces_{nullptr};
-		struct gal_type_object_dictionary* metadata_{nullptr};
+		class gal_method_define* methods_{nullptr};
+		class gal_member_define* members_{nullptr};
+		class gal_rw_interface_define* rw_interfaces_{nullptr};
+		class gal_type_object_dictionary* metadata_{nullptr};
 
-		gal_object* base_{nullptr};
+		gal_type_object* base_{nullptr};
 		gal_object* method_resolution_order_{nullptr};
 		gal_object* cache_{nullptr};
 		gal_object* sub_classes_{nullptr};
@@ -372,7 +431,8 @@ namespace gal::lang
 				gal_method_define* methods = nullptr,
 				gal_member_define* members = nullptr,
 				gal_rw_interface_define* rw_interfaces = nullptr,
-				gal_type_object_dictionary* metadata = nullptr
+				gal_type_object_dictionary* metadata = nullptr,
+				gal_type_object*			base		  = nullptr
 				)
 			: gal_var_object{type},
 			  name_{name},
@@ -380,7 +440,8 @@ namespace gal::lang
 			  methods_{methods},
 			  members_{members},
 			  rw_interfaces_{rw_interfaces},
-			  metadata_{metadata} {}
+			  metadata_{metadata},
+			  base_{base} {}
 
 		virtual ~gal_type_object();
 
@@ -405,83 +466,116 @@ namespace gal::lang
 		 * @brief Documentation string.
 		 */
 		[[nodiscard]] constexpr virtual const char* about() const noexcept = 0;
+
+		//*****************************
+		// object life interfaces below
+		//*****************************
+
+		virtual gal_object* allocate(gal_size_type num_items);
+		virtual gal_object* construct(gal_object* args, gal_object* pair_args);
+		virtual bool initial(gal_object* args, gal_object* pair_args);
+		virtual bool finalize(gal_object& self);
+		virtual bool clear(gal_object& self);
+		virtual void destroy(gal_object& self);
+		virtual void deallocate(gal_object& self);
+
+		[[nodiscard]] constexpr virtual bool is_collectable(gal_object& self) const noexcept;
+
+		virtual gal_object* represent(gal_object& self);
+		virtual gal_object* as_string(gal_object& self) { return represent(self); }
+
+		[[nodiscard]] virtual gal_hash_type hash(gal_object& self) const;
+
+		enum class compare_operand
+		{
+			equal,
+			not_equal,
+			less,
+			less_equal,
+			greater,
+			greater_equal
+		};
+
+		[[nodiscard]] virtual gal_object* compare(gal_object& self, gal_object& other, compare_operand operand) const;
+
+		[[nodiscard]] virtual gal_object* iteration_begin(gal_object& self);
+		[[nodiscard]] virtual gal_object* iteration_end(gal_object& self);
+		[[nodiscard]] virtual gal_object* iteration_next(gal_object& self);
+
+		[[nodiscard]] virtual gal_object* descriptor_get(gal_object& self, gal_object* args, gal_object* pair_args);
+		[[nodiscard]] virtual bool descriptor_set(gal_object& self, gal_object* args, gal_object* pair_args);
+
+		[[nodiscard]] virtual gal_object* invoke(gal_object& self, gal_object* args, gal_object* pair_args);
+
+		[[nodiscard]] virtual gal_object* attribute_get_with_name(gal_object& self, const char* name);
+		virtual bool attribute_set_with_name(gal_object& self, const char* name, gal_object* value);
+		[[nodiscard]] virtual gal_object* attribute_get_with_object(gal_object& self, gal_object& name);
+		virtual bool attribute_set_with_object(gal_object& self, gal_object& name, gal_object* value);
+
+		/**
+		 * @note see invoker.hpp -> gal_invoker_math for details of math operations below.
+		 */
+
+		[[nodiscard]] virtual gal_object* math_plus(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_minus(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_multiply(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_floor_divide(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_real_divide(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_divide_modulus(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_remainder(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_power(gal_object& self, gal_object& object1, gal_object* object2);
+
+		[[nodiscard]] virtual gal_object* math_plus_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_minus_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_multiply_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_floor_divide_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_real_divide_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_remainder_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_power_assign(gal_object& self, gal_object& object1, gal_object* object2);
+
+		[[nodiscard]] virtual gal_object* math_bit_left_shift(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_bit_right_shift(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_bit_and(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_bit_or(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_bit_xor(gal_object& self, gal_object& other);
+
+		[[nodiscard]] virtual gal_object* math_bit_left_shift_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_bit_right_shift_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_bit_and_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_bit_or_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* math_bit_xor_assign(gal_object& self, gal_object& other);
+
+		[[nodiscard]] virtual gal_object* math_negative(gal_object& self);
+		[[nodiscard]] virtual gal_object* math_positive(gal_object& self);
+		[[nodiscard]] virtual gal_object* math_absolute(gal_object& self);
+		[[nodiscard]] virtual gal_object* math_invert(gal_object& self);
+		[[nodiscard]] virtual gal_object* math_index(gal_object& self);
+		[[nodiscard]] virtual gal_object* math_to_boolean(gal_object& self);
+		[[nodiscard]] virtual gal_object* math_to_integer(gal_object& self);
+		[[nodiscard]] virtual gal_object* math_to_floating_point(gal_object& self);
+
+		[[nodiscard]] virtual gal_size_type sequence_length(gal_object& self);
+		[[nodiscard]] virtual gal_object* sequence_concat(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* sequence_concat_assign(gal_object& self, gal_object& other);
+		[[nodiscard]] virtual gal_object* sequence_repeat(gal_object& self, gal_size_type times);
+		[[nodiscard]] virtual gal_object* sequence_repeat_assign(gal_object& self, gal_size_type times);
+		[[nodiscard]] virtual gal_object* sequence_element_get(gal_object& self, gal_size_type index);
+		[[nodiscard]] virtual gal_object* sequence_element_set(gal_object& self, gal_size_type index, gal_object* value);
+
+		[[nodiscard]] virtual gal_size_type mapping_length(gal_object& self);
+		[[nodiscard]] virtual gal_object* mapping_element_get(gal_object& self, gal_object& index);
+		[[nodiscard]] virtual gal_object* mapping_element_set(gal_object& self, gal_object& index, gal_object* value);
+
+		[[nodiscard]] virtual gal_object* async_await(gal_object& self);
+		[[nodiscard]] virtual gal_object* async_iteration(gal_object& self);
+		[[nodiscard]] virtual gal_object* async_next(gal_object& self);
+
+		virtual bool buffer_get(gal_object& self, gal_buffer& buffer, gal_buffer::flags flag);
+		virtual void buffer_release(gal_object& self, gal_buffer& buffer);
 	};
 
 	class gal_type_object_type final : public gal_type_object
 	{
-	public:
-		struct object_life_manager : traits::object_life_interface<gal_type_object_type>
-		{
-			struct deallocate_type : std::true_type
-			{
-				static void call(host_class_type& self);
-			};
-
-			struct construct_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object* args, gal_object* pair_args);
-			};
-
-			struct initial_type : std::true_type
-			{
-				static bool call(gal_object& self, gal_object* args, gal_object* pair_args);
-			};
-
-			struct clear_type : std::true_type
-			{
-				static bool call(gal_object& self);
-			};
-		};
-
-		struct object_traverse_manager : traits::object_traverse_interface<gal_type_object_type>
-		{
-			struct traverse_type
-			{
-				static bool call(host_class_type& self);
-			};
-		};
-
-		constexpr static gal_size_type gc_checker_id = 0;
-
-		struct object_gc_checker : traits::object_inquire_interface<gal_type_object_type, gc_checker_id>
-		{
-			static_assert(gc_checker_id == dummy_id);
-
-			struct inquire_type : std::true_type
-			{
-				static bool call(host_class_type& self);
-			};
-		};
-
-		struct object_represent_manager : traits::object_represent_interface<gal_type_object_type>
-		{
-			struct represent_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self);
-			};
-		};
-
-		struct object_invoke_manager : traits::object_invoke_interface<gal_type_object_type>
-		{
-			struct invoke_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object* args, gal_object* pair_args);
-			};
-		};
-
-		struct object_attribute_manager : traits::object_attribute_interface<gal_type_object_type>
-		{
-			struct object_get_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object& name);
-			};
-
-			struct object_set_type : std::true_type
-			{
-				static bool call(host_class_type& self, gal_object& name, gal_object* value);
-			};
-		};
-
 	private:
 		explicit gal_type_object_type(gal_type_object* self);
 
@@ -497,64 +591,6 @@ namespace gal::lang
 
 	class gal_type_object_object final : public gal_type_object
 	{
-	public:
-		struct object_life_manager : traits::object_life_interface<gal_type_object_object>
-		{
-			struct allocate_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_size_type num_items);
-			};
-
-			struct deallocate_type : std::true_type
-			{
-				static void call(host_class_type& self);
-			};
-
-			struct construct_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object* args, gal_object* pair_args);
-			};
-
-			struct initial_type : std::true_type
-			{
-				static bool call(gal_object& self, gal_object* args, gal_object* pair_args);
-			};
-		};
-
-		struct object_represent_manager : traits::object_represent_interface<gal_type_object_object>
-		{
-			struct represent_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self);
-			};
-
-			struct string_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self);
-			};
-		};
-
-		struct object_attribute_manager : traits::object_attribute_interface<gal_type_object_type>
-		{
-			struct object_get_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object& name);
-			};
-
-			struct object_set_type : std::true_type
-			{
-				static bool call(host_class_type& self, gal_object& name, gal_object* value);
-			};
-		};
-
-		struct object_compare_manager : traits::object_compare_interface<gal_type_object_object>
-		{
-			struct compare_type : std::true_type
-			{
-				static gal_object* compare(gal_object& lhs, gal_object& rhs, compare_operand operand);
-			};
-		};
-
 	private:
 		gal_type_object_object();
 
@@ -571,67 +607,6 @@ namespace gal::lang
 
 	class gal_type_object_super final : public gal_type_object
 	{
-	public:
-		struct object_life_manager : traits::object_life_interface<gal_type_object_type>
-		{
-			struct allocate_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_size_type num_items);
-			};
-
-			struct deallocate_type : std::true_type
-			{
-				static void call(host_class_type& self);
-			};
-
-			struct construct_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object* args, gal_object* pair_args);
-			};
-
-			struct initial_type : std::true_type
-			{
-				static bool call(gal_object& self, gal_object* args, gal_object* pair_args);
-			};
-
-			struct destroy_type : std::true_type
-			{
-				static void call(gal_object& self);
-			};
-		};
-
-		struct object_traverse_manager : traits::object_traverse_interface<gal_type_object_type>
-		{
-			struct traverse_type
-			{
-				static bool call(host_class_type& self);
-			};
-		};
-
-		struct object_represent_manager : traits::object_represent_interface<gal_type_object_type>
-		{
-			struct represent_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self);
-			};
-		};
-
-		struct object_descriptor_manager : traits::object_descriptor_interface<gal_type_object_super>
-		{
-			struct descriptor_get_type : std::true_type
-			{
-				static gal_object* call(gal_object& self, gal_object& object, gal_object* type);
-			};
-		};
-
-		struct object_attribute_manager : traits::object_attribute_interface<gal_type_object_type>
-		{
-			struct object_get_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object& name);
-			};
-		};
-
 	private:
 		gal_type_object_super();
 
@@ -650,31 +625,6 @@ namespace gal::lang
 
 	class gal_type_object_null final : public gal_type_object
 	{
-	public:
-		struct object_life_manager : traits::object_life_interface<gal_type_object_null>
-		{
-			struct construct_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object* args, gal_object* pair_args);
-			};
-		};
-
-		struct object_represent_manager : traits::object_represent_interface<gal_type_object_null>
-		{
-			struct represent_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self);
-			};
-		};
-
-		struct object_mathematical_manager : traits::object_mathematical_interface<gal_type_object_null>
-		{
-			struct to_boolean : std::true_type
-			{
-				static bool call(const gal_object& self);
-			};
-		};
-
 	private:
 		gal_type_object_null();
 
@@ -694,31 +644,6 @@ namespace gal::lang
 
 	class gal_type_object_not_implemented final : public gal_type_object
 	{
-	public:
-		struct object_life_manager : traits::object_life_interface<gal_type_object_null>
-		{
-			struct construct_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self, gal_object* args, gal_object* pair_args);
-			};
-		};
-
-		struct object_represent_manager : traits::object_represent_interface<gal_type_object_null>
-		{
-			struct represent_type : std::true_type
-			{
-				static gal_object* call(host_class_type& self);
-			};
-		};
-
-		struct object_mathematical_manager : traits::object_mathematical_interface<gal_type_object_null>
-		{
-			struct to_boolean : std::true_type
-			{
-				static bool call(const gal_object& self);
-			};
-		};
-
 	private:
 		gal_type_object_not_implemented();
 

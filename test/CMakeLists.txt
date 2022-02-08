@@ -15,6 +15,7 @@ set(
 		test_utils/test_point.cpp
 		test_utils/test_string_utils.cpp
 		test_utils/test_string_pool.cpp
+		test_utils/test_fixed_string.cpp
 )
 
 set(

@@ -123,26 +123,6 @@ namespace gal::lang
 		return instance;
 	}
 
-	gal_object* gal_type_object_null::object_life_manager::construct_type::call(host_class_type& self, gal_object* args, gal_object* pair_args)
-	{
-		// todo
-		(void)self, (void)args, (void)pair_args;
-		return nullptr;
-	}
-
-	gal_object* gal_type_object_null::object_represent_manager::represent_type::call(host_class_type& self)
-	{
-		// todo: return a unicode string of `null`
-		(void)self;
-		return nullptr;
-	}
-
-	bool gal_type_object_null::object_mathematical_manager::to_boolean::call(const gal_object& self)
-	{
-		(void)self;
-		return false;
-	}
-
 	gal_type_object_null::gal_type_object_null()
 		: gal_type_object
 		{
@@ -162,28 +142,6 @@ namespace gal::lang
 		static gal_object instance{&type()};
 		safe_increase_object_ref_count(instance GAL_LANG_DO_IF_DEBUG(, "get an instance of object null", location));
 		return instance;
-	}
-
-	gal_object* gal_type_object_not_implemented::object_life_manager::construct_type::call(host_class_type& self, gal_object* args, gal_object* pair_args)
-	{
-		// todo
-		(void)self, (void)args, (void)pair_args;
-
-		return &instance();
-	}
-
-	gal_object* gal_type_object_not_implemented::object_represent_manager::represent_type::call(host_class_type& self)
-	{
-		// todo: return a unicode string of `not_implemented`
-		(void)self;
-		return nullptr;
-	}
-
-	bool gal_type_object_not_implemented::object_mathematical_manager::to_boolean::call(const gal_object& self)
-	{
-		// todo
-		(void)self;
-		return true;
 	}
 
 	gal_type_object_not_implemented::gal_type_object_not_implemented()
