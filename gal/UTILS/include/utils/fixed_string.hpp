@@ -12,11 +12,38 @@ namespace gal::utils
 		constexpr static std::size_t size_no_0 = size - 1;
 		constexpr static char value[size]{Chars...};
 
-		constexpr static bool match(const char* string) noexcept
+		[[nodiscard]] constexpr static bool match(const char* string) noexcept
 		{
 			return std::char_traits<char>::length(string) == size_no_0 &&
 			       std::char_traits<char>::compare(value, string, size_no_0) == 0;
 		}
+
+		// CharGetter' s parameters are indices
+		template<typename CharGetter, typename CharCompare = std::equal_to<>>
+			requires std::is_invocable_r_v<char, CharGetter, std::size_t>
+		constexpr static bool match(CharGetter getter)
+		noexcept(
+			std::is_nothrow_invocable_r_v<char, CharGetter, std::size_t> &&
+			std::is_nothrow_invocable_r_v<bool, CharCompare, char, char>
+		)
+		{
+			CharCompare compare{};
+			return [&]<std::size_t... Index>(std::index_sequence<Index...>) { return ((compare(value[Index], getter(Index))) && ...); }(std::make_index_sequence<size_no_0>{});
+		}
+
+		template<typename CharGetter, typename CharCompare = std::equal_to<>>
+			requires std::is_invocable_r_v<char, CharGetter>
+		constexpr static bool match(CharGetter getter) noexcept(
+			std::is_nothrow_invocable_r_v<char, CharGetter, std::size_t> &&
+			std::is_nothrow_invocable_r_v<bool, CharCompare, char, char>)
+		{
+			CharCompare compare{};
+			return [&]<std::size_t... Index>(std::index_sequence<Index...>) { return ((compare(value[Index], getter())) && ...); }(std::make_index_sequence<size_no_0>{});
+		}
+
+		[[nodiscard]] constexpr static const char* begin() noexcept { return std::begin(value); }
+
+		[[nodiscard]] constexpr static const char* end() noexcept { return std::end(value); }
 	};
 
 	#define GAL_UTILS_FIXED_STRING_TYPE(string)                                                              \

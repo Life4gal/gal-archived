@@ -7,7 +7,10 @@
 #include <iostream> // for std::clog
 #include <utils/source_location.hpp>
 #include <utils/format.hpp>
-#endif
+#define GAL_ALLOCATOR_TRACE_DO(...) __VA_ARGS__
+	#else
+		#define GAL_ALLOCATOR_TRACE_DO(...)
+	#endif
 
 namespace gal::utils
 {
@@ -25,51 +28,47 @@ namespace gal::utils
 
 		[[nodiscard]] constexpr auto allocate(
 				size_type n
-				#ifndef GAL_ALLOCATOR_NO_TRACE
-				,
-				const std_source_location& location = std_source_location::current()
-				#endif
+								GAL_ALLOCATOR_TRACE_DO(
+								,
+								const std_source_location& location = std_source_location::current())
 				)
 		{
-			#ifndef GAL_ALLOCATOR_NO_TRACE
-			auto* ret = allocator_traits::allocate(allocator, n);
-			std::clog << std_format::format(
-					"Allocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. Allocate at: [file:{}][line:{}, column: {}][function:{}]\n",
-					n,
-					static_cast<void*>(ret),
-					sizeof(value_type),
-					sizeof(value_type) * n,
-					location.file_name(),
-					location.line(),
-					location.column(),
-					location.function_name());
+			auto* ret = arena_.template allocate<alignof(T)>(n * sizeof(T));
+
+			GAL_ALLOCATOR_TRACE_DO(
+					std::clog << std_format::format(
+							"Allocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. Allocate at: [file:{}][line:{}, column: {}][function:{}]\n",
+							n,
+							static_cast<void*>(ret),
+							sizeof(value_type),
+							sizeof(value_type) * n,
+							location.file_name(),
+							location.line(),
+							location.column(),
+							location.function_name());)
+
 			return ret;
-			#else
-			return allocator_traits::allocate(allocator, n);
-			#endif
 		}
 
 		constexpr void deallocate(
 				T* p,
 				size_type n
-				#ifndef GAL_ALLOCATOR_NO_TRACE
-				,
-				const std_source_location& location = std_source_location::current()
-				#endif
+						GAL_ALLOCATOR_TRACE_DO(
+								,
+								const std_source_location& location = std_source_location::current())
 				)
 		{
-			#ifndef GAL_ALLOCATOR_NO_TRACE
-			std::clog << std_format::format(
-					"Deallocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. Deallocate at: [file:{}][line:{}, column: {}][function:{}]\n",
-					n,
-					static_cast<void*>(p),
-					sizeof(value_type),
-					sizeof(value_type) * n,
-					location.file_name(),
-					location.line(),
-					location.column(),
-					location.function_name());
-			#endif
+			GAL_ALLOCATOR_TRACE_DO(
+					std::clog << std_format::format(
+							"Deallocate {} object(s) at {} ({} byte(s) per object), total used {} bytes. Deallocate at: [file:{}][line:{}, column: {}][function:{}]\n",
+							n,
+							static_cast<void*>(p),
+							sizeof(value_type),
+							sizeof(value_type) * n,
+							location.file_name(),
+							location.line(),
+							location.column(),
+							location.function_name());)
 			allocator_traits::deallocate(allocator, p, n);
 		}
 
@@ -93,7 +92,7 @@ template<typename ValueType>
 struct std::allocator_traits<::gal::utils::default_allocator<ValueType>>
 {
 	using allocator_type = ::gal::utils::default_allocator<ValueType>;
-	using internal_allocator_traits = typename ::gal::utils::default_allocator<ValueType>::allocator_traits;
+	using internal_allocator_traits = allocator_type::allocator_traits;
 
 	using value_type = typename internal_allocator_traits::value_type;
 	using pointer = typename internal_allocator_traits::pointer;
@@ -116,17 +115,13 @@ struct std::allocator_traits<::gal::utils::default_allocator<ValueType>>
 	[[nodiscard]] constexpr static pointer allocate(
 			allocator_type& a,
 			size_type n
-			#ifndef GAL_ALLOCATOR_NO_TRACE
-			,
-			const std_source_location& location = std_source_location::current()
-			#endif
+					GAL_ALLOCATOR_TRACE_DO(
+							,
+							const std_source_location& location = std_source_location::current())
 			)
 	{
 		return a.allocate(n
-		                  #ifndef GAL_ALLOCATOR_NO_TRACE
-		                  ,
-		                  location
-		                  #endif
+								  GAL_ALLOCATOR_TRACE_DO(, location)
 				);
 	}
 
@@ -134,19 +129,15 @@ struct std::allocator_traits<::gal::utils::default_allocator<ValueType>>
 			allocator_type& a,
 			pointer p,
 			size_type n
-			#ifndef GAL_ALLOCATOR_NO_TRACE
-			,
-			const std_source_location& location = std_source_location::current()
-			#endif
+					GAL_ALLOCATOR_TRACE_DO(
+							,
+							const std_source_location& location = std_source_location::current())
 			)
 	{
 		return a.deallocate(
 				p,
 				n
-				#ifndef GAL_ALLOCATOR_NO_TRACE
-				,
-				location
-				#endif
+						GAL_ALLOCATOR_TRACE_DO(, location)
 				);
 	}
 
