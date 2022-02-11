@@ -1,16 +1,22 @@
 #pragma once
 
-#ifndef GAL_UTILS_BOXED_VALUE_HPP
-#define GAL_UTILS_BOXED_VALUE_HPP
+#ifndef GAL_LANG_KITS_BOXED_VALUE_HPP
+#define GAL_LANG_KITS_BOXED_VALUE_HPP
 
 #include <map>
 #include <memory>
 #include <string>
 #include <any>
-#include<utils/type_info.hpp>
+#include <utils/type_info.hpp>
 
-namespace gal::utils
+namespace gal::lang
 {
+	namespace detail
+	{
+		using utils::gal_type_info;
+		using namespace utils::detail;
+	}
+
 	class boxed_value
 	{
 	public:
@@ -21,7 +27,7 @@ namespace gal::utils
 		{
 			using attributes_type = std::map<std::string, std::shared_ptr<real_data>>;
 
-			gal_type_info ti;
+			utils::gal_type_info ti;
 			std::any object;
 			void* data;
 			const void* const_data;
@@ -30,7 +36,7 @@ namespace gal::utils
 			bool is_return_value;
 
 			real_data(
-					const gal_type_info& ti,
+					const utils::gal_type_info& ti,
 					std::any to,
 					const void* const_data,
 					const bool is_reference,
@@ -76,7 +82,7 @@ namespace gal::utils
 			static auto make()
 			{
 				return std::make_shared<real_data>(
-						gal_type_info{},
+						utils::gal_type_info{},
 						std::any{},
 						nullptr,
 						false,
@@ -86,7 +92,7 @@ namespace gal::utils
 			static auto make(void_type, bool is_return_value)
 			{
 				return std::make_shared<real_data>(
-						detail::type_info_factory<void>::make(),
+						utils::detail::type_info_factory<void>::make(),
 						std::any{},
 						nullptr,
 						false,
@@ -187,26 +193,26 @@ namespace gal::utils
 			return *this;
 		}
 
-		[[nodiscard]] constexpr const gal_type_info& type_info() const noexcept { return data_->ti; }
+		[[nodiscard]] const utils::gal_type_info& type_info() const noexcept { return data_->ti; }
 
 		/**
 		 * @brief return true if the object is uninitialized
 		 */
-		[[nodiscard]] constexpr bool is_undefined() const noexcept { return data_->ti.is_undefined(); }
+		[[nodiscard]] bool is_undefined() const noexcept { return data_->ti.is_undefined(); }
 
-		[[nodiscard]] constexpr bool is_const() const noexcept { return data_->ti.is_const(); }
+		[[nodiscard]] bool is_const() const noexcept { return data_->ti.is_const(); }
 
-		[[nodiscard]] constexpr bool is_null() const noexcept { return data_->data == nullptr && data_->const_data == nullptr; }
+		[[nodiscard]] bool is_null() const noexcept { return data_->data == nullptr && data_->const_data == nullptr; }
 
-		[[nodiscard]] constexpr bool is_reference() const noexcept { return data_->is_reference; }
+		[[nodiscard]] bool is_reference() const noexcept { return data_->is_reference; }
 
-		[[nodiscard]] constexpr bool is_pointer() const noexcept { return not is_reference(); }
+		[[nodiscard]] bool is_pointer() const noexcept { return not is_reference(); }
 
-		[[nodiscard]] constexpr bool is_return_value() const noexcept { return data_->is_return_value; }
+		[[nodiscard]] bool is_return_value() const noexcept { return data_->is_return_value; }
 
-		constexpr void reset_return_value() const noexcept { data_->is_return_value = false; }
+		void reset_return_value() const noexcept { data_->is_return_value = false; }
 
-		[[nodiscard]] bool is_type_of(const gal_type_info& ti) const noexcept { return data_->ti.bare_equal(ti); }
+		[[nodiscard]] bool is_type_of(const utils::gal_type_info& ti) const noexcept { return data_->ti.bare_equal(ti); }
 
 		template<typename T>
 		auto pointer_sentinel(std::shared_ptr<T>& ptr) const noexcept
@@ -280,7 +286,7 @@ namespace gal::utils
 		 * @return Immutable boxed_value
 		 */
 		template<typename T>
-		boxed_value make_const_boxed_value(const T& object) { return {std::make_shared<std::add_const_t<T>>(object)}; }
+		boxed_value make_const_boxed_value(const T& object) { return boxed_value{std::make_shared<std::add_const_t<T>>(object)}; }
 
 		/**
 		 * @brief Takes a pointer to a value, adds const to the pointed to type and returns an
@@ -317,25 +323,25 @@ namespace gal::utils
 	 * @param t The value to box
 	 */
 	template<typename T>
-	boxed_value make_boxed_value(T&& t) { return {std::forward<T>(t)}; }
+	boxed_value var(T&& t) { return {std::forward<T>(t)}; }
 
 	/**
-	 * @brief Takes an object and returns an immutable Boxed_Value. If the object is a
+	 * @brief Takes an object and returns an immutable boxed_value. If the object is a
 	 * std::reference or pointer type the value is not copied.
 	 * If it is an object type, it is copied.
 	 * @param object Object to make immutable
 	 * @return Immutable boxed_value
 	 */
 	template<typename T>
-	boxed_value make_const_boxed_value(const T& object) { return detail::make_const_boxed_value(object); }
+	boxed_value const_var(const T& object) { return detail::make_const_boxed_value(object); }
 
-	inline boxed_value make_void_boxed_value()
+	inline boxed_value void_var()
 	{
 		const static boxed_value v{boxed_value::void_type{}};
 		return v;
 	}
 
-	inline boxed_value make_boolean_boxed_value(const bool b)
+	inline boxed_value const_var(const bool b)
 	{
 		const static boxed_value t{detail::make_const_boxed_value(true)};
 		const static boxed_value f{detail::make_const_boxed_value(false)};
@@ -344,4 +350,4 @@ namespace gal::utils
 	}
 }
 
-#endif // GAL_UTILS_BOXED_VALUE_HPP
+#endif // GAL_LANG_KITS_BOXED_VALUE_HPP

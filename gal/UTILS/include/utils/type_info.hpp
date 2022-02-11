@@ -228,9 +228,19 @@ namespace gal::utils
 		};
 	}// namespace detail
 
+	/**
+	 * @brief Creates a type_info object representing the templated type.
+	 * @tparam T Type of object to get a type_info for.
+	 * @return type_info for T
+	 */
 	template<typename T>
 	constexpr auto make_type_info() noexcept { return detail::type_info_factory<T>::make(); }
 
+	/**
+	 * @brief Creates a type_info object representing the type passed in.
+	 * @tparam T Type of object to get a type_info for, derived from the passed in parameter.
+	 * @return type_info for T
+	 */
 	template<typename T>
 	constexpr auto make_type_info(const T&) noexcept { return detail::type_info_factory<T>::make(); }
 }
