@@ -8,10 +8,10 @@
 #include <algorithm>
 #include <atomic>
 #include <utils/format.hpp>
-#include<kits/boxed_value.hpp>
+#include <kits/boxed_value.hpp>
 #include <utils/thread_storage.hpp>
 
-namespace gal::lang
+namespace gal::lang::kits
 {
 	class type_conversion_state;
 
@@ -427,7 +427,7 @@ namespace gal::lang
 		};
 
 		template<typename Base, typename Derived>
-		class static_conversion_impl : public type_conversion_base
+		class static_conversion_impl final : public type_conversion_base
 		{
 		public:
 			static_conversion_impl()
@@ -441,7 +441,7 @@ namespace gal::lang
 		};
 
 		template<typename Base, typename Derived>
-		class dynamic_conversion_impl : public type_conversion_base
+		class dynamic_conversion_impl final : public type_conversion_base
 		{
 		public:
 			dynamic_conversion_impl()
@@ -453,7 +453,7 @@ namespace gal::lang
 		};
 
 		template<typename Callable>
-		class type_conversion_impl : public type_conversion_base
+		class type_conversion_impl final : public type_conversion_base
 		{
 		public:
 			using function_type = Callable;
@@ -657,9 +657,7 @@ namespace gal::lang
 
 		[[nodiscard]] const type_conversion_manager* operator->() const noexcept { return &this->operator*(); }
 
-		[[nodiscard]] auto& saves() noexcept { return saves_.get(); }
-
-		[[nodiscard]] const auto& saves() const noexcept { return const_cast<type_conversion_state&>(*this).saves(); }
+		[[nodiscard]] auto& saves() const noexcept { return saves_.get(); }
 	};
 
 	using type_conversion_type = std::shared_ptr<detail::type_conversion_base>;
@@ -764,6 +762,41 @@ namespace gal::lang
 							[](const auto& pair) { return std::make_pair(pair.first, detail::cast_helper<MappedType>::cast(pair.second, nullptr)); });
 					return {std::move(ret)};
 				});
+	}
+
+	template<typename T>
+	decltype(auto) boxed_cast(const boxed_value& object, const type_conversion_state* conversion = nullptr)
+	{
+		if (not conversion ||
+		    object.type_info().bare_equal(utils::make_type_info<T>()) ||
+		    (conversion && not conversion->operator*().is_convertible_type<T>()))
+		{
+			try { return detail::cast_helper<T>::cast(object, conversion); }
+			catch (const std::bad_any_cast&) {}
+		}
+
+		if (conversion && conversion->operator*().is_convertible_type<T>())
+		{
+			try
+			{
+				// We will not catch any bad_boxed_dynamic_cast that is thrown, let the user get it
+				// either way, we are not responsible if it doesn't work
+				return detail::cast_helper<T>::cast(conversion->operator*().boxed_type_conversion<T>(conversion->saves(), object), conversion);
+			}
+			catch (...)
+			{
+				try
+				{
+					// try going the other way
+					return detail::cast_helper<T>::cast(conversion->operator*().boxed_type_down_conversion<T>(conversion->saves(), object), conversion);
+				}
+				catch (const std::bad_any_cast&) { throw bad_boxed_cast{object.type_info(), typeid(T)}; }
+			}
+		}
+
+		// If it's not convertible, just throw the error, don't waste the time on the
+		// attempted dynamic_cast
+		throw bad_boxed_cast{object.type_info(), typeid(T)};
 	}
 }
 

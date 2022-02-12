@@ -9,7 +9,7 @@
 #include <any>
 #include <utils/type_info.hpp>
 
-namespace gal::lang
+namespace gal::lang::kits
 {
 	namespace detail
 	{
@@ -244,9 +244,7 @@ namespace gal::lang
 
 		[[nodiscard]] const std::any& get() const noexcept { return data_->object; }
 
-		[[nodiscard]] void* get_ptr() noexcept { return data_->data; }
-
-		[[nodiscard]] const void* get_ptr() const noexcept { return data_->data; }
+		[[nodiscard]] void* get_ptr() const noexcept { return data_->data; }
 
 		[[nodiscard]] const void* get_const_ptr() const noexcept { return data_->data; }
 

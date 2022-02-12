@@ -8,6 +8,8 @@
 #include<string>
 #include<memory>
 
+#define GAL_LANG_ARITHMETIC_DIVIDE_ZERO_PROTECT
+
 namespace gal::lang
 {
 	

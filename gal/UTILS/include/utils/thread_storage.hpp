@@ -129,7 +129,7 @@ namespace gal::utils
 
 		const T& operator*() const noexcept { return this->operator*(); }
 
-		T* operator->() noexcept { return &this->operator->(); }
+		T* operator->() noexcept { return &data()[this]; }
 
 		const T* operator->() const noexcept { return this->operator->(); }
 
