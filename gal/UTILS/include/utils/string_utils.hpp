@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILS_STRING_UTILS_HPP
-#define GAL_LANG_UTILS_STRING_UTILS_HPP
+#ifndef GAL_UTILS_STRING_UTILS_HPP
+#define GAL_UTILS_STRING_UTILS_HPP
 
 #include<string>
 #include<string_view>
@@ -182,4 +182,4 @@ namespace gal::utils
 	}
 }
 
-#endif // GAL_LANG_UTILS_STRING_UTILS_HPP
+#endif // GAL_UTILS_STRING_UTILS_HPP

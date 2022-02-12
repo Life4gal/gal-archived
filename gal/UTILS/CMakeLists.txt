@@ -84,3 +84,4 @@ target_link_libraries(
 )
 
 include(${GAL_MODULE_PATH}/config_build_type.cmake)
+BuildAsPrivate()

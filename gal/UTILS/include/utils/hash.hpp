@@ -1,9 +1,9 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILS_HASH_HPP
-#define GAL_LANG_UTILS_HASH_HPP
+#ifndef GAL_UTILS_HASH_HPP
+#define GAL_UTILS_HASH_HPP
 
-#include <utility>
+#include <cstdint>
 
 namespace gal::utils
 {
@@ -13,7 +13,7 @@ namespace gal::utils
 			std::begin(container);
 			std::end(container);
 		}
-	[[nodiscard]] constexpr std::conditional_t<Is64Bits, std::uint64_t, std::uint32_t> fnv1a_hash(const Container& container) noexcept
+	[[nodiscard]] constexpr std::conditional_t<Is64Bits, std::uint64_t, std::uint32_t> hash_fnv1a(const Container& container) noexcept
 	{
 		// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
 		if constexpr (Is64Bits)
@@ -49,27 +49,27 @@ namespace gal::utils
 	}
 
 	template<typename Container>
-	requires requires(Container container)
-	{
-		std::begin(container);
-		std::end(container);
-		std::size(container);
-		std::data(container);
-	}
-	[[nodiscard]] constexpr std::size_t short_string_hash(const Container& container) noexcept
-	{
-		const auto* data = std::data(container);
-		const auto	length = std::size(container);
-
-		std::size_t hash   = static_cast<std::size_t>(length);
-
-		for (auto i = length; i > 0; --i)
+		requires requires(Container container)
 		{
-			hash ^= (hash << 5) + (hash >> 2) + data[i - 1];
+			std::begin(container);
+			std::end(container);
+		}
+	[[nodiscard]] constexpr std::uint32_t hash_jenkins_one_at_a_time(const Container& container) noexcept
+	{
+		std::uint32_t hash = 0;
+
+		for (const auto i: container)
+		{
+			hash += static_cast<std::uint32_t>(i);
+			hash += hash << 10;
+			hash ^= hash >> 6;
 		}
 
+		hash += hash << 3;
+		hash ^= hash >> 11;
+		hash += hash << 15;
 		return hash;
 	}
 }
 
-#endif // GAL_LANG_UTILS_HASH_HPP
+#endif // GAL_UTILS_HASH_HPP

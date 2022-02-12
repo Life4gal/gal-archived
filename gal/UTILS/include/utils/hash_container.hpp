@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILS_HASH_CONTAINER_HPP
-#define GAL_LANG_UTILS_HASH_CONTAINER_HPP
+#ifndef GAL_UTILS_HASH_CONTAINER_HPP
+#define GAL_UTILS_HASH_CONTAINER_HPP
 
 // todo: implement it
 
@@ -46,4 +46,4 @@ namespace gal::utils
 	using hash_map = std::unordered_map<Key, Value, Hasher, KeyEqual, Allocator>;
 }
 
-#endif // GAL_LANG_UTILS_HASH_CONTAINER_HPP
+#endif // GAL_UTILS_HASH_CONTAINER_HPP
