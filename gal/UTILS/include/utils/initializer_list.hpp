@@ -10,6 +10,7 @@ namespace gal::utils
 	{
 	public:
 		using value_type = T;
+		using size_type = std::size_t;
 
 		using iterator = value_type*;
 		using const_iterator = const value_type*;
@@ -46,7 +47,7 @@ namespace gal::utils
 			: begin_{container.empty() ? nullptr : container.begin()},
 			  end_{container.empty() ? nullptr : container.end()} {}
 
-		template<std::size_t Size, template<typename, std::size_t> typename Container>
+		template<size_type Size, template<typename, size_type> typename Container>
 			requires(Size != 0) && requires(Container<value_type, Size> container)
 			{
 				{
@@ -60,7 +61,7 @@ namespace gal::utils
 			: begin_{container.begin()},
 			  end_{container.end()} {}
 
-		template<std::size_t Size, template<typename, std::size_t> typename Container>
+		template<size_type Size, template<typename, size_type> typename Container>
 			requires(Size == 0)
 		constexpr explicit initializer_list(const Container<value_type, Size>&) noexcept
 			: begin_{nullptr},
@@ -74,7 +75,7 @@ namespace gal::utils
 
 		[[nodiscard]] constexpr const_reference back() const noexcept { return *(end() - 1); }
 
-		[[nodiscard]] constexpr std::size_t size() const noexcept { return static_cast<std::size_t>(end() - begin()); }
+		[[nodiscard]] constexpr size_type size() const noexcept { return static_cast<size_type>(end() - begin()); }
 
 		[[nodiscard]] constexpr bool empty() const noexcept { return size() == 0; }
 

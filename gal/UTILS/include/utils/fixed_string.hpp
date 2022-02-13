@@ -18,10 +18,26 @@ namespace gal::utils
 			       std::char_traits<char>::compare(value, string, size_no_0) == 0;
 		}
 
+		template<
+			template<typename> typename Container,
+			char (Container<char>::*CharGetter)(std::size_t) = &Container<char>::operator[]
+		>
+			requires requires(Container<char> container)
+			{
+				{
+					container.size()
+				} -> std::same_as<std::size_t>;
+			}
+		[[nodiscard]] constexpr static bool match(const Container<char>& container)
+		{
+			return container.size() == size_no_0 &&
+			       [&]<std::size_t... Index>(std::index_sequence<Index...>) { return ((value[Index] == container.CharGetter(Index)) && ...); }(std::make_index_sequence<size_no_0>{});
+		}
+
 		// CharGetter' s parameters are indices
 		template<typename CharGetter, typename CharCompare = std::equal_to<>>
 			requires std::is_invocable_r_v<char, CharGetter, std::size_t>
-		constexpr static bool match(CharGetter getter)
+		[[nodiscard]] constexpr static bool match(CharGetter getter)
 		noexcept(
 			std::is_nothrow_invocable_r_v<char, CharGetter, std::size_t> &&
 			std::is_nothrow_invocable_r_v<bool, CharCompare, char, char>
@@ -33,7 +49,7 @@ namespace gal::utils
 
 		template<typename CharGetter, typename CharCompare = std::equal_to<>>
 			requires std::is_invocable_r_v<char, CharGetter>
-		constexpr static bool match(CharGetter getter) noexcept(
+		[[nodiscard]] constexpr static bool match(CharGetter getter) noexcept(
 			std::is_nothrow_invocable_r_v<char, CharGetter, std::size_t> &&
 			std::is_nothrow_invocable_r_v<bool, CharCompare, char, char>)
 		{
@@ -50,7 +66,7 @@ namespace gal::utils
 	decltype(                                                                            \
 			[]<std::size_t... Index>(std::index_sequence<Index...>) constexpr noexcept \
 			{ \
-				return fixed_string<[](std::size_t index) constexpr noexcept           \
+				return ::gal::utils::fixed_string<[](std::size_t index) constexpr noexcept           \
 				{                                                                        \
 					return (string)[index];                                              \
 				}                                                                        \

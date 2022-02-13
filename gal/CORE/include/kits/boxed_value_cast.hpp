@@ -387,8 +387,7 @@ namespace gal::lang::kits
 					if (from.is_pointer())
 					{
 						// static/dynamic cast out the contained boxed value, which we know is the type we want
-						using caster_type = decltype(
-							[&]<typename T, typename F>()
+						auto do_cast = [&]<typename T, typename F>()
 							{
 								if constexpr (IsStatic)
 								{
@@ -402,23 +401,22 @@ namespace gal::lang::kits
 										data) { return data; }
 									throw std::bad_cast{};
 								}
-							});
+							};
 
-						if (from.is_const()) { return caster_type::template operator()<const To, const From>(); }
-						return caster_type::template operator()<To, From>();
+						if (from.is_const()) { return do_cast.decltype(do_cast)::template operator()<const To, const From>(); }
+						return do_cast.decltype(do_cast)::template operator()<To, From>();
 					}
 					// Pull the reference out of the contained boxed value, which we know is the type we want
-					using caster_type = decltype(
-						[&]<typename T, typename F>() -> std::add_lvalue_reference_t<T>
+					auto do_cast = [&]<typename T, typename F>() -> std::add_lvalue_reference_t<T>
 						{
 							auto& f = cast_helper<std::add_lvalue_reference_t<F>>::cast(from, nullptr);
 
 							if constexpr (IsStatic) { return static_cast<std::add_lvalue_reference_t<T>>(f); }
 							else { return dynamic_cast<std::add_lvalue_reference_t<T>>(f); }
-						});
+						};
 
-					if (from.is_const()) { return std::cref(caster_type::template operator()<const To, const From>()); }
-					return std::ref(caster_type::template operator()<To, From>());
+					if (from.is_const()) { return std::cref(do_cast.decltype(do_cast)::template operator()<const To, const From>()); }
+					return std::ref(do_cast.decltype(do_cast)::template operator()<To, From>());
 				}
 
 				if constexpr (IsStatic) { throw bad_boxed_static_cast(from.type_info(), typeid(To), "Unknown static_cast_conversion"); }
@@ -570,7 +568,6 @@ namespace gal::lang::kits
 		template<typename T>
 		[[nodiscard]] bool is_convertible_type() const noexcept { return thread_cache_->contains(utils::make_type_info<T>().bare_type_info()); }
 
-		template<typename To, typename From>
 		[[nodiscard]] bool is_convertible_type(const utils::gal_type_info& to, const utils::gal_type_info& from) const noexcept
 		{
 			if (const auto& cache = get_cache();
@@ -655,7 +652,7 @@ namespace gal::lang::kits
 
 		[[nodiscard]] const type_conversion_manager& operator*() const noexcept { return conversions_.get(); }
 
-		[[nodiscard]] const type_conversion_manager* operator->() const noexcept { return &this->operator*(); }
+		[[nodiscard]] const type_conversion_manager* operator->() const noexcept { return &conversions_.get(); }
 
 		[[nodiscard]] auto& saves() const noexcept { return saves_.get(); }
 	};
