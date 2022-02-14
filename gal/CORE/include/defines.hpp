@@ -14,6 +14,8 @@
 
 namespace gal::lang
 {
+	// todo: It looks like now only GCC correctly recognizes the function signature
+	// cannot use fixed_string::match with std::string
 	using dynamic_object_name = GAL_UTILS_FIXED_STRING_TYPE("dynamic_object");
 }
 

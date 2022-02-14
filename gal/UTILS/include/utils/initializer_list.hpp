@@ -37,29 +37,23 @@ namespace gal::utils
 				container.size();
 				container.empty();
 				{
-					container.begin()
-				} -> std::convertible_to<const_iterator>;
-				{
-					container.end()
+					container.data()
 				} -> std::convertible_to<const_iterator>;
 			}
 		constexpr explicit initializer_list(const Container<value_type>& container) noexcept
-			: begin_{container.empty() ? nullptr : container.begin()},
-			  end_{container.empty() ? nullptr : container.end()} {}
+			: begin_{container.empty() ? nullptr : container.data()},
+			  end_{container.empty() ? nullptr : container.data() + container.size()} {}
 
 		template<size_type Size, template<typename, size_type> typename Container>
 			requires(Size != 0) && requires(Container<value_type, Size> container)
 			{
 				{
-					container.begin()
-				} -> std::convertible_to<const_iterator>;
-				{
-					container.end()
+					container.data()
 				} -> std::convertible_to<const_iterator>;
 			}
 		constexpr explicit initializer_list(const Container<value_type, Size>& container) noexcept
-			: begin_{container.begin()},
-			  end_{container.end()} {}
+			: begin_{container.data()},
+			  end_{container.data() + Size} {}
 
 		template<size_type Size, template<typename, size_type> typename Container>
 			requires(Size == 0)
@@ -95,7 +89,7 @@ namespace gal::utils
 			std::ranges::for_each(
 					begin(),
 					end(),
-					[&](const value_type& v) { ret.PushFunction(v); });
+					[&](const value_type& v) { (ret.*PushFunction)(v); });
 			return ret;
 		}
 	};

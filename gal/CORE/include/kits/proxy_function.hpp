@@ -40,7 +40,7 @@ namespace gal::lang::kits
 		{
 			try
 			{
-				[i = function_parameters::size_type{0}, &]() mutable { (boxed_cast<Params>(params[i++], &conversion), ...); }();
+				[&, i = function_parameters::size_type{0}]() mutable { (boxed_cast<Params>(params[i++], &conversion), ...); }();
 
 				return true;
 			}
@@ -101,7 +101,7 @@ namespace gal::lang::kits
 	template<typename Function>
 	std::function<Function> make_functor(std::shared_ptr<const proxy_function_base> function, const type_conversion_state* conversion);
 
-	class params_type
+	class param_types
 	{
 	public:
 		using param_name_type = std::string;
@@ -127,14 +127,14 @@ namespace gal::lang::kits
 		}
 
 	public:
-		params_type()
+		param_types()
 			: empty_{true} {}
 
-		explicit params_type(param_type_container_type types)
+		explicit param_types(param_type_container_type types)
 			: types_{std::move(types)},
 			  empty_{true} { check_empty(); }
 
-		bool operator==(const params_type& other) const noexcept { return types_ == other.types_; }
+		bool operator==(const param_types& other) const noexcept { return types_ == other.types_; }
 
 		void push_front(param_name_type name, param_type_type ti)
 		{
@@ -257,6 +257,7 @@ namespace gal::lang::kits
 
 	protected:
 		static_assert(std::is_signed_v<arity_error::size_type>);
+		using arity_size_type = arity_error::size_type;
 
 		std::vector<detail::gal_type_info> types_;
 		arity_error::size_type arity_;
@@ -271,7 +272,7 @@ namespace gal::lang::kits
 			return true;
 		}
 
-		proxy_function_base(std::vector<detail::gal_type_info> types, const arity_error::size_type arity)
+		proxy_function_base(std::vector<detail::gal_type_info> types, const arity_size_type arity)
 			: types_{std::move(types)},
 			  arity_{arity},
 			  has_arithmetic_param_{std::ranges::any_of(types, [](const auto& type) { return type.is_arithmetic(); })} { }
@@ -304,13 +305,13 @@ namespace gal::lang::kits
 		boxed_value operator()(const function_parameters& params, const type_conversion_state& conversion) const
 		{
 			if (arity_ < 0 || static_cast<decltype(params.size())>(arity_) == params.size()) { return do_invoke(params, conversion); }
-			throw arity_error{static_cast<arity_error::size_type>(params.size()), arity_};
+			throw arity_error{static_cast<arity_size_type>(params.size()), arity_};
 		}
 
 		/**
 		 * @brief The number of arguments the function takes or -1 if it is variadic.
 		 */
-		[[nodiscard]] constexpr auto get_arity() const noexcept { return arity_; }
+		[[nodiscard]] constexpr arity_size_type get_arity() const noexcept { return arity_; }
 
 		/**
 		 * @brief Returns a vector containing all of the types of the parameters
@@ -328,7 +329,7 @@ namespace gal::lang::kits
 		 */
 		[[nodiscard]] bool filter(const function_parameters& params, const type_conversion_state& conversion) const noexcept
 		{
-			gal_assert(arity_ == -1 || (arity_ > 0 && static_cast<arity_error::size_type>(params.size()) == arity_));
+			gal_assert(arity_ == -1 || (arity_ > 0 && static_cast<arity_size_type>(params.size()) == arity_));
 
 			if (arity_ < 0) { return true; }
 
@@ -350,6 +351,165 @@ namespace gal::lang::kits
 			return compare_type_to_param(types_[1], object, conversion);
 		}
 	};
+}
+
+namespace gal::lang
+{
+	/**
+	 * @brief Common typedef used for passing of any registered function in GAL.
+	 */
+	using proxy_function = std::shared_ptr<kits::proxy_function_base>;
+
+	/**
+	 * @brief Const version of proxy_function. Points to a const proxy_function.
+	 * This is how most registered functions are handled internally.
+	 */
+	using const_proxy_function = std::shared_ptr<const kits::proxy_function_base>;
+}
+
+namespace gal::lang::kits
+{
+	/**
+	 * @brief Exception thrown if a function's guard fails.
+	 */
+	class guard_error final : public std::runtime_error
+	{
+	public:
+		guard_error()
+			: std::runtime_error{"Guard evaluation failed"} {}
+	};
+
+	/**
+	 * @brief A proxy_function implementation that is not type safe, the called
+	 * function is expecting a std::vector<boxed_value> that it works with how it chooses.
+	 */
+	class dynamic_proxy_function_base : public proxy_function_base
+	{
+	public:
+		using parse_ast_node_type = std::shared_ptr<ast_node>;
+
+	private:
+		parse_ast_node_type parse_ast_node_;
+		proxy_function guard_;
+
+	protected:
+		param_types param_types_;
+
+	private:
+		static std::vector<detail::gal_type_info> build_param_type_list(const param_types& types)
+		{
+			std::vector ret{detail::type_info_factory<boxed_value>::make()};
+
+			for (const auto& [_, ti]: types.types())
+			{
+				if (ti.is_undefined()) { ret.push_back(detail::type_info_factory<boxed_value>::make()); }
+				else { ret.push_back(ti); }
+			}
+
+			return ret;
+		}
+
+	protected:
+		[[nodiscard]] bool test_guard(const function_parameters& params, const type_conversion_state& conversion) const
+		{
+			if (guard_)
+			{
+				try { return boxed_cast<bool>(guard_->operator()(params, conversion)); }
+				catch (const arity_error&) { return false; }catch (const bad_boxed_cast&) { return false; }
+			}
+			return true;
+		}
+
+		/**
+		 * @return pair.first means 'is a match or not', pair.second means 'needs conversions'
+		 */
+		[[nodiscard]] std::pair<bool, bool> do_match(const function_parameters& params, const type_conversion_state& conversion) const
+		{
+			const auto [m, c] = [&]
+			{
+				if (arity_ < 0) { return std::make_pair(true, false); }
+				if (static_cast<decltype(params.size())>(arity_) == params.size()) { return param_types_.match(params, conversion); }
+				return std::make_pair(false, false);
+			}();
+
+			return std::make_pair(m && test_guard(params, conversion), c);
+		}
+
+	public:
+		dynamic_proxy_function_base(
+				const arity_size_type arity,
+				parse_ast_node_type parse_ast_node,
+				param_types param_types = {},
+				proxy_function guard = {})
+			: proxy_function_base{build_param_type_list(param_types), arity},
+			  parse_ast_node_{std::move(parse_ast_node)},
+			  guard_{std::move(guard)},
+			  param_types_{std::move(param_types)} {}
+
+		[[nodiscard]] const parse_ast_node_type::element_type& get_parse_tree() const
+		{
+			if (parse_ast_node_) { return *parse_ast_node_; }
+			throw std::runtime_error{"Dynamic_proxy_function does not contain a parse_tree"};
+		}
+
+		[[nodiscard]] bool has_guard() const noexcept { return guard_.operator bool(); }
+
+		[[nodiscard]] proxy_function get_guard() const noexcept { return guard_; }
+
+		[[nodiscard]] bool operator==(const proxy_function_base& other) const noexcept override
+		{
+			return this == &other ||
+			       [&]
+			       {
+				       const auto* rhs = dynamic_cast<const dynamic_proxy_function_base*>(&other);
+
+				       return rhs != nullptr &&
+				              arity_ == rhs->arity_ &&
+				              not has_guard() &&
+				              not rhs->has_guard() &&
+				              param_types_ == rhs->param_types_;
+			       }();
+		}
+
+		[[nodiscard]] bool match(const function_parameters& params, const type_conversion_state& conversion) const override { return do_match(params, conversion).first; }
+	};
+
+	template<typename Callable>
+	class dynamic_proxy_function final : public dynamic_proxy_function_base
+	{
+	private:
+		Callable function_;
+
+	protected:
+		[[nodiscard]] boxed_value do_invoke(const function_parameters& params, const type_conversion_state& conversion) const override
+		{
+			if (const auto [m, c] = do_match(params, conversion);
+				m)
+			{
+				if (c) { return function_(function_parameters{param_types_.convert(params, conversion)}); }
+				return function_(params);
+			}
+			throw guard_error{};
+		}
+
+	public:
+		dynamic_proxy_function(
+				Callable function,
+				const arity_size_type arity,
+				parse_ast_node_type parse_ast_node,
+				param_types types,
+				proxy_function guard)
+			: dynamic_proxy_function_base{arity, std::move(parse_ast_node), std::move(types), std::move(guard)},
+			  function_{std::move(function)} {}
+	};
+
+	template<typename Callable, typename... Args>
+	proxy_function make_dynamic_proxy_function(Callable&& function, Args&&... args)
+	{
+		return std::make_shared<proxy_function_base, dynamic_proxy_function<Callable>>(
+				std::forward<Callable>(function),
+				std::forward<Args>(args)...);
+	}
 }
 
 #endif // GAL_LANG_KITS_PROXY_FUNCTION_HPP

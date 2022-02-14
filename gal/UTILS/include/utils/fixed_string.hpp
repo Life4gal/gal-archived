@@ -18,20 +18,21 @@ namespace gal::utils
 			       std::char_traits<char>::compare(value, string, size_no_0) == 0;
 		}
 
+		// todo: It looks like now only GCC correctly recognizes the function signature
 		template<
 			template<typename> typename Container,
-			char (Container<char>::*CharGetter)(std::size_t) = &Container<char>::operator[]
+			typename Container<char>::const_reference (Container<char>::*CharGetter)(std::size_t) const noexcept = &Container<char>::operator[]
 		>
 			requires requires(Container<char> container)
 			{
 				{
 					container.size()
-				} -> std::same_as<std::size_t>;
+				} -> std::convertible_to<std::size_t>;
 			}
 		[[nodiscard]] constexpr static bool match(const Container<char>& container)
 		{
 			return container.size() == size_no_0 &&
-			       [&]<std::size_t... Index>(std::index_sequence<Index...>) { return ((value[Index] == container.CharGetter(Index)) && ...); }(std::make_index_sequence<size_no_0>{});
+			       [&]<std::size_t... Index>(std::index_sequence<Index...>) { return ((value[Index] == (container.*CharGetter)(Index)) && ...); }(std::make_index_sequence<size_no_0>{});
 		}
 
 		// CharGetter' s parameters are indices
