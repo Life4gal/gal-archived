@@ -3,6 +3,7 @@
 #include <utils/function_signature.hpp>
 #include <kits/return_handler.hpp>
 #include <kits/proxy_function.hpp>
+#include <kits/call_function.hpp>
 
 using namespace gal::utils;
 

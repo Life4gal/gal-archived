@@ -31,8 +31,8 @@ namespace gal::utils
 			: begin_{&object},
 			  end_{begin_ + 1} {}
 
-		template<template<typename> typename Container>
-			requires requires(Container<value_type> container)
+		template<template<typename...> typename Container, typename... AnyOther>
+			requires requires(const Container<value_type, AnyOther...>& container)
 			{
 				container.size();
 				container.empty();
@@ -40,7 +40,7 @@ namespace gal::utils
 					container.data()
 				} -> std::convertible_to<const_iterator>;
 			}
-		constexpr explicit initializer_list(const Container<value_type>& container) noexcept
+		constexpr explicit initializer_list(const Container<value_type, AnyOther...>& container) noexcept
 			: begin_{container.empty() ? nullptr : container.data()},
 			  end_{container.empty() ? nullptr : container.data() + container.size()} {}
 
@@ -75,23 +75,61 @@ namespace gal::utils
 
 		[[nodiscard]] constexpr const_reference operator[](const std::size_t index) const noexcept { return begin()[index]; }
 
-		template<template<typename> typename Container>
-			requires std::is_constructible_v<Container<value_type>, const_iterator, const_iterator>
-		[[nodiscard]] Container<value_type> to() const { return Container<value_type>{begin(), end()}; }
+		template<template<typename...> typename Container, typename... AnyOther>
+			requires std::is_constructible_v<Container<value_type, AnyOther...>, const_iterator, const_iterator>
+		[[nodiscard]] Container<value_type> to() const { return Container<value_type, AnyOther...>(begin(), end()); }
+
+		template<typename Container>
+			requires std::is_constructible_v<Container, const_iterator, const_iterator>
+		[[nodiscard]] Container to() const { return Container(begin(), end()); }
 
 		template<
-			template<typename>
+			template<typename...>
 			typename Container,
-			void (Container<value_type>::*PushFunction)(const value_type&) = &Container<value_type>::push_back>
-		[[nodiscard]] Container<value_type> to() const
+			typename... AnyOther,
+			typename PushFunction
+		>
+			requires std::is_invocable_v<PushFunction, Container<value_type, AnyOther...>&, const_reference>
+		[[nodiscard]] Container<value_type, AnyOther...> to(PushFunction push_function) const
 		{
-			Container<value_type> ret{};
+			Container<value_type, AnyOther...> ret{};
 			std::ranges::for_each(
 					begin(),
 					end(),
-					[&](const value_type& v) { (ret.*PushFunction)(v); });
+					[&](const_reference v) { push_function(ret, v); });
 			return ret;
 		}
+
+		template<
+			template<typename...>
+			typename Container,
+			typename... AnyOther>
+			requires (not std::is_constructible_v<Container<value_type, AnyOther...>, const_iterator, const_iterator>) &&
+			         requires(Container<value_type, AnyOther...>& container)
+			         {
+				         container.push_back(std::declval<const_reference>());
+			         }
+		[[nodiscard]] Container<value_type, AnyOther...> to() const { return to<Container, AnyOther...>([](auto& container, const_reference v) { container.push_back(v); }); }
+
+		template<typename Container, typename PushFunction>
+			requires std::is_invocable_v<PushFunction, Container&, const_reference>
+		[[nodiscard]] Container to(PushFunction push_function) const
+		{
+			Container ret{};
+			std::ranges::for_each(
+					begin(),
+					end(),
+					[&](const value_type& v) { push_function(ret, v); });
+			return ret;
+		}
+
+		template<typename Container>
+			requires (not std::is_constructible_v<Container, const_iterator, const_iterator>) &&
+			         requires(Container& container)
+			         {
+				         container.push_back(std::declval<const_reference>());
+			         }
+		[[nodiscard]] Container to() const { return to<Container>([](auto& container, const_reference v) { container.push_back(v); }); }
 	};
 }
 

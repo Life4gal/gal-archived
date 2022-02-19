@@ -281,8 +281,23 @@ namespace gal::lang::kits
 		template<typename Result>
 		struct cast_helper<const std::reference_wrapper<const Result>&> : cast_helper<const Result&> {};
 
+		/**
+		 * @note internal use only
+		 */
 		template<typename T>
-		decltype(auto) help_cast(const boxed_value& object, const type_conversion_state* conversion) { return cast_helper<T>::cast(object, conversion); }
+		struct default_cast_invoker
+		{
+			/**
+			 * @note default conversion method
+			 */
+			static decltype(auto) cast(const boxed_value& object, const type_conversion_state* conversion) { return cast_helper<T>::cast(object, conversion); }
+		};
+
+		template<typename T>
+		struct cast_invoker
+		{
+			static decltype(auto) cast(const boxed_value& object, const type_conversion_state* conversion) { return default_cast_invoker<T>(object, conversion); }
+		};
 	}// namespace detail
 
 	/**
@@ -388,32 +403,32 @@ namespace gal::lang::kits
 					{
 						// static/dynamic cast out the contained boxed value, which we know is the type we want
 						auto do_cast = [&]<typename T, typename F>()
+						{
+							if constexpr (IsStatic)
 							{
-								if constexpr (IsStatic)
-								{
-									if (auto data = std::static_pointer_cast<T>(cast_helper<std::shared_ptr<F>>::cast(from, nullptr));
-										data) { return data; }
-									throw std::bad_cast{};
-								}
-								else
-								{
-									if (auto data = std::dynamic_pointer_cast<T>(cast_helper<std::shared_ptr<F>>::cast(from, nullptr));
-										data) { return data; }
-									throw std::bad_cast{};
-								}
-							};
+								if (auto data = std::static_pointer_cast<T>(cast_helper<std::shared_ptr<F>>::cast(from, nullptr));
+									data) { return data; }
+								throw std::bad_cast{};
+							}
+							else
+							{
+								if (auto data = std::dynamic_pointer_cast<T>(cast_helper<std::shared_ptr<F>>::cast(from, nullptr));
+									data) { return data; }
+								throw std::bad_cast{};
+							}
+						};
 
 						if (from.is_const()) { return do_cast.decltype(do_cast)::template operator()<const To, const From>(); }
 						return do_cast.decltype(do_cast)::template operator()<To, From>();
 					}
 					// Pull the reference out of the contained boxed value, which we know is the type we want
 					auto do_cast = [&]<typename T, typename F>() -> std::add_lvalue_reference_t<T>
-						{
-							auto& f = cast_helper<std::add_lvalue_reference_t<F>>::cast(from, nullptr);
+					{
+						auto& f = cast_helper<std::add_lvalue_reference_t<F>>::cast(from, nullptr);
 
-							if constexpr (IsStatic) { return static_cast<std::add_lvalue_reference_t<T>>(f); }
-							else { return dynamic_cast<std::add_lvalue_reference_t<T>>(f); }
-						};
+						if constexpr (IsStatic) { return static_cast<std::add_lvalue_reference_t<T>>(f); }
+						else { return dynamic_cast<std::add_lvalue_reference_t<T>>(f); }
+					};
 
 					if (from.is_const()) { return std::cref(do_cast.decltype(do_cast)::template operator()<const To, const From>()); }
 					return std::ref(do_cast.decltype(do_cast)::template operator()<To, From>());
