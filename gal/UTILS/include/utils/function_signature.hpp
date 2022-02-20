@@ -133,6 +133,15 @@ namespace gal::utils
 		}
 		else { return function_signature{function}; }
 	}
+
+	template<typename ReturnType, bool IsNoexcept, bool IsMember, bool IsMemberObject, bool IsObject, typename... Params>
+	using function_signature_t = function_signature<ReturnType, detail::function_param_type<Params...>, IsNoexcept, IsMember, IsMemberObject, IsObject>;
+
+	/**
+	 * @brief For call an object's member function.
+	 */
+	template<typename Object, typename ReturnType, typename ObjectType, typename... Params, bool IsNoexcept, bool IsMember, bool IsMemberObject, bool IsObject>
+	constexpr ObjectType get_object_instance(function_signature<ReturnType, detail::function_param_type<ObjectType, Params...>, IsNoexcept, IsMember, IsMemberObject, IsObject>, Object&& object) noexcept { return static_cast<ObjectType>(std::forward<Object>(object)); }
 }
 
 #endif // GAL_UTILS_FUNCTION_SIGNATURE_HPP

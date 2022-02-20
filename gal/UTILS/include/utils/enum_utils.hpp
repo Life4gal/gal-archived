@@ -63,12 +63,12 @@ namespace gal::utils
 	{
 		if constexpr (Conjunction)
 		{
-			return ([&v, o](const auto e) { o(v, e); }(enums) &&
+			return ([&v, o](const auto e) { return o(v, e); }(enums) &&
 				...);
 		}
 		else
 		{
-			return ([&v, o](const auto e) { o(v, e); }(enums) ||
+			return ([&v, o](const auto e) { return o(v, e); }(enums) ||
 				...);
 		}
 	}

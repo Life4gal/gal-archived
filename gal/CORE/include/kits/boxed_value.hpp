@@ -293,7 +293,7 @@ namespace gal::lang::kits
 		 * @return Immutable boxed_value
 		 */
 		template<typename T>
-		boxed_value make_const_boxed_value(T* object) { return {const_cast<std::add_const_t<T>*>(object)}; }
+		boxed_value make_const_boxed_value(T* object) { return boxed_value{const_cast<std::add_const_t<T>*>(object)}; }
 
 		/**
 		 * @brief Takes a std::shared_ptr to a value, adds const to the pointed to type and
@@ -302,7 +302,7 @@ namespace gal::lang::kits
 		 * @return Immutable boxed_value
 		 */
 		template<typename T>
-		boxed_value make_const_boxed_value(const std::shared_ptr<T>& object) { return {std::const_pointer_cast<std::add_const_t<T>>(object)}; }
+		boxed_value make_const_boxed_value(const std::shared_ptr<T>& object) { return boxed_value{std::const_pointer_cast<std::add_const_t<T>>(object)}; }
 
 		/**
 		 * @brief Takes a std::reference_wrapper value, adds const to the referenced type
@@ -311,7 +311,7 @@ namespace gal::lang::kits
 		 * @return Immutable boxed_value
 		 */
 		template<typename T>
-		boxed_value make_const_boxed_value(const std::reference_wrapper<T>& object) { return {std::cref(object.get())}; }
+		boxed_value make_const_boxed_value(const std::reference_wrapper<T>& object) { return boxed_value{std::cref(object.get())}; }
 	}
 
 	/**
@@ -321,7 +321,7 @@ namespace gal::lang::kits
 	 * @param t The value to box
 	 */
 	template<typename T>
-	boxed_value var(T&& t) { return {std::forward<T>(t)}; }
+	boxed_value var(T&& t) { return boxed_value{std::forward<T>(t)}; }
 
 	/**
 	 * @brief Takes an object and returns an immutable boxed_value. If the object is a

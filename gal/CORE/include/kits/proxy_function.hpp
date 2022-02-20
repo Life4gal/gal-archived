@@ -5,7 +5,9 @@
 
 #include <vector>
 #include <utils/assert.hpp>
+#include <utils/algorithm.hpp>
 #include <defines.hpp>
+#include <ranges>
 #include <kits/function_parameters.hpp>
 #include <kits/return_handler.hpp>
 #include<kits/dynamic_object.hpp>
@@ -116,7 +118,7 @@ namespace gal::lang::kits
 
 		void check_empty()
 		{
-			for (const auto& [name, _]: types_)
+			for (const auto& name: types_ | std::views::keys)
 			{
 				if (not name.empty())
 				{
@@ -243,7 +245,7 @@ namespace gal::lang::kits
 	 * dispatch_engine only knows how to work with proxy_function, no other
 	 * function classes.
 	 */
-	class proxy_function_base
+	class proxy_function_base  // NOLINT(cppcoreguidelines-pro-type-member-init)
 	{
 	public:
 		proxy_function_base() = default;
@@ -412,7 +414,7 @@ namespace gal::lang::kits
 			{
 				std::vector ret{detail::type_info_factory<boxed_value>::make()};
 
-				for (const auto& [_, ti]: types.types())
+				for (const auto& ti: types.types() | std::views::values)
 				{
 					if (ti.is_undefined()) { ret.push_back(detail::type_info_factory<boxed_value>::make()); }
 					else { ret.push_back(ti); }
@@ -438,6 +440,7 @@ namespace gal::lang::kits
 		 */
 			[[nodiscard]] std::pair<bool, bool> do_match(const function_parameters& params, const type_conversion_state& conversion) const
 			{
+				// ReSharper disable once CppVariableCanBeMadeConstexpr
 				const auto [m, c] = [&]
 				{
 					if (arity_ < 0) { return std::make_pair(true, false); }
@@ -855,7 +858,8 @@ namespace gal::lang::kits
 			new_parameters.reserve(parameters.size());
 
 			const auto& tis = matching->second->types();
-			std::ranges::transform(
+
+			std::transform(
 					tis.begin() + 1,
 					tis.end(),
 					parameters.begin(),
@@ -906,11 +910,12 @@ namespace gal::lang::kits
 			{
 				std::size_t num_diffs = 0;
 
-				std::ranges::transform(
+				utils::zip_invoke(
+						[&num_diffs](const auto& ti, const auto& param)
+						{ if (not ti.bare_equal(param.type_info())) { ++num_diffs; } },
 						function->types().begin() + 1,
 						function->types().end(),
-						parameters.begin(),
-						[&num_diffs](const auto& ti, const auto& param) { if (not ti.bare_equal(param.type_info())) { ++num_diffs; } });
+						parameters.begin());
 
 				ordered_functions.emplace_back(num_diffs, function.get());
 			}

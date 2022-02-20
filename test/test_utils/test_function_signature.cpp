@@ -4,6 +4,10 @@
 #include <kits/return_handler.hpp>
 #include <kits/proxy_function.hpp>
 #include <kits/call_function.hpp>
+#include <kits/register_function.hpp>
+#include <kits/bootstrap.hpp>
+#include <kits/proxy_constructor.hpp>
+#include <kits/dispatch.hpp>
 
 using namespace gal::utils;
 

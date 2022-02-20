@@ -637,18 +637,16 @@ namespace gal::lang::kits
 		template<typename From>
 		[[nodiscard]] boxed_value boxed_type_down_conversion(conversion_saves& saves, const boxed_value& to) const { return boxed_type_down_conversion(utils::make_type_info<From>(), saves, to); }
 
-		constexpr static void enable_conversion_saves(conversion_saves& saves, const bool enable) { saves.enable = enable; }
+		constexpr static void enable_conversion_saves(conversion_saves& saves, const bool enable) noexcept { saves.enable = enable; }
 
-		[[nodiscard]] constexpr auto take_conversion_saves(conversion_saves& saves)
+		[[nodiscard]] constexpr static auto take_conversion_saves(conversion_saves& saves) noexcept
 		{
 			decltype(conversion_saves::saves) dummy;
 			std::swap(dummy, saves.saves);
 			return dummy;
 		}
 
-		[[nodiscard]] conversion_saves& get_conversion_saves() noexcept { return *conversion_saves_; }
-
-		[[nodiscard]] const conversion_saves& get_conversion_saves() const noexcept { return *conversion_saves_; }
+		[[nodiscard]] conversion_saves& get_conversion_saves() const noexcept { return *conversion_saves_; }
 	};
 
 	class type_conversion_state
