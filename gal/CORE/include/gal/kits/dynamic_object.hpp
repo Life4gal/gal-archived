@@ -4,12 +4,12 @@
 #define GAL_LANG_KITS_DYNAMIC_OBJECT_HPP
 
 #include <map>
-#include <kits/boxed_value.hpp>
+#include <gal/kits/boxed_value.hpp>
 #include <utils/format.hpp>
 
 namespace gal::lang::kits
 {
-	class option_explicit_error : public std::runtime_error
+	class option_explicit_error final : public std::runtime_error
 	{
 	public:
 		explicit option_explicit_error(std::string_view parameter)

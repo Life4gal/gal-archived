@@ -3,7 +3,7 @@
 #ifndef GAL_LANG_KITS_PROXY_CONSTRUCTOR_HPP
 #define GAL_LANG_KITS_PROXY_CONSTRUCTOR_HPP
 
-#include<kits/proxy_function.hpp>
+#include<gal/kits/proxy_function.hpp>
 
 namespace gal::lang::kits
 {

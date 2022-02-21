@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <atomic>
 #include <utils/format.hpp>
-#include <kits/boxed_value.hpp>
+#include <gal/kits/boxed_value.hpp>
 #include <utils/thread_storage.hpp>
 
 namespace gal::lang::kits
@@ -312,16 +312,16 @@ namespace gal::lang::kits
 
 	public:
 		// gal_type_info contained in the boxed_value
-		utils::gal_type_info from;
+		utility::gal_type_info from;
 		// std::type_info of the desired (but failed) result type
 		const std::type_info* to;
 
-		bad_boxed_cast(utils::gal_type_info from, const std::type_info& to, const char* const what) noexcept
+		bad_boxed_cast(utility::gal_type_info from, const std::type_info& to, const char* const what) noexcept
 			: what_{what},
 			  from{from},
 			  to{&to} {}
 
-		bad_boxed_cast(utils::gal_type_info from, const std::type_info& to) noexcept
+		bad_boxed_cast(utility::gal_type_info from, const std::type_info& to) noexcept
 			: bad_boxed_cast{from, to, "Cannot perform boxed_cast"} {}
 
 		explicit bad_boxed_cast(const char* const what) noexcept
@@ -337,9 +337,9 @@ namespace gal::lang::kits
 	class conversion_error final : public bad_boxed_cast
 	{
 	public:
-		detail::gal_type_info type_to;
+		utility::gal_type_info type_to;
 
-		conversion_error(const detail::gal_type_info t, const detail::gal_type_info f, const char* const what) noexcept
+		conversion_error(const utility::gal_type_info t, const utility::gal_type_info f, const char* const what) noexcept
 			: bad_boxed_cast{f, t.bare_type_info(), what},
 			  type_to{t} {}
 	};
@@ -367,11 +367,11 @@ namespace gal::lang::kits
 		class type_conversion_base
 		{
 		private:
-			const gal_type_info to_;
-			const gal_type_info from_;
+			const utility::gal_type_info to_;
+			const utility::gal_type_info from_;
 
 		protected:
-			type_conversion_base(gal_type_info to, gal_type_info from)
+			type_conversion_base(utility::gal_type_info to, utility::gal_type_info from)
 				: to_{to},
 				  from_{from} {}
 
@@ -388,8 +388,8 @@ namespace gal::lang::kits
 			[[nodiscard]] virtual boxed_value convert(const boxed_value& from) const = 0;
 			[[nodiscard]] virtual boxed_value convert_down(const boxed_value& to) const = 0;
 
-			[[nodiscard]] const gal_type_info& to() const noexcept { return to_; }
-			[[nodiscard]] const gal_type_info& from() const noexcept { return from_; }
+			[[nodiscard]] const utility::gal_type_info& to() const noexcept { return to_; }
+			[[nodiscard]] const utility::gal_type_info& from() const noexcept { return from_; }
 		};
 
 		template<bool IsStatic, typename From, typename To>
@@ -397,7 +397,7 @@ namespace gal::lang::kits
 		{
 			static boxed_value cast(const boxed_value& from)
 			{
-				if (from.type_info().bare_equal(utils::make_type_info<From>()))
+				if (from.type_info().bare_equal(utility::make_type_info<From>()))
 				{
 					if (from.is_pointer())
 					{
@@ -444,7 +444,7 @@ namespace gal::lang::kits
 		{
 		public:
 			static_conversion_impl()
-				: type_conversion_base{utils::make_type_info<Base>(), utils::make_type_info<Derived>()} {}
+				: type_conversion_base{utility::make_type_info<Base>(), utility::make_type_info<Derived>()} {}
 
 			[[nodiscard]] constexpr bool is_bidirectional() const noexcept override { return false; }
 
@@ -458,7 +458,7 @@ namespace gal::lang::kits
 		{
 		public:
 			dynamic_conversion_impl()
-				: type_conversion_base{utils::make_type_info<Base>(), utils::make_type_info<Derived>()} {}
+				: type_conversion_base{utility::make_type_info<Base>(), utility::make_type_info<Derived>()} {}
 
 			[[nodiscard]] boxed_value convert(const boxed_value& from) const override { return caster<true, Derived, Base>::cast(from); }
 
@@ -475,7 +475,7 @@ namespace gal::lang::kits
 			function_type function_;
 
 		public:
-			type_conversion_impl(const gal_type_info from, const gal_type_info to, function_type function)
+			type_conversion_impl(const utility::gal_type_info from, const utility::gal_type_info to, function_type function)
 				: type_conversion_base{to, from},
 				  function_{std::move(function)} {}
 
@@ -513,7 +513,7 @@ namespace gal::lang::kits
 		convertible_types_type convertible_types_;
 		std::atomic_size_t num_types_;
 
-		auto bidirectional_find(const utils::gal_type_info& to, const utils::gal_type_info& from) const
+		auto bidirectional_find(const utility::gal_type_info& to, const utility::gal_type_info& from) const
 		{
 			return std::ranges::find_if(
 					conversions_,
@@ -526,7 +526,7 @@ namespace gal::lang::kits
 
 		auto bidirectional_find(const conversion_type& conversion) const { return bidirectional_find(conversion->to(), conversion->from()); }
 
-		auto find(const utils::gal_type_info& to, const utils::gal_type_info& from) const
+		auto find(const utility::gal_type_info& to, const utility::gal_type_info& from) const
 		{
 			return std::ranges::find_if(
 					conversions_,
@@ -574,16 +574,16 @@ namespace gal::lang::kits
 			num_types_ = convertible_types_.size();
 		}
 
-		[[nodiscard]] bool has_conversion(const utils::gal_type_info& to, const utils::gal_type_info& from) const
+		[[nodiscard]] bool has_conversion(const utility::gal_type_info& to, const utility::gal_type_info& from) const
 		{
 			utils::threading::shared_lock lock{mutex_};
 			return bidirectional_find(to, from) != conversions_.end();
 		}
 
 		template<typename T>
-		[[nodiscard]] bool is_convertible_type() const noexcept { return thread_cache_->contains(utils::make_type_info<T>().bare_type_info()); }
+		[[nodiscard]] bool is_convertible_type() const noexcept { return thread_cache_->contains(utility::make_type_info<T>().bare_type_info()); }
 
-		[[nodiscard]] bool is_convertible_type(const utils::gal_type_info& to, const utils::gal_type_info& from) const noexcept
+		[[nodiscard]] bool is_convertible_type(const utility::gal_type_info& to, const utility::gal_type_info& from) const noexcept
 		{
 			if (const auto& cache = get_cache();
 				cache.contains(to.bare_type_info()) && cache.contains(from.bare_type_info())) { return has_conversion(to, from); }
@@ -591,9 +591,9 @@ namespace gal::lang::kits
 		}
 
 		template<typename To, typename From>
-		[[nodiscard]] bool is_convertible_type() const noexcept { return is_convertible_type(utils::make_type_info<To>(), utils::make_type_info<From>()); }
+		[[nodiscard]] bool is_convertible_type() const noexcept { return is_convertible_type(utility::make_type_info<To>(), utility::make_type_info<From>()); }
 
-		conversion_type get_conversion(const utils::gal_type_info& to, const utils::gal_type_info& from) const
+		conversion_type get_conversion(const utility::gal_type_info& to, const utility::gal_type_info& from) const
 		{
 			utils::threading::shared_lock lock{mutex_};
 
@@ -607,7 +607,7 @@ namespace gal::lang::kits
 							to.bare_name())};
 		}
 
-		[[nodiscard]] boxed_value boxed_type_conversion(const utils::gal_type_info& to, conversion_saves& saves, const boxed_value& from) const
+		[[nodiscard]] boxed_value boxed_type_conversion(const utility::gal_type_info& to, conversion_saves& saves, const boxed_value& from) const
 		{
 			try
 			{
@@ -620,9 +620,9 @@ namespace gal::lang::kits
 		}
 
 		template<typename To>
-		[[nodiscard]] boxed_value boxed_type_conversion(conversion_saves& saves, const boxed_value& from) const { return boxed_type_conversion(utils::make_type_info<To>(), saves, from); }
+		[[nodiscard]] boxed_value boxed_type_conversion(conversion_saves& saves, const boxed_value& from) const { return boxed_type_conversion(utility::make_type_info<To>(), saves, from); }
 
-		[[nodiscard]] boxed_value boxed_type_down_conversion(const utils::gal_type_info& from, conversion_saves& saves, const boxed_value& to) const
+		[[nodiscard]] boxed_value boxed_type_down_conversion(const utility::gal_type_info& from, conversion_saves& saves, const boxed_value& to) const
 		{
 			try
 			{
@@ -635,7 +635,7 @@ namespace gal::lang::kits
 		}
 
 		template<typename From>
-		[[nodiscard]] boxed_value boxed_type_down_conversion(conversion_saves& saves, const boxed_value& to) const { return boxed_type_down_conversion(utils::make_type_info<From>(), saves, to); }
+		[[nodiscard]] boxed_value boxed_type_down_conversion(conversion_saves& saves, const boxed_value& to) const { return boxed_type_down_conversion(utility::make_type_info<From>(), saves, to); }
 
 		constexpr static void enable_conversion_saves(conversion_saves& saves, const bool enable) noexcept { saves.enable = enable; }
 
@@ -691,14 +691,14 @@ namespace gal::lang::kits
 	}
 
 	template<typename Callable>
-	type_conversion_type register_convert_function(const utils::gal_type_info& from, const utils::gal_type_info& to, const Callable& function) { return std::make_shared<detail::type_conversion_base, detail::type_conversion_impl<Callable>>(from, to, function); }
+	type_conversion_type register_convert_function(const utility::gal_type_info& from, const utility::gal_type_info& to, const Callable& function) { return std::make_shared<detail::type_conversion_base, detail::type_conversion_impl<Callable>>(from, to, function); }
 
 	template<typename From, typename To, typename Callable>
 	type_conversion_type register_convert_function(const Callable& function)
 	{
 		return register_convert_function(
-				utils::make_type_info<From>(),
-				utils::make_type_info<To>(),
+				utility::make_type_info<From>(),
+				utility::make_type_info<To>(),
 				[function](const boxed_value& object) -> boxed_value
 				{
 					// not even attempting to call boxed_cast so that we don't get caught in some call recursion
@@ -730,8 +730,8 @@ namespace gal::lang::kits
 	type_conversion_type register_container_convert_function()
 	{
 		return register_convert_function(
-				utils::make_type_info<Container<boxed_value>>(),
-				utils::make_type_info<ValueType>(),
+				utility::make_type_info<Container<boxed_value>>(),
+				utility::make_type_info<ValueType>(),
 				[](const boxed_value& object) -> boxed_value
 				{
 					const auto& source = detail::cast_helper<const Container<boxed_value>&>::cast(object, nullptr);
@@ -759,8 +759,8 @@ namespace gal::lang::kits
 	type_conversion_type register_associative_container_convert_function()
 	{
 		return register_convert_function(
-				utils::make_type_info<Container<KeyType, MappedType>>(),
-				utils::make_type_info<MappedType>(),
+				utility::make_type_info<Container<KeyType, MappedType>>(),
+				utility::make_type_info<MappedType>(),
 				[](const boxed_value& object) -> boxed_value
 				{
 					const auto& source = detail::cast_helper<const Container<KeyType, boxed_value>&>::cast(object, nullptr);
@@ -778,7 +778,7 @@ namespace gal::lang::kits
 	decltype(auto) boxed_cast(const boxed_value& object, const type_conversion_state* conversion = nullptr)
 	{
 		if (not conversion ||
-		    object.type_info().bare_equal(utils::make_type_info<T>()) ||
+		    object.type_info().bare_equal(utility::make_type_info<T>()) ||
 		    (conversion && not conversion->operator*().is_convertible_type<T>()))
 		{
 			try { return detail::cast_helper<T>::cast(object, conversion); }

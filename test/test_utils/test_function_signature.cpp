@@ -1,13 +1,13 @@
 #include <gtest/gtest.h>
 
 #include <utils/function_signature.hpp>
-#include <kits/return_handler.hpp>
-#include <kits/proxy_function.hpp>
-#include <kits/call_function.hpp>
-#include <kits/register_function.hpp>
-#include <kits/bootstrap.hpp>
-#include <kits/proxy_constructor.hpp>
-#include <kits/dispatch.hpp>
+#include <gal/kits/return_handler.hpp>
+#include <gal/kits/proxy_function.hpp>
+#include <gal/kits/call_function.hpp>
+#include <gal/kits/register_function.hpp>
+#include <gal/kits/bootstrap.hpp>
+#include <gal/kits/proxy_constructor.hpp>
+#include <gal/kits/dispatch.hpp>
 
 using namespace gal::utils;
 

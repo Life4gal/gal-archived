@@ -6,12 +6,12 @@
 #include <vector>
 #include <utils/assert.hpp>
 #include <utils/algorithm.hpp>
-#include <defines.hpp>
+#include <gal/defines.hpp>
 #include <ranges>
-#include <kits/function_parameters.hpp>
-#include <kits/return_handler.hpp>
-#include<kits/dynamic_object.hpp>
-#include<kits/boxed_value_cast.hpp>
+#include <gal/kits/function_parameters.hpp>
+#include <gal/kits/return_handler.hpp>
+#include <gal/kits/dynamic_object.hpp>
+#include <gal/kits/boxed_value_cast.hpp>
 
 namespace gal::lang
 {
@@ -27,7 +27,7 @@ namespace gal::lang::kits
 		 * @brief Used by proxy_function_impl to return a list of all param types it contains.
 		 */
 		template<typename Result, typename... Params>
-		std::vector<gal_type_info> build_params_type_list(Result (*)(Params ...)) { return {utils::make_type_info<Result>(), utils::make_type_info<Params>()...}; }
+		std::vector<utility::gal_type_info> build_params_type_list(Result (*)(Params ...)) { return {utility::make_type_info<Result>(), utility::make_type_info<Params>()...}; }
 
 		/**
 		 * @brief Used by proxy_function_impl to determine if it is equivalent to another
@@ -107,7 +107,7 @@ namespace gal::lang::kits
 	{
 	public:
 		using param_name_type = std::string;
-		using param_type_type = detail::gal_type_info;
+		using param_type_type = utility::gal_type_info;
 
 		using param_type = std::pair<param_name_type, param_type_type>;
 		using param_type_container_type = std::vector<param_type>;
@@ -148,7 +148,7 @@ namespace gal::lang::kits
 		{
 			auto ret = params.to<std::vector>();
 
-			const auto dynamic_object_type_info = utils::make_type_info<dynamic_object>();
+			const auto dynamic_object_type_info = utility::make_type_info<dynamic_object>();
 
 			for (decltype(ret.size()) i = 0; i < ret.size(); ++i)
 			{
@@ -194,7 +194,7 @@ namespace gal::lang::kits
 		 */
 		[[nodiscard]] std::pair<bool, bool> match(const function_parameters& params, const type_conversion_state& conversion) const noexcept
 		{
-			const auto dynamic_object_type_info = utils::make_type_info<dynamic_object>();
+			const auto dynamic_object_type_info = utility::make_type_info<dynamic_object>();
 
 			bool need_conversion = false;
 
@@ -245,7 +245,7 @@ namespace gal::lang::kits
 	 * dispatch_engine only knows how to work with proxy_function, no other
 	 * function classes.
 	 */
-	class proxy_function_base  // NOLINT(cppcoreguidelines-pro-type-member-init)
+	class proxy_function_base// NOLINT(cppcoreguidelines-pro-type-member-init)
 	{
 	public:
 		proxy_function_base() = default;
@@ -261,7 +261,7 @@ namespace gal::lang::kits
 		using arity_size_type = arity_error::size_type;
 		constexpr static arity_size_type no_parameters_arity = -1;
 
-		using type_infos_type = std::vector<detail::gal_type_info>;
+		using type_infos_type = std::vector<utility::gal_type_info>;
 		using arguments_type = std::vector<boxed_value>;
 		using contained_functions_type = std::vector<std::shared_ptr<const proxy_function_base>>;
 
@@ -287,11 +287,11 @@ namespace gal::lang::kits
 		[[nodiscard]] virtual boxed_value do_invoke(const function_parameters& params, const type_conversion_state& conversion) const = 0;
 
 	public:
-		static bool compare_type_to_param(const utils::gal_type_info& ti, const boxed_value& object, const type_conversion_state& conversion) noexcept
+		static bool compare_type_to_param(const utility::gal_type_info& ti, const boxed_value& object, const type_conversion_state& conversion) noexcept
 		{
-			const auto boxed_value_type_info = utils::make_type_info<boxed_value>();
-			const auto boxed_number_type_info = utils::make_type_info<boxed_number>();
-			const auto function_type_info = utils::make_type_info<std::shared_ptr<const proxy_function_base>>();
+			const auto boxed_value_type_info = utility::make_type_info<boxed_value>();
+			const auto boxed_number_type_info = utility::make_type_info<boxed_number>();
+			const auto function_type_info = utility::make_type_info<std::shared_ptr<const proxy_function_base>>();
 
 			if (
 				ti.is_undefined() ||
@@ -412,11 +412,11 @@ namespace gal::lang::kits
 		private:
 			static type_infos_type build_param_type_list(const param_types& types)
 			{
-				std::vector ret{detail::type_info_factory<boxed_value>::make()};
+				std::vector ret{utility::detail::type_info_factory<boxed_value>::make()};
 
 				for (const auto& ti: types.types() | std::views::values)
 				{
-					if (ti.is_undefined()) { ret.push_back(detail::type_info_factory<boxed_value>::make()); }
+					if (ti.is_undefined()) { ret.push_back(utility::detail::type_info_factory<boxed_value>::make()); }
 					else { ret.push_back(ti); }
 				}
 
@@ -561,7 +561,7 @@ namespace gal::lang::kits
 
 			std::vector ret{types[0]};
 
-			for (decltype(arguments.size()) i = 0; i < arguments.size(); ++i) { if (arguments[i].type_info() == detail::type_info_factory<function_argument_placeholder>::make()) { ret.push_back(types[i + 1]); } }
+			for (decltype(arguments.size()) i = 0; i < arguments.size(); ++i) { if (arguments[i].type_info() == utility::detail::type_info_factory<function_argument_placeholder>::make()) { ret.push_back(types[i + 1]); } }
 
 			return ret;
 		}
@@ -587,7 +587,7 @@ namespace gal::lang::kits
 
 						while (not (it_param == end_param && it_arg == end_arg))
 						{
-							while (it_arg != end_arg && it_arg->type_info() != detail::type_info_factory<function_argument_placeholder>::make())
+							while (it_arg != end_arg && it_arg->type_info() != utility::detail::type_info_factory<function_argument_placeholder>::make())
 							{
 								ret.push_back(*it_arg);
 								++it_arg;
@@ -599,7 +599,7 @@ namespace gal::lang::kits
 								++it_param;
 							}
 
-							if (it_arg != end_arg && it_arg->type_info() == detail::type_info_factory<function_argument_placeholder>::make()) { ++it_arg; }
+							if (it_arg != end_arg && it_arg->type_info() == utility::detail::type_info_factory<function_argument_placeholder>::make()) { ++it_arg; }
 						}
 
 						return ret;
@@ -701,7 +701,7 @@ namespace gal::lang::kits
 		type_infos_type param_types_;
 		T Class::* attribute_;
 
-		static type_infos_type param_types() { return {utils::make_type_info<T>(), utils::make_type_info<Class>()}; }
+		static type_infos_type param_types() { return {utility::make_type_info<T>(), utility::make_type_info<Class>()}; }
 
 		template<typename U>
 		auto do_invoke(Class* object) const
@@ -747,7 +747,7 @@ namespace gal::lang::kits
 		{
 			if (static_cast<arity_size_type>(params.size()) != arity_size) { return false; }
 
-			return params.front().type_info().bare_equal(utils::make_type_info<Class>());
+			return params.front().type_info().bare_equal(utility::make_type_info<Class>());
 		}
 	};
 
@@ -911,8 +911,7 @@ namespace gal::lang::kits
 				std::size_t num_diffs = 0;
 
 				utils::zip_invoke(
-						[&num_diffs](const auto& ti, const auto& param)
-						{ if (not ti.bare_equal(param.type_info())) { ++num_diffs; } },
+						[&num_diffs](const auto& ti, const auto& param) { if (not ti.bare_equal(param.type_info())) { ++num_diffs; } },
 						function->types().begin() + 1,
 						function->types().end(),
 						parameters.begin());

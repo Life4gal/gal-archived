@@ -3,8 +3,8 @@
 #ifndef GAL_LANG_KITS_CALL_FUNCTION_HPP
 #define GAL_LANG_KITS_CALL_FUNCTION_HPP
 
-#include <kits/boxed_value_cast.hpp>
-#include <kits/proxy_function.hpp>
+#include <gal/kits/boxed_value_cast.hpp>
+#include <gal/kits/proxy_function.hpp>
 
 namespace gal::lang::kits
 {
@@ -95,7 +95,7 @@ namespace gal::lang::kits
 					       static_cast<decltype(detail::arity(static_cast<Function*>(nullptr)))>(function->get_arity()) == detail::arity(static_cast<Function*>(nullptr));
 				});
 
-		if (not has_arity_match) { throw bad_boxed_cast{utils::make_type_info<const_proxy_function>(), typeid(std::function<Function>)}; }
+		if (not has_arity_match) { throw bad_boxed_cast{utility::make_type_info<const_proxy_function>(), typeid(std::function<Function>)}; }
 
 		return detail::make_function_invoker(static_cast<Function*>(nullptr), functions, conversion);
 	}
@@ -143,7 +143,7 @@ namespace gal::lang::kits
 					const type_conversion_state* conversion
 					)
 			{
-				if (object.type_info().bare_equal(utils::make_type_info<const_proxy_function>())) { return make_functor<FunctionSignature>(object, conversion); }
+				if (object.type_info().bare_equal(utility::make_type_info<const_proxy_function>())) { return make_functor<FunctionSignature>(object, conversion); }
 				return default_cast_invoker<std::function<FunctionSignature>>::cast(object, conversion);
 			}
 		};
@@ -158,7 +158,7 @@ namespace gal::lang::kits
 					const boxed_value& object,
 					const type_conversion_state* conversion)
 			{
-				if (object.type_info().bare_equal(utils::make_type_info<const_proxy_function>())) { return make_functor<FunctionSignature>(object, conversion); }
+				if (object.type_info().bare_equal(utility::make_type_info<const_proxy_function>())) { return make_functor<FunctionSignature>(object, conversion); }
 				return default_cast_invoker<const std::function<FunctionSignature>>::cast(object, conversion);
 			}
 		};
@@ -174,7 +174,7 @@ namespace gal::lang::kits
 					const type_conversion_state* conversion
 					)
 			{
-				if (object.type_info().bare_equal(utils::make_type_info<const_proxy_function>())) { return make_functor<FunctionSignature>(object, conversion); }
+				if (object.type_info().bare_equal(utility::make_type_info<const_proxy_function>())) { return make_functor<FunctionSignature>(object, conversion); }
 				return default_cast_invoker<const std::function<FunctionSignature>&>::cast(object, conversion);
 			}
 		};

@@ -4,7 +4,7 @@
 #define GAL_LANG_KITS_REGISTER_FUNCTION_HPP
 
 #include<utils/function_signature.hpp>
-#include<kits/proxy_function.hpp>
+#include<gal/kits/proxy_function.hpp>
 
 namespace gal::lang::kits
 {
