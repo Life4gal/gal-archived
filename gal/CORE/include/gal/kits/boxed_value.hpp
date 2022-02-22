@@ -7,16 +7,10 @@
 #include <memory>
 #include <string>
 #include <any>
-#include <utils/type_info.hpp>
+#include <gal/utility/type_info.hpp>
 
 namespace gal::lang::kits
 {
-	namespace detail
-	{
-		using utils::gal_type_info;
-		using namespace utils::detail;
-	}
-
 	class boxed_value
 	{
 	public:
@@ -27,7 +21,7 @@ namespace gal::lang::kits
 		{
 			using attributes_type = std::map<std::string, std::shared_ptr<real_data>>;
 
-			utils::gal_type_info ti;
+			utility::gal_type_info ti;
 			std::any object;
 			void* data;
 			const void* const_data;
@@ -36,7 +30,7 @@ namespace gal::lang::kits
 			bool is_return_value;
 
 			real_data(
-					const utils::gal_type_info& ti,
+					const utility::gal_type_info& ti,
 					std::any to,
 					const void* const_data,
 					const bool is_reference,
@@ -82,7 +76,7 @@ namespace gal::lang::kits
 			static auto make()
 			{
 				return std::make_shared<real_data>(
-						utils::gal_type_info{},
+						utility::gal_type_info{},
 						std::any{},
 						nullptr,
 						false,
@@ -92,7 +86,7 @@ namespace gal::lang::kits
 			static auto make(void_type, bool is_return_value)
 			{
 				return std::make_shared<real_data>(
-						utils::detail::type_info_factory<void>::make(),
+						utility::detail::type_info_factory<void>::make(),
 						std::any{},
 						nullptr,
 						false,
@@ -103,7 +97,7 @@ namespace gal::lang::kits
 			static auto make(const std::shared_ptr<T>& object, bool is_return_value)
 			{
 				return std::make_shared<real_data>(
-						detail::type_info_factory<T>::make(),
+						utility::detail::type_info_factory<T>::make(),
 						std::any{object},
 						object.get(),
 						false,
@@ -115,7 +109,7 @@ namespace gal::lang::kits
 			{
 				auto ptr = object.get();
 				return std::make_shared<real_data>(
-						detail::type_info_factory<T>::make(),
+						utility::detail::type_info_factory<T>::make(),
 						std::any{std::move(object)},
 						ptr,
 						false,
@@ -136,7 +130,7 @@ namespace gal::lang::kits
 			{
 				auto ptr = &object.get();
 				return std::make_shared<real_data>(
-						detail::type_info_factory<T>::make(),
+						utility::detail::type_info_factory<T>::make(),
 						std::any{std::move(object)},
 						ptr,
 						true,
@@ -148,7 +142,7 @@ namespace gal::lang::kits
 			{
 				auto ptr = object.get();
 				return std::make_shared<real_data>(
-						detail::type_info_factory<T>::make(),
+						utility::detail::type_info_factory<T>::make(),
 						std::any{std::make_shared<std::unique_ptr<T>>(std::move(object))},
 						ptr,
 						true,
@@ -156,7 +150,7 @@ namespace gal::lang::kits
 			}
 
 			template<typename T>
-			static auto make(T t, const bool is_return_value) { return make(std::make_shared<T>(std::move(t)), is_return_value); }
+			static auto make(T t, const bool is_return_value) { return make(std::move(std::make_shared<T>(std::move(t))), is_return_value); }
 		};
 
 		std::shared_ptr<real_data> data_;
@@ -193,7 +187,7 @@ namespace gal::lang::kits
 			return *this;
 		}
 
-		[[nodiscard]] const utils::gal_type_info& type_info() const noexcept { return data_->ti; }
+		[[nodiscard]] const utility::gal_type_info& type_info() const noexcept { return data_->ti; }
 
 		/**
 		 * @brief return true if the object is uninitialized
@@ -212,7 +206,7 @@ namespace gal::lang::kits
 
 		void reset_return_value() const noexcept { data_->is_return_value = false; }
 
-		[[nodiscard]] bool is_type_of(const utils::gal_type_info& ti) const noexcept { return data_->ti.bare_equal(ti); }
+		[[nodiscard]] bool is_type_of(const utility::gal_type_info& ti) const noexcept { return data_->ti.bare_equal(ti); }
 
 		template<typename T>
 		auto pointer_sentinel(std::shared_ptr<T>& ptr) const noexcept
@@ -293,7 +287,7 @@ namespace gal::lang::kits
 		 * @return Immutable boxed_value
 		 */
 		template<typename T>
-		boxed_value make_const_boxed_value(T* object) { return {const_cast<std::add_const_t<T>*>(object)}; }
+		boxed_value make_const_boxed_value(T* object) { return boxed_value{const_cast<std::add_const_t<T>*>(object)}; }
 
 		/**
 		 * @brief Takes a std::shared_ptr to a value, adds const to the pointed to type and
@@ -302,7 +296,7 @@ namespace gal::lang::kits
 		 * @return Immutable boxed_value
 		 */
 		template<typename T>
-		boxed_value make_const_boxed_value(const std::shared_ptr<T>& object) { return {std::const_pointer_cast<std::add_const_t<T>>(object)}; }
+		boxed_value make_const_boxed_value(const std::shared_ptr<T>& object) { return boxed_value{std::const_pointer_cast<std::add_const_t<T>>(object)}; }
 
 		/**
 		 * @brief Takes a std::reference_wrapper value, adds const to the referenced type
@@ -311,7 +305,7 @@ namespace gal::lang::kits
 		 * @return Immutable boxed_value
 		 */
 		template<typename T>
-		boxed_value make_const_boxed_value(const std::reference_wrapper<T>& object) { return {std::cref(object.get())}; }
+		boxed_value make_const_boxed_value(const std::reference_wrapper<T>& object) { return boxed_value{std::cref(object.get())}; }
 	}
 
 	/**
@@ -321,7 +315,7 @@ namespace gal::lang::kits
 	 * @param t The value to box
 	 */
 	template<typename T>
-	boxed_value var(T&& t) { return {std::forward<T>(t)}; }
+	boxed_value var(T&& t) { return boxed_value{std::forward<T>(t)}; }
 
 	/**
 	 * @brief Takes an object and returns an immutable boxed_value. If the object is a

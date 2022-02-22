@@ -34,8 +34,8 @@ namespace gal::utils
 		template<typename T>
 		constexpr explicit function_signature(T&&) noexcept { }// NOLINT(bugprone-forwarding-reference-overload)
 
-		template<typename T>
-		constexpr explicit operator T() noexcept = delete;
+		// template<typename T>
+		// constexpr explicit operator T() noexcept = delete;
 	};
 
 	// normal function
@@ -120,8 +120,7 @@ namespace gal::utils
 	template<typename Function>
 	constexpr auto make_function_signature(const Function& function) noexcept
 	{
-		using invokable = std::conditional_t<requires{function();}, std::true_type, std::false_type>;
-		if constexpr (invokable::value)
+		if constexpr (requires { &Function::operator(); })
 		{
 			return function_signature<
 				typename decltype(function_signature{&std::decay_t<Function>::operator()})::return_type,
@@ -133,6 +132,15 @@ namespace gal::utils
 		}
 		else { return function_signature{function}; }
 	}
+
+	template<typename ReturnType, bool IsNoexcept, bool IsMember, bool IsMemberObject, bool IsObject, typename... Params>
+	using function_signature_t = function_signature<ReturnType, detail::function_param_type<Params...>, IsNoexcept, IsMember, IsMemberObject, IsObject>;
+
+	/**
+	 * @brief For call an object's member function.
+	 */
+	template<typename Object, typename ReturnType, typename ObjectType, typename... Params, bool IsNoexcept, bool IsMember, bool IsMemberObject, bool IsObject>
+	constexpr ObjectType get_object_instance(function_signature<ReturnType, detail::function_param_type<ObjectType, Params...>, IsNoexcept, IsMember, IsMemberObject, IsObject>, Object&& object) noexcept { return static_cast<ObjectType>(std::forward<Object>(object)); }
 }
 
 #endif // GAL_UTILS_FUNCTION_SIGNATURE_HPP

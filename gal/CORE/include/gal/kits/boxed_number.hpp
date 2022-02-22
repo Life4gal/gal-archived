@@ -3,11 +3,10 @@
 #ifndef GAL_LANG_KITS_BOXED_NUMBER_HPP
 #define GAL_LANG_KITS_BOXED_NUMBER_HPP
 
-#include <defines.hpp>
-#include <kits/boxed_value.hpp>
-#include <kits/boxed_value_cast.hpp>
-#include <language/algebraic.hpp>
-#include<utils/type_info.hpp>
+#include <gal/kits/boxed_value.hpp>
+#include <gal/kits/boxed_value_cast.hpp>
+#include <gal/language/algebraic.hpp>
+#include <gal/utility/type_info.hpp>
 #include <utils/format.hpp>
 
 namespace gal::lang::kits
@@ -81,31 +80,31 @@ namespace gal::lang::kits
 		{
 			const auto& ti = object.type_info();
 
-			if (ti == utils::make_type_info<std::int8_t>()) { return numeric_type::int8_type; }
-			if (ti == utils::make_type_info<std::uint8_t>()) { return numeric_type::uint8_type; }
-			if (ti == utils::make_type_info<std::int16_t>()) { return numeric_type::int16_type; }
-			if (ti == utils::make_type_info<std::uint16_t>()) { return numeric_type::uint16_type; }
-			if (ti == utils::make_type_info<std::int32_t>()) { return numeric_type::int32_type; }
-			if (ti == utils::make_type_info<std::uint32_t>()) { return numeric_type::uint32_type; }
-			if (ti == utils::make_type_info<std::int64_t>()) { return numeric_type::int64_type; }
-			if (ti == utils::make_type_info<std::uint64_t>()) { return numeric_type::uint64_type; }
-			if (ti == utils::make_type_info<float>()) { return numeric_type::float_type; }
-			if (ti == utils::make_type_info<double>()) { return numeric_type::double_type; }
-			if (ti == utils::make_type_info<long double>()) { return numeric_type::long_double_type; }
+			if (ti == utility::make_type_info<std::int8_t>()) { return numeric_type::int8_type; }
+			if (ti == utility::make_type_info<std::uint8_t>()) { return numeric_type::uint8_type; }
+			if (ti == utility::make_type_info<std::int16_t>()) { return numeric_type::int16_type; }
+			if (ti == utility::make_type_info<std::uint16_t>()) { return numeric_type::uint16_type; }
+			if (ti == utility::make_type_info<std::int32_t>()) { return numeric_type::int32_type; }
+			if (ti == utility::make_type_info<std::uint32_t>()) { return numeric_type::uint32_type; }
+			if (ti == utility::make_type_info<std::int64_t>()) { return numeric_type::int64_type; }
+			if (ti == utility::make_type_info<std::uint64_t>()) { return numeric_type::uint64_type; }
+			if (ti == utility::make_type_info<float>()) { return numeric_type::float_type; }
+			if (ti == utility::make_type_info<double>()) { return numeric_type::double_type; }
+			if (ti == utility::make_type_info<long double>()) { return numeric_type::long_double_type; }
 
-			if (ti == utils::make_type_info<char>()) { return get_integral_type<sizeof(char), std::is_signed_v<char>>(); }
-			if (ti == utils::make_type_info<unsigned char>()) { return get_integral_type<sizeof(unsigned char), false>(); }
-			if (ti == utils::make_type_info<wchar_t>()) { return get_integral_type<sizeof(wchar_t), std::is_signed_v<wchar_t>>(); }
-			if (ti == utils::make_type_info<char8_t>()) { return get_integral_type<sizeof(char8_t), std::is_signed_v<char8_t>>(); }
-			if (ti == utils::make_type_info<char16_t>()) { return get_integral_type<sizeof(char16_t), std::is_signed_v<char16_t>>(); }
-			if (ti == utils::make_type_info<char32_t>()) { return get_integral_type<sizeof(char32_t), std::is_signed_v<char32_t>>(); }
-			if (ti == utils::make_type_info<short>()) { return get_integral_type<sizeof(short), true>(); }
-			if (ti == utils::make_type_info<unsigned short>()) { return get_integral_type<sizeof(unsigned short), false>(); }
-			if (ti == utils::make_type_info<int>()) { return get_integral_type<sizeof(int), true>(); }
-			if (ti == utils::make_type_info<unsigned int>()) { return get_integral_type<sizeof(unsigned int), false>(); }
-			if (ti == utils::make_type_info<long>()) { return get_integral_type<sizeof(long), true>(); }
-			if (ti == utils::make_type_info<unsigned long>()) { return get_integral_type<sizeof(unsigned long), false>(); }
-			if (ti == utils::make_type_info<long long>()) { return get_integral_type<sizeof(long long), true>(); }
+			if (ti == utility::make_type_info<char>()) { return get_integral_type<sizeof(char), std::is_signed_v<char>>(); }
+			if (ti == utility::make_type_info<unsigned char>()) { return get_integral_type<sizeof(unsigned char), false>(); }
+			if (ti == utility::make_type_info<wchar_t>()) { return get_integral_type<sizeof(wchar_t), std::is_signed_v<wchar_t>>(); }
+			if (ti == utility::make_type_info<char8_t>()) { return get_integral_type<sizeof(char8_t), std::is_signed_v<char8_t>>(); }
+			if (ti == utility::make_type_info<char16_t>()) { return get_integral_type<sizeof(char16_t), std::is_signed_v<char16_t>>(); }
+			if (ti == utility::make_type_info<char32_t>()) { return get_integral_type<sizeof(char32_t), std::is_signed_v<char32_t>>(); }
+			if (ti == utility::make_type_info<short>()) { return get_integral_type<sizeof(short), true>(); }
+			if (ti == utility::make_type_info<unsigned short>()) { return get_integral_type<sizeof(unsigned short), false>(); }
+			if (ti == utility::make_type_info<int>()) { return get_integral_type<sizeof(int), true>(); }
+			if (ti == utility::make_type_info<unsigned int>()) { return get_integral_type<sizeof(unsigned int), false>(); }
+			if (ti == utility::make_type_info<long>()) { return get_integral_type<sizeof(long), true>(); }
+			if (ti == utility::make_type_info<unsigned long>()) { return get_integral_type<sizeof(unsigned long), false>(); }
+			if (ti == utility::make_type_info<long long>()) { return get_integral_type<sizeof(long long), true>(); }
 
 			throw std::bad_any_cast{};
 		}
@@ -139,7 +138,7 @@ namespace gal::lang::kits
 		template<typename Lhs, typename Rhs>
 		static auto do_binary_invoke(const boxed_value& object, const algebraic_invoker::operations operation, Lhs* lhs_return, const Lhs lhs_part, const Rhs rhs_part)
 		{
-			using common_type = typename std::conditional_t<  // NOLINT(misc-redundant-expression)
+			using common_type = typename std::conditional_t<// NOLINT(misc-redundant-expression)
 				(std::is_same_v<Lhs, bool> || std::is_same_v<Rhs, bool>) ||
 				(std::is_floating_point_v<Lhs> || std::is_floating_point_v<Rhs>) ||
 				(std::is_signed_v<Lhs> == std::is_signed_v<Rhs>),
@@ -164,6 +163,7 @@ namespace gal::lang::kits
 						*lhs_return = static_cast<Lhs>(static_cast<common_type>(rhs_part));
 						return object;
 					}
+					break;
 				}
 				case equal:
 				{
@@ -416,23 +416,23 @@ namespace gal::lang::kits
 		template<typename Target, typename Source>
 		static Target cast_to(const boxed_value& value) { return static_cast<Target>(*static_cast<const Source*>(value.get_const_ptr())); }
 
-		boxed_value value_;
-
 	public:
+		boxed_value value;
+
 		boxed_number()
-			: value_{0} {}
+			: value{0} {}
 
 		explicit boxed_number(boxed_value value)
-			: value_{std::move(value)} { check_boxed_number(value_); }
+			: value{std::move(value)} { check_boxed_number(value); }
 
 		template<typename T>
 		explicit boxed_number(T t)
-			: value_{t} { check_boxed_number(value_); }
+			: value{t} { check_boxed_number(value); }
 
 		static void check_boxed_number(const boxed_value& value)
 		{
 			if (const auto& ti = value.type_info();
-				ti == utils::make_type_info<bool>() || not ti.is_arithmetic()) { throw std::bad_any_cast{}; }
+				ti == utility::make_type_info<bool>() || not ti.is_arithmetic()) { throw std::bad_any_cast{}; }
 		}
 
 		template<typename Source, typename Target>
@@ -447,9 +447,9 @@ namespace gal::lang::kits
 		[[nodiscard]] static bool is_floating_point(const boxed_value& value)
 		{
 			if (const auto& ti = value.type_info();
-				ti == utils::make_type_info<float>() ||
-				ti == utils::make_type_info<double>() ||
-				ti == utils::make_type_info<long double>()
+				ti == utility::make_type_info<float>() ||
+				ti == utility::make_type_info<double>() ||
+				ti == utility::make_type_info<long double>()
 			) { return true; }
 			return false;
 		}
@@ -457,20 +457,20 @@ namespace gal::lang::kits
 		template<typename Target>
 		[[nodiscard]] Target as() const
 		{
-			switch (get_type(value_))
+			switch (get_type(value))
 			{
 					using enum numeric_type;
-				case int8_type: { return cast_to<Target, std::int8_t>(value_); }
-				case uint8_type: { return cast_to<Target, std::uint8_t>(value_); }
-				case int16_type: { return cast_to<Target, std::int16_t>(value_); }
-				case uint16_type: { return cast_to<Target, std::uint16_t>(value_); }
-				case int32_type: { return cast_to<Target, std::int32_t>(value_); }
-				case uint32_type: { return cast_to<Target, std::uint32_t>(value_); }
-				case int64_type: { return cast_to<Target, std::int64_t>(value_); }
-				case uint64_type: { return cast_to<Target, std::uint64_t>(value_); }
-				case float_type: { return cast_to<Target, float>(value_); }
-				case double_type: { return cast_to<Target, double>(value_); }
-				case long_double_type: { return cast_to<Target, long double>(value_); }
+				case int8_type: { return cast_to<Target, std::int8_t>(value); }
+				case uint8_type: { return cast_to<Target, std::uint8_t>(value); }
+				case int16_type: { return cast_to<Target, std::int16_t>(value); }
+				case uint16_type: { return cast_to<Target, std::uint16_t>(value); }
+				case int32_type: { return cast_to<Target, std::int32_t>(value); }
+				case uint32_type: { return cast_to<Target, std::uint32_t>(value); }
+				case int64_type: { return cast_to<Target, std::int64_t>(value); }
+				case uint64_type: { return cast_to<Target, std::uint64_t>(value); }
+				case float_type: { return cast_to<Target, float>(value); }
+				case double_type: { return cast_to<Target, double>(value); }
+				case long_double_type: { return cast_to<Target, long double>(value); }
 			}
 
 			throw std::bad_any_cast{};
@@ -479,103 +479,103 @@ namespace gal::lang::kits
 		template<typename Target>
 		[[nodiscard]] Target as_checked() const
 		{
-			switch (get_type(value_))
+			switch (get_type(value))
 			{
 					using enum numeric_type;
 				case int8_type:
 				{
 					check_type<std::int8_t, Target>();
-					return cast_to<Target, std::int8_t>(value_);
+					return cast_to<Target, std::int8_t>(value);
 				}
 				case uint8_type:
 				{
 					check_type<std::uint8_t, Target>();
-					return cast_to<Target, std::uint8_t>(value_);
+					return cast_to<Target, std::uint8_t>(value);
 				}
 				case int16_type:
 				{
 					check_type<std::int16_t, Target>();
-					return cast_to<Target, std::int16_t>(value_);
+					return cast_to<Target, std::int16_t>(value);
 				}
 				case uint16_type:
 				{
 					check_type<std::uint16_t, Target>();
-					return cast_to<Target, std::uint16_t>(value_);
+					return cast_to<Target, std::uint16_t>(value);
 				}
 				case int32_type:
 				{
 					check_type<std::int32_t, Target>();
-					return cast_to<Target, std::int32_t>(value_);
+					return cast_to<Target, std::int32_t>(value);
 				}
 				case uint32_type:
 				{
 					check_type<std::uint32_t, Target>();
-					return cast_to<Target, std::uint32_t>(value_);
+					return cast_to<Target, std::uint32_t>(value);
 				}
 				case int64_type:
 				{
 					check_type<std::int64_t, Target>();
-					return cast_to<Target, std::int64_t>(value_);
+					return cast_to<Target, std::int64_t>(value);
 				}
 				case uint64_type:
 				{
 					check_type<std::uint64_t, Target>();
-					return cast_to<Target, std::uint64_t>(value_);
+					return cast_to<Target, std::uint64_t>(value);
 				}
 				case float_type:
 				{
 					check_type<float, Target>();
-					return cast_to<Target, float>(value_);
+					return cast_to<Target, float>(value);
 				}
 				case double_type:
 				{
 					check_type<double, Target>();
-					return cast_to<Target, double>(value_);
+					return cast_to<Target, double>(value);
 				}
 				case long_double_type:
 				{
 					check_type<long double, Target>();
-					return cast_to<Target, long double>(value_);
+					return cast_to<Target, long double>(value);
 				}
 			}
 
 			throw std::bad_any_cast{};
 		}
 
-		[[nodiscard]] boxed_number as(const detail::gal_type_info& ti) const
+		[[nodiscard]] boxed_number as(const utility::gal_type_info& ti) const
 		{
-			if (ti.bare_equal(utils::make_type_info<std::int8_t>())) { return boxed_number{as<std::int8_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<std::uint8_t>())) { return boxed_number{as<std::uint8_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<std::int16_t>())) { return boxed_number{as<std::int16_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<std::uint16_t>())) { return boxed_number{as<std::uint16_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<std::int32_t>())) { return boxed_number{as<std::int32_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<std::uint32_t>())) { return boxed_number{as<std::uint32_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<std::int64_t>())) { return boxed_number{as<std::int64_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<std::uint64_t>())) { return boxed_number{as<std::uint64_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<float>())) { return boxed_number{as<float>()}; }
-			if (ti.bare_equal(utils::make_type_info<double>())) { return boxed_number{as<double>()}; }
-			if (ti.bare_equal(utils::make_type_info<long double>())) { return boxed_number{as<long double>()}; }
+			if (ti.bare_equal(utility::make_type_info<std::int8_t>())) { return boxed_number{as<std::int8_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<std::uint8_t>())) { return boxed_number{as<std::uint8_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<std::int16_t>())) { return boxed_number{as<std::int16_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<std::uint16_t>())) { return boxed_number{as<std::uint16_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<std::int32_t>())) { return boxed_number{as<std::int32_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<std::uint32_t>())) { return boxed_number{as<std::uint32_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<std::int64_t>())) { return boxed_number{as<std::int64_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<std::uint64_t>())) { return boxed_number{as<std::uint64_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<float>())) { return boxed_number{as<float>()}; }
+			if (ti.bare_equal(utility::make_type_info<double>())) { return boxed_number{as<double>()}; }
+			if (ti.bare_equal(utility::make_type_info<long double>())) { return boxed_number{as<long double>()}; }
 
-			if (ti.bare_equal(utils::make_type_info<char>())) { return boxed_number{as<char>()}; }
-			if (ti.bare_equal(utils::make_type_info<unsigned char>())) { return boxed_number{as<unsigned char>()}; }
-			if (ti.bare_equal(utils::make_type_info<wchar_t>())) { return boxed_number{as<wchar_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<char8_t>())) { return boxed_number{as<char8_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<char16_t>())) { return boxed_number{as<char16_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<char32_t>())) { return boxed_number{as<char32_t>()}; }
-			if (ti.bare_equal(utils::make_type_info<short>())) { return boxed_number{as<short>()}; }
-			if (ti.bare_equal(utils::make_type_info<unsigned short>())) { return boxed_number{as<unsigned short>()}; }
-			if (ti.bare_equal(utils::make_type_info<int>())) { return boxed_number{as<int>()}; }
-			if (ti.bare_equal(utils::make_type_info<unsigned int>())) { return boxed_number{as<unsigned int>()}; }
-			if (ti.bare_equal(utils::make_type_info<long>())) { return boxed_number{as<long>()}; }
-			if (ti.bare_equal(utils::make_type_info<unsigned long>())) { return boxed_number{as<unsigned long>()}; }
-			if (ti.bare_equal(utils::make_type_info<long long>())) { return boxed_number{as<long long>()}; }
+			if (ti.bare_equal(utility::make_type_info<char>())) { return boxed_number{as<char>()}; }
+			if (ti.bare_equal(utility::make_type_info<unsigned char>())) { return boxed_number{as<unsigned char>()}; }
+			if (ti.bare_equal(utility::make_type_info<wchar_t>())) { return boxed_number{as<wchar_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<char8_t>())) { return boxed_number{as<char8_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<char16_t>())) { return boxed_number{as<char16_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<char32_t>())) { return boxed_number{as<char32_t>()}; }
+			if (ti.bare_equal(utility::make_type_info<short>())) { return boxed_number{as<short>()}; }
+			if (ti.bare_equal(utility::make_type_info<unsigned short>())) { return boxed_number{as<unsigned short>()}; }
+			if (ti.bare_equal(utility::make_type_info<int>())) { return boxed_number{as<int>()}; }
+			if (ti.bare_equal(utility::make_type_info<unsigned int>())) { return boxed_number{as<unsigned int>()}; }
+			if (ti.bare_equal(utility::make_type_info<long>())) { return boxed_number{as<long>()}; }
+			if (ti.bare_equal(utility::make_type_info<unsigned long>())) { return boxed_number{as<unsigned long>()}; }
+			if (ti.bare_equal(utility::make_type_info<long long>())) { return boxed_number{as<long long>()}; }
 
 			throw std::bad_any_cast{};
 		}
 
 		[[nodiscard]] std::string to_string() const
 		{
-			switch (get_type(value_))
+			switch (get_type(value))
 			{
 					using enum numeric_type;
 				case int8_type: { return std_format::format("{}", as<std::int8_t>()); }
@@ -594,65 +594,67 @@ namespace gal::lang::kits
 			throw std::bad_any_cast{};
 		}
 
-		[[nodiscard]] friend boxed_number assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend bool operator==(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::equal, lhs.value_, rhs.value_)); }
+		[[nodiscard]] static bool operator_equal(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::equal, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend bool operator!=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::not_equal, lhs.value_, rhs.value_)); }
+		[[nodiscard]] static bool operator_not_equal(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::not_equal, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend bool operator<(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::less_than, lhs.value_, rhs.value_)); }
+		[[nodiscard]] static bool operator_less_than(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::less_than, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend bool operator<=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::less_equal, lhs.value_, rhs.value_)); }
+		[[nodiscard]] static bool operator_less_equal(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::less_equal, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend bool operator>(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::greater_than, lhs.value_, rhs.value_)); }
+		[[nodiscard]] static bool operator_greater_than(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::greater_than, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend bool operator>=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::greater_equal, lhs.value_, rhs.value_)); }
+		[[nodiscard]] static bool operator_greater_equal(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::greater_equal, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend boxed_number operator+(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::plus, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_plus(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::plus, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator-(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::minus, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_minus(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::minus, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator*(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::multiply, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_multiply(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::multiply, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator/(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::divide, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_divide(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::divide, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator%(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::remainder, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_remainder(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::remainder, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator+=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::plus_assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_plus_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::plus_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator-=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::minus_assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_minus_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::minus_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator*=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::multiply_assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_multiply_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::multiply_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator/=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::divide_assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_divide_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::divide_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator%=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::remainder_assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_remainder_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::remainder_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator<<(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_left, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_shift_left(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_left, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator>>(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_right, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_shift_right(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_right, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator&(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_and, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_and(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_and, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator|(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_or, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_or(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_or, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator^(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_xor, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_xor(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_xor, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator<<=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_left_assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_shift_left_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_left_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator>>=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_right_assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_shift_right_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_right_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator&=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_and_assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_and_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_and_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator|=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_or_assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_or_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_or_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator^=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_xor_assign, lhs.value_, rhs.value_)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_xor_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_xor_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator+(const boxed_number& self) { return boxed_number{unary_invoke(self.value_, algebraic_invoker::operations::unary_plus)}; }
+		[[nodiscard]] static boxed_number operator_unary_not(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_not)}; }
 
-		[[nodiscard]] friend boxed_number operator-(const boxed_number& self) { return boxed_number{unary_invoke(self.value_, algebraic_invoker::operations::unary_minus)}; }
+		[[nodiscard]] static boxed_number operator_unary_plus(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_plus)}; }
 
-		[[nodiscard]] friend boxed_number operator~(const boxed_number& self) { return boxed_number{unary_invoke(self.value_, algebraic_invoker::operations::unary_bitwise_complement)}; }
+		[[nodiscard]] static boxed_number operator_unary_minus(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_minus)}; }
+
+		[[nodiscard]] static boxed_number operator_unary_bitwise_complement(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_bitwise_complement)}; }
 	};
 
 	namespace detail

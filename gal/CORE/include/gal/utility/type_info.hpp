@@ -1,15 +1,15 @@
 #pragma once
 
-#ifndef GAL_UTILS_TYPE_INFO_HPP
-#define GAL_UTILS_TYPE_INFO_HPP
+#ifndef GAL_LANG_UTILITY_TYPE_INFO_HPP
+	#define GAL_LANG_UTILITY_TYPE_INFO_HPP
 
 #include<type_traits>
 #include<typeinfo>
 #include<memory>
 
-namespace gal::utils
+namespace gal::lang::utility
 {
-	// stl 's type_info in the global namespace :(
+	// MSVC' s stl 's type_info in the global namespace :(
 	class gal_type_info
 	{
 	public:
@@ -245,4 +245,4 @@ namespace gal::utils
 	constexpr auto make_type_info(const T&) noexcept { return detail::type_info_factory<T>::make(); }
 }
 
-#endif // GAL_UTILS_TYPE_INFO_HPP
+#endif // GAL_LANG_UTILITY_TYPE_INFO_HPP
