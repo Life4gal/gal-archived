@@ -34,8 +34,8 @@ namespace gal::utils
 		template<typename T>
 		constexpr explicit function_signature(T&&) noexcept { }// NOLINT(bugprone-forwarding-reference-overload)
 
-		template<typename T>
-		constexpr explicit operator T() noexcept = delete;
+		// template<typename T>
+		// constexpr explicit operator T() noexcept = delete;
 	};
 
 	// normal function
@@ -120,8 +120,7 @@ namespace gal::utils
 	template<typename Function>
 	constexpr auto make_function_signature(const Function& function) noexcept
 	{
-		using invokable = std::conditional_t<requires{function();}, std::true_type, std::false_type>;
-		if constexpr (invokable::value)
+		if constexpr (requires { &Function::operator(); })
 		{
 			return function_signature<
 				typename decltype(function_signature{&std::decay_t<Function>::operator()})::return_type,

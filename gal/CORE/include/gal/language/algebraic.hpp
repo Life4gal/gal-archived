@@ -4,6 +4,7 @@
 #define GAL_LANG_LANGUAGE_ALGEBRAIC_HPP
 
 #include <utils/hash.hpp>
+#include <gal/defines.hpp>
 
 namespace gal::lang
 {
@@ -89,45 +90,45 @@ namespace gal::lang
 		{
 			constexpr operation_string_type operation_names[]
 			{
-					{"unknown"},
+					{operator_unknown_name::value},
 
-					{"="},
-					{"=="},
-					{"!="},
+					{operator_assign_name::value},
+					{operator_equal_name::value},
+					{operator_not_equal_name::value},
 
-					{"<"},
-					{"<="},
-					{">"},
-					{">="},
+					{operator_less_than_name::value},
+					{operator_less_equal_name::value},
+					{operator_greater_than_name::value},
+					{operator_greater_equal_name::value},
 
-					{"+"},
-					{"-"},
-					{"*"},
-					{"/"},
-					{"%"},
+					{operator_plus_name::value},
+					{operator_minus_name::value},
+					{operator_multiply_name::value},
+					{operator_divide_name::value},
+					{operator_remainder_name::value},
 
-					{"+="},
-					{"-="},
-					{"*="},
-					{"/="},
-					{"%="},
+					{operator_plus_assign_name::value},
+					{operator_minus_assign_name::value},
+					{operator_multiply_assign_name::value},
+					{operator_divide_assign_name::value},
+					{operator_remainder_assign_name::value},
 
-					{"<<"},
-					{">>"},
-					{"&"},
-					{"|"},
-					{"^"},
+					{operator_bitwise_shift_left_name::value},
+					{operator_bitwise_shift_right_name::value},
+					{operator_bitwise_and_name::value},
+					{operator_bitwise_or_name::value},
+					{operator_bitwise_xor_name::value},
 
-					{"<<="},
-					{">>="},
-					{"&="},
-					{"|="},
-					{"^="},
+					{operator_bitwise_shift_left_assign_name::value},
+					{operator_bitwise_shift_right_assign_name::value},
+					{operator_bitwise_and_assign_name::value},
+					{operator_bitwise_or_assign_name::value},
+					{operator_bitwise_xor_assign_name::value},
 
-					{"!"},
-					{"+"},
-					{"-"},
-					{"~"}
+					{operator_unary_not_name::value},
+					{operator_unary_plus_name::value},
+					{operator_unary_minus_name::value},
+					{operator_unary_bitwise_complement_name::value}
 			};
 
 			return operation_names[static_cast<std::size_t>(operation)];

@@ -321,7 +321,7 @@ namespace gal::lang::kits
 			  from{from},
 			  to{&to} {}
 
-		bad_boxed_cast(utility::gal_type_info from, const std::type_info& to) noexcept
+		bad_boxed_cast(const utility::gal_type_info from, const std::type_info& to) noexcept
 			: bad_boxed_cast{from, to, "Cannot perform boxed_cast"} {}
 
 		explicit bad_boxed_cast(const char* const what) noexcept
@@ -376,10 +376,10 @@ namespace gal::lang::kits
 				  from_{from} {}
 
 		public:
-			type_conversion_base(const type_conversion_base&) = default;
-			type_conversion_base& operator=(const type_conversion_base&) = default;
-			type_conversion_base(type_conversion_base&&) = default;
-			type_conversion_base& operator=(type_conversion_base&&) = default;
+			// type_conversion_base(const type_conversion_base&) = default;
+			// type_conversion_base& operator=(const type_conversion_base&) = default;
+			// type_conversion_base(type_conversion_base&&) = default;
+			// type_conversion_base& operator=(type_conversion_base&&) = default;
 
 			virtual ~type_conversion_base() = default;
 
@@ -418,8 +418,8 @@ namespace gal::lang::kits
 							}
 						};
 
-						if (from.is_const()) { return do_cast.decltype(do_cast)::template operator()<const To, const From>(); }
-						return do_cast.decltype(do_cast)::template operator()<To, From>();
+						if (from.is_const()) { return boxed_value{do_cast.decltype(do_cast)::template operator()<const To, const From>()}; }
+						return boxed_value{do_cast.decltype(do_cast)::template operator()<To, From>()};
 					}
 					// Pull the reference out of the contained boxed value, which we know is the type we want
 					auto do_cast = [&]<typename T, typename F>() -> std::add_lvalue_reference_t<T>
@@ -430,8 +430,8 @@ namespace gal::lang::kits
 						else { return dynamic_cast<std::add_lvalue_reference_t<T>>(f); }
 					};
 
-					if (from.is_const()) { return std::cref(do_cast.decltype(do_cast)::template operator()<const To, const From>()); }
-					return std::ref(do_cast.decltype(do_cast)::template operator()<To, From>());
+					if (from.is_const()) { return boxed_value{std::cref(do_cast.decltype(do_cast)::template operator()<const To, const From>())}; }
+					return boxed_value{std::ref(do_cast.decltype(do_cast)::template operator()<To, From>())};
 				}
 
 				if constexpr (IsStatic) { throw bad_boxed_static_cast(from.type_info(), typeid(To), "Unknown static_cast_conversion"); }
@@ -686,12 +686,12 @@ namespace gal::lang::kits
 		// may be expanded some day to support conversions other than child -> parent
 		static_assert(std::is_base_of_v<Base, Derived>, "Classes are not related by inheritance");
 
-		if constexpr (std::is_polymorphic_v<Base> && std::is_polymorphic_v<Derived>) { return std::make_shared<detail::type_conversion_base, detail::dynamic_conversion_impl<Base, Derived>>(); }
-		else { return std::make_shared<detail::type_conversion_base, detail::static_conversion_impl<Base, Derived>>(); }
+		if constexpr (std::is_polymorphic_v<Base> && std::is_polymorphic_v<Derived>) { return std::make_shared<detail::dynamic_conversion_impl<Base, Derived>>(); }
+		else { return std::make_shared<detail::static_conversion_impl<Base, Derived>>(); }
 	}
 
 	template<typename Callable>
-	type_conversion_type register_convert_function(const utility::gal_type_info& from, const utility::gal_type_info& to, const Callable& function) { return std::make_shared<detail::type_conversion_base, detail::type_conversion_impl<Callable>>(from, to, function); }
+	type_conversion_type register_convert_function(const utility::gal_type_info& from, const utility::gal_type_info& to, const Callable& function) { return std::make_shared<detail::type_conversion_impl<Callable>>(from, to, function); }
 
 	template<typename From, typename To, typename Callable>
 	type_conversion_type register_convert_function(const Callable& function)
@@ -702,7 +702,7 @@ namespace gal::lang::kits
 				[function](const boxed_value& object) -> boxed_value
 				{
 					// not even attempting to call boxed_cast so that we don't get caught in some call recursion
-					return {function(detail::cast_helper<const From&>::cast(object, nullptr))};
+					return boxed_value{function(detail::cast_helper<const From&>::cast(object, nullptr))};
 				});
 	}
 
@@ -714,7 +714,7 @@ namespace gal::lang::kits
 				[](const boxed_value& object) -> boxed_value
 				{
 					// not even attempting to call boxed_cast so that we don't get caught in some call recursion
-					return {static_cast<To>(detail::cast_helper<From>::cast(object, nullptr))};
+					return boxed_value{static_cast<To>(detail::cast_helper<From>::cast(object, nullptr))};
 				});
 	}
 
@@ -742,7 +742,7 @@ namespace gal::lang::kits
 							source,
 							[&](ValueType&& value) { ret.PushFunction(std::forward<ValueType&&>(value)); },
 							[](const boxed_value& bv) { return detail::cast_helper<ValueType>::cast(bv, nullptr); });
-					return {std::move(ret)};
+					return boxed_value{std::move(ret)};
 				});
 	}
 
@@ -770,7 +770,7 @@ namespace gal::lang::kits
 							source,
 							[&](std::pair<KeyType, MappedType>&& pair) { ret.PushFunction(std::forward<std::pair<KeyType, MappedType>>(pair)); },
 							[](const auto& pair) { return std::make_pair(pair.first, detail::cast_helper<MappedType>::cast(pair.second, nullptr)); });
-					return {std::move(ret)};
+					return boxed_value{std::move(ret)};
 				});
 	}
 

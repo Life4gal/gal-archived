@@ -163,6 +163,7 @@ namespace gal::lang::kits
 						*lhs_return = static_cast<Lhs>(static_cast<common_type>(rhs_part));
 						return object;
 					}
+					break;
 				}
 				case equal:
 				{
@@ -593,65 +594,67 @@ namespace gal::lang::kits
 			throw std::bad_any_cast{};
 		}
 
-		[[nodiscard]] friend boxed_number assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend bool operator==(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::equal, lhs.value, rhs.value)); }
+		[[nodiscard]] static bool operator_equal(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::equal, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend bool operator!=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::not_equal, lhs.value, rhs.value)); }
+		[[nodiscard]] static bool operator_not_equal(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::not_equal, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend bool operator<(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::less_than, lhs.value, rhs.value)); }
+		[[nodiscard]] static bool operator_less_than(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::less_than, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend bool operator<=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::less_equal, lhs.value, rhs.value)); }
+		[[nodiscard]] static bool operator_less_equal(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::less_equal, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend bool operator>(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::greater_than, lhs.value, rhs.value)); }
+		[[nodiscard]] static bool operator_greater_than(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::greater_than, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend bool operator>=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::greater_equal, lhs.value, rhs.value)); }
+		[[nodiscard]] static bool operator_greater_equal(const boxed_number& lhs, const boxed_number& rhs) { return boxed_cast<bool>(binary_invoke(algebraic_invoker::operations::greater_equal, lhs.value, rhs.value)); }
 
-		[[nodiscard]] friend boxed_number operator+(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::plus, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_plus(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::plus, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator-(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::minus, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_minus(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::minus, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator*(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::multiply, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_multiply(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::multiply, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator/(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::divide, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_divide(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::divide, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator%(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::remainder, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_remainder(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::remainder, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator+=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::plus_assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_plus_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::plus_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator-=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::minus_assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_minus_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::minus_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator*=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::multiply_assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_multiply_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::multiply_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator/=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::divide_assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_divide_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::divide_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator%=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::remainder_assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_remainder_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::remainder_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator<<(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_left, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_shift_left(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_left, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator>>(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_right, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_shift_right(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_right, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator&(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_and, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_and(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_and, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator|(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_or, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_or(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_or, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator^(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_xor, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_xor(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_xor, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator<<=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_left_assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_shift_left_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_left_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator>>=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_right_assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_shift_right_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_shift_right_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator&=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_and_assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_and_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_and_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator|=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_or_assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_or_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_or_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator^=(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_xor_assign, lhs.value, rhs.value)}; }
+		[[nodiscard]] static boxed_number operator_bitwise_xor_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::bitwise_xor_assign, lhs.value, rhs.value)}; }
 
-		[[nodiscard]] friend boxed_number operator+(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_plus)}; }
+		[[nodiscard]] static boxed_number operator_unary_not(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_not)}; }
 
-		[[nodiscard]] friend boxed_number operator-(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_minus)}; }
+		[[nodiscard]] static boxed_number operator_unary_plus(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_plus)}; }
 
-		[[nodiscard]] friend boxed_number operator~(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_bitwise_complement)}; }
+		[[nodiscard]] static boxed_number operator_unary_minus(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_minus)}; }
+
+		[[nodiscard]] static boxed_number operator_unary_bitwise_complement(const boxed_number& self) { return boxed_number{unary_invoke(self.value, algebraic_invoker::operations::unary_bitwise_complement)}; }
 	};
 
 	namespace detail

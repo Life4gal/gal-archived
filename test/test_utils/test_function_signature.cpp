@@ -8,6 +8,8 @@
 #include <gal/kits/bootstrap.hpp>
 #include <gal/kits/proxy_constructor.hpp>
 #include <gal/kits/dispatch.hpp>
+#include <gal/kits/operators.hpp>
+#include <gal/kits/utility.hpp>
 
 using namespace gal::utils;
 

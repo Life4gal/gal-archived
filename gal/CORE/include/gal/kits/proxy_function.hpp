@@ -49,15 +49,6 @@ namespace gal::lang::kits
 			catch (const bad_boxed_cast&) { return false; }
 		}
 
-		template<typename Callable, typename Result, typename... Params, std::size_t... Index>
-		Result do_invoke(
-				Result (*)(Params ...),
-				std::index_sequence<Index...>,
-				const Callable& function,
-				const function_parameters& params,
-				const type_conversion_state& conversion
-				) { return function(boxed_cast<Params>(params[Index], &conversion)...); }
-
 		/**
 		 * @brief Used by proxy_function_impl to perform type safe execution of a function.
 		 * @note The function attempts to unbox each parameter to the expected type.
@@ -66,18 +57,24 @@ namespace gal::lang::kits
 		 */
 		template<typename Callable, typename Result, typename... Params>
 		boxed_value do_invoke(
-				Result (*signature)(Params ...),
+				Result (*)(Params ...),
 				const Callable& function,
 				const function_parameters& params,
 				const type_conversion_state& conversion
 				)
 		{
+			auto call = [&]<bool HasReturn, std::size_t... Index>(std::index_sequence<Index...>) -> std::conditional_t<HasReturn, Result, void>
+			{
+				if constexpr (HasReturn) { return function(boxed_cast<Params>(params[Index], &conversion)...); }
+				else { function(boxed_cast<Params>(params[Index], &conversion)...); }
+			};
+
 			if constexpr (std::is_same_v<Result, void>)
 			{
-				do_invoke(signature, std::index_sequence_for<Params...>{}, function, params, conversion);
+				call.decltype(call)::template operator()<false>(std::index_sequence_for<Params...>{});
 				return return_handler<void>::handle();
 			}
-			else { return return_handler<Result>::handle(do_invoke(signature, std::index_sequence_for<Params...>{}, function, params, conversion)); }
+			else { return return_handler<Result>::handle(call.decltype(call)::template operator()<true>(std::index_sequence_for<Params...>{})); }
 		}
 	}
 
@@ -101,7 +98,7 @@ namespace gal::lang::kits
 	};
 
 	template<typename Function>
-	std::function<Function> make_functor(std::shared_ptr<const proxy_function_base> function, const type_conversion_state* conversion);
+	std::function<Function> make_functor(std::shared_ptr<const class proxy_function_base> function, const type_conversion_state* conversion);
 
 	class param_types
 	{
@@ -213,7 +210,7 @@ namespace gal::lang::kits
 						try
 						{
 							if (const auto& result = boxed_cast<const dynamic_object&>(object, &conversion);
-								not(dynamic_object_name::match(name) || result.type_name() == name)) { return std::make_pair(false, false); }
+								not(dynamic_object_type_name::match(name) || result.type_name() == name)) { return std::make_pair(false, false); }
 						}
 						catch (const std::bad_cast&) { return std::make_pair(false, false); }
 					}
@@ -316,7 +313,7 @@ namespace gal::lang::kits
 		}
 
 		/**
-		 * @brief The number of arguments the function takes or -1 if it is variadic.
+		 * @brief The number of arguments the function takes or -1(no_parameters_arity) if it is variadic.
 		 */
 		[[nodiscard]] constexpr arity_size_type get_arity() const noexcept { return arity_; }
 
@@ -648,7 +645,7 @@ namespace gal::lang::kits
 			: proxy_function_impl_base{detail::build_params_type_list(static_cast<FunctionSignature*>(nullptr))},
 			  function_{std::move(function)} {}
 
-		[[nodiscard]] bool operator==(const proxy_function_base& other) const noexcept override { return dynamic_cast<const proxy_function_callable<FunctionSignature, Callable>*>(&function_); }
+		[[nodiscard]] bool operator==(const proxy_function_base& other) const noexcept override { return dynamic_cast<const proxy_function_callable<FunctionSignature, Callable>*>(&other); }
 
 		[[nodiscard]] bool is_invokable(const function_parameters& params, const type_conversion_state& conversion) const noexcept override { return detail::is_invokable(static_cast<FunctionSignature*>(nullptr), params, conversion); }
 	};

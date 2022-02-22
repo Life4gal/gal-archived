@@ -9,11 +9,10 @@
 
 namespace gal::lang::kits
 {
-	class proxy_function_base;
 	template<typename Function, typename Callable>
-	class proxy_function_callable_impl;
+	class proxy_function_callable;
 	template<typename Function>
-	class assignable_proxy_function_impl;
+	class assignable_proxy_function;
 
 	namespace detail
 	{
@@ -21,14 +20,14 @@ namespace gal::lang::kits
 		struct return_handler_reference
 		{
 			template<typename T>
-			static boxed_value handle(T&& result) { return {std::cref(result), true}; }
+			static boxed_value handle(T&& result) { return boxed_value{std::cref(result), true}; }
 		};
 
 		template<typename Result>
 		struct return_handler_reference<Result, true>
 		{
 			template<typename T>
-			static boxed_value handle(T&& result) { return {std::remove_reference_t<decltype(result)>{result}, true}; }
+			static boxed_value handle(T&& result) { return boxed_value{std::remove_reference_t<decltype(result)>{result}, true}; }
 		};
 
 		/**
@@ -39,23 +38,23 @@ namespace gal::lang::kits
 		{
 			template<typename T>
 				requires std::is_trivial_v<std::decay_t<T>>
-			static boxed_value handle(T result) { return {std::move(result), true}; }
+			static boxed_value handle(T result) { return boxed_value{std::move(result), true}; }
 
 			template<typename T>
 				requires not std::is_trivial_v<std::decay_t<T>>
-			static boxed_value handle(T&& result) { return {std::make_shared<T>(std::forward<T>(result)), true}; }
+			static boxed_value handle(T&& result) { return boxed_value{std::make_shared<T>(std::forward<T>(result)), true}; }
 		};
 
 		template<typename Result>
 		struct return_handler<const Result>
 		{
-			static boxed_value handle(Result result) { return {std::move(result)}; }
+			static boxed_value handle(Result result) { return boxed_value{std::move(result)}; }
 		};
 
 		template<typename Result>
 		struct return_handler<Result&>
 		{
-			static boxed_value handle(Result& result) { return {std::ref(result)}; }
+			static boxed_value handle(Result& result) { return boxed_value{std::ref(result)}; }
 		};
 
 		template<typename Result>
@@ -64,25 +63,25 @@ namespace gal::lang::kits
 		template<typename Result>
 		struct return_handler<Result*>
 		{
-			static boxed_value handle(Result* ptr) { return {ptr, true}; }
+			static boxed_value handle(Result* ptr) { return boxed_value{ptr, true}; }
 		};
 
 		template<typename Result>
 		struct return_handler<const Result*>
 		{
-			static boxed_value handle(const Result* ptr) { return {ptr, true}; }
+			static boxed_value handle(const Result* ptr) { return boxed_value{ptr, true}; }
 		};
 
 		template<typename Result>
 		struct return_handler<Result*&>
 		{
-			static boxed_value handle(Result* ptr) { return {ptr, true}; }
+			static boxed_value handle(Result* ptr) { return boxed_value{ptr, true}; }
 		};
 
 		template<typename Result>
 		struct return_handler<const Result*&>
 		{
-			static boxed_value handle(const Result* ptr) { return {ptr, true}; }
+			static boxed_value handle(const Result* ptr) { return boxed_value{ptr, true}; }
 		};
 
 		template<typename Result>
@@ -91,21 +90,21 @@ namespace gal::lang::kits
 		template<typename Result>
 		struct return_handler<std::function<Result>&>
 		{
-			static boxed_value handle(std::function<Result>& function) { return {std::make_shared<proxy_function_base, assignable_proxy_function_impl<return_handler>>(std::ref(function), std::shared_ptr<std::function<Result>>{})}; }
+			static boxed_value handle(std::function<Result>& function) { return boxed_value{std::make_shared<assignable_proxy_function<return_handler>>(std::ref(function), std::shared_ptr<std::function<Result>>{})}; }
 
-			static boxed_value handle(const std::function<Result>& function) { return {std::make_shared<proxy_function_base, proxy_function_callable_impl<Result, std::function<Result>>>(function)}; }
+			static boxed_value handle(const std::function<Result>& function) { return boxed_value{std::make_shared<proxy_function_callable<Result, std::function<Result>>>(function)}; }
 		};
 
 		template<typename Result>
 		struct return_handler<const std::function<Result>&>
 		{
-			static boxed_value handle(const std::function<Result>& function) { return {std::make_shared<proxy_function_base, proxy_function_callable_impl<Result, std::function<Result>>>(function)}; }
+			static boxed_value handle(const std::function<Result>& function) { return boxed_value{std::make_shared<proxy_function_callable<Result, std::function<Result>>>(function)}; }
 		};
 
 		template<typename Result>
 		struct return_handler<std::unique_ptr<Result>> : return_handler<std::unique_ptr<Result>&>
 		{
-			static boxed_value handle(std::unique_ptr<Result>&& result) { return {std::move(result), true}; }
+			static boxed_value handle(std::unique_ptr<Result>&& result) { return boxed_value{std::move(result), true}; }
 		};
 
 		template<typename Result>
@@ -114,7 +113,7 @@ namespace gal::lang::kits
 		template<typename Result>
 		struct return_handler<std::shared_ptr<Result>&>
 		{
-			static boxed_value handle(const std::shared_ptr<Result>& result) { return {result, true}; }
+			static boxed_value handle(const std::shared_ptr<Result>& result) { return boxed_value{result, true}; }
 		};
 
 		template<typename Result>
@@ -126,7 +125,7 @@ namespace gal::lang::kits
 		template<typename Result>
 		struct return_handler<const std::shared_ptr<std::function<Result>>>
 		{
-			static boxed_value handle(const std::shared_ptr<std::function<Result>>& function) { return {std::make_shared<proxy_function_base, assignable_proxy_function_impl<Result>>(std::ref(*function), function)}; }
+			static boxed_value handle(const std::shared_ptr<std::function<Result>>& function) { return boxed_value{std::make_shared<assignable_proxy_function<Result>>(std::ref(*function), function)}; }
 		};
 
 		template<typename Result>

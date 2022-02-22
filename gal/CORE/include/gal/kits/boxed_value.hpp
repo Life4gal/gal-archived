@@ -150,7 +150,7 @@ namespace gal::lang::kits
 			}
 
 			template<typename T>
-			static auto make(T t, const bool is_return_value) { return make(std::make_shared<T>(std::move(t)), is_return_value); }
+			static auto make(T t, const bool is_return_value) { return make(std::move(std::make_shared<T>(std::move(t))), is_return_value); }
 		};
 
 		std::shared_ptr<real_data> data_;
