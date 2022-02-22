@@ -774,6 +774,9 @@ namespace gal::lang::kits
 				});
 	}
 
+	/**
+	 * @throw bad_boxed_cast(std::bad_cast)
+	 */
 	template<typename T>
 	decltype(auto) boxed_cast(const boxed_value& object, const type_conversion_state* conversion = nullptr)
 	{

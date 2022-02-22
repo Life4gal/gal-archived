@@ -3,17 +3,14 @@
 #ifndef GAL_LANG_KITS_DISPATCH_HPP
 #define GAL_LANG_KITS_DISPATCH_HPP
 
-#include <gal/defines.hpp>
 #include <gal/kits/boxed_value.hpp>
 #include <gal/kits/boxed_value_cast.hpp>
 #include <gal/kits/dynamic_object.hpp>
 #include <gal/kits/proxy_function.hpp>
-#include <gal/kits/proxy_constructor.hpp>
 #include <gal/utility/flat_continuous_map.hpp>
 
 #include <utils/format.hpp>
 #include <utils/enum_utils.hpp>
-#include <utils/flat_hash_container.hpp>
 #include <utils/unordered_hash_container.hpp>
 
 namespace gal::lang
@@ -330,6 +327,7 @@ namespace gal::lang
 		struct stack_holder
 		{
 			friend class dispatch_engine;
+			friend class dispatch_state;
 			friend class scoped_holder;
 
 			template<typename T>
@@ -509,6 +507,10 @@ namespace gal::lang
 				return add_variable_no_check(name, std::move(variable));
 			}
 
+			[[nodiscard]] param_list_type& recent_call_param() noexcept { return param_lists.back(); }
+
+			[[nodiscard]] const param_list_type& recent_call_param() const noexcept { return param_lists.back(); }
+
 			void emit_call(kits::type_conversion_manager::conversion_saves& saves)
 			{
 				if (is_root()) { kits::type_conversion_manager::enable_conversion_saves(saves, true); }
@@ -604,6 +606,7 @@ namespace gal::lang
 		 */
 		class dispatch_engine
 		{
+			friend class dispatch_state;
 		public:
 			constexpr static char type_name_format[] = "@@{}@@";
 			constexpr static char method_missing_name[] = "method_missing";
@@ -717,7 +720,8 @@ namespace gal::lang
 				: parser_{parser} {}
 
 			/**
-			 * @brief casts an object while applying any dynamic_conversion available
+			 * @brief casts an object while applying any dynamic_conversion available.
+			 * @throw bad_boxed_cast(std::bad_cast)
 			 */
 			template<typename T>
 			decltype(auto) boxed_cast(const kits::boxed_value& object) const
@@ -859,7 +863,7 @@ namespace gal::lang
 			 * includes a special overload for the _ place holder object to
 			 * ensure that it is always in scope.
 			 */
-			[[nodiscard]] object_type get_object(std::string_view name, location_type& location, stack_holder& stack_holder) const
+			[[nodiscard]] object_type get_object(std::string_view name, location_type& location) const
 			{
 				using enum_type = location_type::value_type;
 				enum class location_t : enum_type
@@ -874,16 +878,15 @@ namespace gal::lang
 
 				if (loc == 0)
 				{
-					auto& stack = stack_holder.recent_stack_data();
+					auto& stack = stack_holder_->recent_stack_data();
 
 					// Is it in the stack?
 					for (auto it_scope = stack.rbegin(); it_scope != stack.rend(); ++it_scope)
 					{
-						const auto it = std::ranges::find_if(
-								*it_scope,
-								[&name](const auto& pair) { return pair.first == name; });
-
-						if (it != it_scope->end())
+						if (const auto it = std::ranges::find_if(
+									*it_scope,
+									[&name](const auto& pair) { return pair.first == name; });
+							it != it_scope->end())
 						{
 							location = utils::set_enum_flag_ret(
 									static_cast<enum_type>(std::ranges::distance(stack.rbegin(), it_scope)) << 16 | static_cast<enum_type>(std::ranges::distance(it_scope->begin(), it)),
@@ -898,7 +901,7 @@ namespace gal::lang
 				else if (utils::check_any_enum_flag(loc, location_t::is_local))
 				{
 					// todo
-					auto& stack = stack_holder.recent_stack_data();
+					auto& stack = stack_holder_->recent_stack_data();
 
 					return stack[
 						stack.size() - 1 - (utils::filter_enum_flag_ret(loc, location_t::stack_mask) >> 16)
@@ -920,6 +923,7 @@ namespace gal::lang
 
 			/**
 			 * @brief Returns the type info for a named type.
+			 * @throw std::range_error
 			 */
 			[[nodiscard]] utility::gal_type_info get_type_info(const std::string_view name, const bool throw_if_not_exist = true) const
 			{
@@ -931,6 +935,24 @@ namespace gal::lang
 
 				if (throw_if_not_exist) { throw std::range_error{"type not exist"}; }
 				return {};
+			}
+
+			/**
+			 * @brief return true if the object matches the registered type by name.
+			 */
+			[[nodiscard]] bool is_type_match(const std::string_view name, const object_type& object) const noexcept
+			{
+				try { if (get_type_info(name).bare_equal(object.type_info())) { return true; } }
+				catch (const std::range_error&) {}
+
+				try
+				{
+					const auto& o = boxed_cast<const kits::dynamic_object&>(object);
+					return o.type_name() == name;
+				}
+				catch (const std::bad_cast&) {}
+
+				return false;
 			}
 
 			/**
@@ -997,7 +1019,7 @@ namespace gal::lang
 			/**
 			 * @brief Get a map of all objects that can be seen from the current scope in a scripting context.
 			 */
-			[[nodiscard]] state_type::global_objects_type get_scripting_objects() const
+			[[nodiscard]] state_type::global_objects_type copy_scripting_objects() const
 			{
 				// We don't want the current context, but one up if it exists
 				const auto& stack = (stack_holder_->stack.size() == 1) ? stack_holder_->recent_stack_data() : stack_holder_->recent_parent_stack_data();
@@ -1020,7 +1042,7 @@ namespace gal::lang
 			/**
 			 * @brief Get a vector of all registered functions.
 			 */
-			[[nodiscard]] auto get_functions() const
+			[[nodiscard]] auto copy_functions() const
 			{
 				utils::threading::shared_lock lock{mutex_};
 
@@ -1043,7 +1065,7 @@ namespace gal::lang
 			/**
 			 * @brief Get a map of all functions that can be seen from a scripting context.
 			 */
-			[[nodiscard]] state_type::global_objects_type get_function_objects() const
+			[[nodiscard]] state_type::global_objects_type copy_function_objects() const
 			{
 				const auto& functions = state_.function_objects;
 
@@ -1246,13 +1268,8 @@ namespace gal::lang
 						);
 			}
 
-			/**
-			 * @brief Dump function.
-			 */
-			[[nodiscard]] name_type dump_function(const state_type::function_objects_type::value_type& pair) const
+			[[nodiscard]] name_type dump_function(const state_type::function_objects_type::key_type& name, const state_type::function_objects_type::mapped_type& function) const
 			{
-				const auto [name, function] = pair;
-
 				const auto& types = function->types();
 
 				auto context = dump_type(types.front());
@@ -1270,11 +1287,79 @@ namespace gal::lang
 				return context;
 			}
 
+			/**
+			 * @brief Dump function.
+			 */
+			[[nodiscard]] name_type dump_function(const state_type::function_objects_type::value_type& pair) const { return dump_function(pair.first, pair.second); }
+
+			[[nodiscard]] name_type dump_everything() const
+			{
+				name_type context{"Registered type: \n"};
+
+				// todo: copy or lock?
+				{
+					// const auto types = copy_types<std::vector>();
+					utils::threading::shared_lock lock{mutex_};
+					std::ranges::for_each(
+							state_.types,
+							[&context](const auto& pair) { context.append(pair.first).append(": ").append(pair.second.bare_name()).append("\n"); });
+				}
+
+				context.push_back('\n');
+
+				// todo: copy or lock?
+				{
+					// const auto functions = copy_functions();
+					utils::threading::shared_lock lock{mutex_};
+					std::ranges::for_each(
+							state_.functions,
+							[&context, this](const auto& pair)
+							{
+								std::ranges::for_each(
+										*pair.second,
+										[&context, &pair, this](const auto& function) { context.append(dump_function(pair.first, function)); });
+							});
+				}
+
+				context.push_back('\n');
+				return context;
+			}
+
 			[[nodiscard]] const kits::type_conversion_manager& get_conversion_manager() const noexcept { return conversion_manager_; }
 
 			[[nodiscard]] parser::parser_base& get_parser() const noexcept { return parser_.get(); }
 
 			[[nodiscard]] stack_holder& get_stack_holder() noexcept { return stack_holder_.operator*(); }
+		};
+
+		class dispatch_state
+		{
+		public:
+			using engine_type = std::reference_wrapper<dispatch_engine>;
+			using stack_holder_type = std::reference_wrapper<stack_holder>;
+
+		private:
+			engine_type engine_;
+			kits::type_conversion_state conversion_;
+
+		public:
+			explicit dispatch_state(dispatch_engine& engine)
+				: engine_{engine},
+				  conversion_{engine.get_conversion_manager(), engine.get_conversion_manager().get_conversion_saves()} {}
+
+			[[nodiscard]] engine_type::type* operator->() const noexcept { return &engine_.get(); }
+
+			[[nodiscard]] engine_type::type& operator*() const noexcept { return engine_.get(); }
+
+			[[nodiscard]] stack_holder_type::type& stack_holder() const noexcept { return engine_.get().get_stack_holder(); }
+
+			[[nodiscard]] const kits::type_conversion_state& conversion() const noexcept { return conversion_; }
+
+			[[nodiscard]] const kits::type_conversion_manager::conversion_saves& conversion_saves() const noexcept { return conversion_.saves(); }
+
+			stack_holder_type::type::variable_type& add_object_no_check(const engine_type::type::name_type& name, engine_type::type::object_type object) const { return stack_holder().add_variable_no_check(name, std::move(object)); }
+
+			[[nodiscard]] engine_type::type::object_type get_object(const std::string_view name, engine_type::type::location_type& location) const { return engine_.get().get_object(name, location); }
 		};
 	}
 }
