@@ -60,12 +60,14 @@ namespace gal::lang::kits
 			throw std::range_error{std_format::format("Attribute '{}' not found and cannot be added to a const object", name)};
 		}
 
-		[[nodiscard]] const boxed_value& method_missing(const attribute_name_type& name) const
+		[[nodiscard]] boxed_value& method_missing(const attribute_name_type& name)
 		{
 			if (is_explicit() && not has_attribute(name)) { throw option_explicit_error{name}; }
 
 			return get_attribute(name);
 		}
+
+		[[nodiscard]] const boxed_value& method_missing(const attribute_name_type& name) const { return const_cast<dynamic_object&>(*this).method_missing(name); }
 	};
 }
 

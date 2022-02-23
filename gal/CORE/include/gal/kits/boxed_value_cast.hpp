@@ -680,7 +680,7 @@ namespace gal::lang::kits
 	 * GAL engine.
 	 */
 	template<typename Base, typename Derived>
-	type_conversion_type register_base()
+	type_conversion_type make_base_conversion()
 	{
 		// Can only be used with related polymorphic types
 		// may be expanded some day to support conversions other than child -> parent
@@ -691,12 +691,12 @@ namespace gal::lang::kits
 	}
 
 	template<typename Callable>
-	type_conversion_type register_convert_function(const utility::gal_type_info& from, const utility::gal_type_info& to, const Callable& function) { return std::make_shared<detail::type_conversion_impl<Callable>>(from, to, function); }
+	type_conversion_type make_convert_function(const utility::gal_type_info& from, const utility::gal_type_info& to, const Callable& function) { return std::make_shared<detail::type_conversion_impl<Callable>>(from, to, function); }
 
 	template<typename From, typename To, typename Callable>
-	type_conversion_type register_convert_function(const Callable& function)
+	type_conversion_type make_convert_function(const Callable& function)
 	{
-		return register_convert_function(
+		return make_convert_function(
 				utility::make_type_info<From>(),
 				utility::make_type_info<To>(),
 				[function](const boxed_value& object) -> boxed_value
@@ -708,7 +708,7 @@ namespace gal::lang::kits
 
 	template<typename From, typename To>
 		requires std::is_convertible_v<From, To>
-	type_conversion_type register_convert_function()
+	type_conversion_type make_convert_function()
 	{
 		return register_convert_function<From, To>(
 				[](const boxed_value& object) -> boxed_value
@@ -727,9 +727,9 @@ namespace gal::lang::kits
 			container.reserve(container.size());
 			container.PushFunction(std::declval<ValueType&&>());
 		}
-	type_conversion_type register_container_convert_function()
+	type_conversion_type make_container_convert_function()
 	{
-		return register_convert_function(
+		return make_convert_function(
 				utility::make_type_info<Container<boxed_value>>(),
 				utility::make_type_info<ValueType>(),
 				[](const boxed_value& object) -> boxed_value
@@ -756,9 +756,9 @@ namespace gal::lang::kits
 		{
 			container.PushFunction(std::declval<std::pair<KeyType, MappedType>>());
 		}
-	type_conversion_type register_associative_container_convert_function()
+	type_conversion_type make_associative_container_convert_function()
 	{
-		return register_convert_function(
+		return make_convert_function(
 				utility::make_type_info<Container<KeyType, MappedType>>(),
 				utility::make_type_info<MappedType>(),
 				[](const boxed_value& object) -> boxed_value

@@ -14,7 +14,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs = rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs = rhs; }));
 	}
 
 	template<typename T>
@@ -110,7 +110,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_plus_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs += rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs += rhs; }));
 	}
 
 	template<typename T>
@@ -118,7 +118,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_minus_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs -= rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs -= rhs; }));
 	}
 
 	template<typename T>
@@ -126,7 +126,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_multiply_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs *= rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs *= rhs; }));
 	}
 
 	template<typename T>
@@ -134,7 +134,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_divide_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs /= rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs /= rhs; }));
 	}
 
 	template<typename T>
@@ -142,7 +142,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_remainder_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs %= rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs %= rhs; }));
 	}
 
 	template<typename T>
@@ -190,7 +190,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_bitwise_shift_left_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs <<= rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs <<= rhs; }));
 	}
 
 	template<typename T>
@@ -198,7 +198,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_bitwise_shift_right_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs >>= rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs >>= rhs; }));
 	}
 
 	template<typename T>
@@ -206,7 +206,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_bitwise_and_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs &= rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs &= rhs; }));
 	}
 
 	template<typename T>
@@ -214,7 +214,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_bitwise_or_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs |= rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs |= rhs; }));
 	}
 
 	template<typename T>
@@ -222,7 +222,7 @@ namespace gal::lang::kits::detail
 	{
 		m.add_function(
 				operator_bitwise_xor_assign_name::value,
-				fun([](const T& lhs, const T& rhs) -> T& { return lhs ^= rhs; }));
+				fun([](T& lhs, const T& rhs) -> T& { return lhs ^= rhs; }));
 	}
 
 	template<typename T>

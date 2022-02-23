@@ -462,7 +462,7 @@ namespace gal::lang::kits
 			[[nodiscard]] const parse_ast_node_type::element_type& get_parse_tree() const
 			{
 				if (parse_ast_node_) { return *parse_ast_node_; }
-				throw std::runtime_error{"Dynamic_proxy_function does not contain a parse_tree"};
+				throw std::runtime_error{"dynamic_proxy_function does not contain a parse_tree"};
 			}
 
 			[[nodiscard]] bool has_guard() const noexcept { return guard_.operator bool(); }
