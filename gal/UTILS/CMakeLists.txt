@@ -7,7 +7,6 @@ set(
 		${PROJECT_NAME}_SOURCE
 
 		src/assert.cpp
-		src/point.cpp
 		src/confusable.cpp
 		src/timer.cpp
 )

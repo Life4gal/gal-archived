@@ -9,6 +9,7 @@
 #include <gal/kits/operators.hpp>
 #include <gal/kits/utility.hpp>
 #include <gal/kits/proxy_constructor.hpp>
+#include <gal/language/common.hpp>
 
 namespace gal::lang::kits
 {
@@ -257,14 +258,14 @@ namespace gal::lang::kits
 			};
 		}
 
-		// static bool has_parse_tree(const const_proxy_function& function) noexcept { return std::dynamic_pointer_cast<const base::dynamic_proxy_function_base>(function).operator bool(); }
+		static bool has_parse_tree(const const_proxy_function& function) noexcept { return std::dynamic_pointer_cast<const base::dynamic_proxy_function_base>(function).operator bool(); }
 
-		// static const ast_node& get_parse_tree(const const_proxy_function& function)
-		// {
-		// 	if (const auto f = std::dynamic_pointer_cast<const base::dynamic_proxy_function_base>(function);
-		// 		f) { return f->get_parse_tree(); }
-		// 	throw std::runtime_error{"Function does not have a parse tree"};
-		// }
+		static const ast_node& get_parse_tree(const const_proxy_function& function)
+		{
+			if (const auto f = std::dynamic_pointer_cast<const base::dynamic_proxy_function_base>(function);
+				f) { return f->get_parse_tree(); }
+			throw std::runtime_error{"Function does not have a parse tree"};
+		}
 
 		static void print(const std::string_view string) noexcept { std::cout << string; }
 
@@ -362,7 +363,7 @@ namespace gal::lang::kits
 			//*********************************************
 			m.add_type_info(number_type_name::value,
 			                utility::make_type_info<boxed_number>());
-			
+
 			register_arithmetic<std::int8_t>(number_int8_type_name::value, m);
 			register_arithmetic<std::uint8_t>(number_uint8_type_name::value, m);
 			register_arithmetic<std::int16_t>(number_int16_type_name::value, m);
@@ -428,10 +429,10 @@ namespace gal::lang::kits
 			m.add_function(operator_assign_name::value,
 			               fun([](base::assignable_proxy_function_base& lhs, const const_proxy_function& rhs) { lhs.assign(rhs); }));
 
-			// m.add_function(function_has_parse_tree_interface_name::value,
-			//                fun(&has_parse_tree));
-			// m.add_function(function_get_parse_tree_interface_name::value,
-			//                fun(&get_parse_tree));
+			m.add_function(function_has_parse_tree_interface_name::value,
+			               fun(&has_parse_tree));
+			m.add_function(function_get_parse_tree_interface_name::value,
+			               fun(&get_parse_tree));
 
 			//*********************************************
 			// dynamic object & interface
@@ -491,7 +492,33 @@ namespace gal::lang::kits
 			m.add_type_conversion(make_base_conversion<std::exception, arithmetic_error>());
 			m.add_type_conversion(make_base_conversion<std::runtime_error, arithmetic_error>());
 
-			// todo: eval_error
+			register_class<eval_error>(
+					m,
+					exception_eval_error_type_name::value,
+					{},
+					{
+							{
+									exception_eval_error_reason_interface_name::value,
+									fun(&eval_error::reason)
+							},
+							{
+									exception_eval_error_pretty_print_interface_name::value,
+									fun(&eval_error::pretty_print)
+							},
+							{
+									exception_eval_error_stack_trace_interface_name::value,
+									fun([](const eval_error& error)
+									{
+										std::vector<boxed_value> ret;
+										ret.reserve(error.stack_traces.size());
+										std::ranges::transform(error.stack_traces,
+										                       std::back_inserter(ret),
+										                       &kits::var<const ast_node_trace&>);
+										return ret;
+									})
+							}
+					}
+					);
 
 			m.add_function(exception_query_interface_name::value,
 			               fun([](const std::exception& e) { return std::string{e.what()}; }));
@@ -527,6 +554,8 @@ namespace gal::lang::kits
 
 			m.add_function(operator_type_match_name::value,
 			               fun(&boxed_value::is_type_match));
+
+
 		}
 	};
 }

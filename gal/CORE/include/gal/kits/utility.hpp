@@ -46,7 +46,7 @@ namespace gal::lang::kits
 			engine_module& m,
 			const std::string_view name,
 			const detail::dispatch_function::functions_type& constructors,
-			const engine_module::functions_type& functions
+			const std::vector<engine_module::functions_type::value_type>& functions
 			)
 	{
 		m.add_type_info(engine_module::name_type{name}, utility::make_type_info<T>());

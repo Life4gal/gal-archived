@@ -328,7 +328,7 @@ namespace gal::lang
 		{
 			friend class dispatch_engine;
 			friend class dispatch_state;
-			friend class scoped_holder;
+			friend class scoped_function_scope;
 
 			template<typename T>
 			using internal_stack_type = std::vector<T>;
@@ -347,24 +347,57 @@ namespace gal::lang
 			param_lists_type param_lists;
 			call_depth_type depth;
 
-			struct scoped_holder
+			struct scoped_scope
 			{
 				std::reference_wrapper<stack_holder> stack;
 
-				scoped_holder(stack_holder& stack, const variable_type& object)
-					: stack{stack}
+				explicit scoped_scope(stack_holder& stack)
+					: stack{stack} { stack.new_scope(); }
+
+				~scoped_scope() noexcept { stack.get().pop_scope(); }
+
+				scoped_scope(const scoped_scope&) = delete;
+				scoped_scope& operator=(const scoped_scope&) = delete;
+				scoped_scope(scoped_scope&&) = delete;
+				scoped_scope& operator=(scoped_scope&&) = delete;
+			};
+
+			struct scoped_object_scope : scoped_scope
+			{
+				scoped_object_scope(stack_holder& stack, const variable_type& object)
+					: scoped_scope{stack}
 				{
-					stack.new_scope();
 					// todo: this' s name?
 					stack.add_variable_no_check("__this", object);
 				}
 
-				~scoped_holder() noexcept { stack.get().pop_scope(); }
+				~scoped_object_scope() noexcept { stack.get().pop_scope(); }
+			};
 
-				scoped_holder(const scoped_holder&) = delete;
-				scoped_holder& operator=(const scoped_holder&) = delete;
-				scoped_holder(scoped_holder&&) = delete;
-				scoped_holder& operator=(scoped_holder&&) = delete;
+			struct scoped_stack_scope
+			{
+				std::reference_wrapper<stack_holder> stack;
+
+				explicit scoped_stack_scope(stack_holder& stack)
+					: stack{stack} { stack.new_stack(); }
+
+				~scoped_stack_scope() noexcept { stack.get().pop_stack(); }
+			};
+
+			struct scoped_function_scope
+			{
+				std::reference_wrapper<dispatch_state> state;
+
+				explicit scoped_function_scope(dispatch_state& s);
+
+				~scoped_function_scope() noexcept;
+
+				scoped_function_scope(const scoped_function_scope&) = delete;
+				scoped_function_scope& operator=(const scoped_function_scope&) = delete;
+				scoped_function_scope(scoped_function_scope&&) = delete;
+				scoped_function_scope& operator=(scoped_function_scope&&) = delete;
+
+				void push_params(kits::function_parameters&& params);
 			};
 
 			stack_holder()
@@ -489,7 +522,7 @@ namespace gal::lang
 				finish_scope();
 			}
 
-			[[nodiscard]] scoped_holder make_temp_scope(const variable_type& object) { return {*this, object}; }
+			[[nodiscard]] scoped_object_scope make_temp_scope(const variable_type& object) { return {*this, object}; }
 
 			variable_type& add_variable(const name_type& name, variable_type variable)
 			{
@@ -1355,12 +1388,19 @@ namespace gal::lang
 
 			[[nodiscard]] const kits::type_conversion_state& conversion() const noexcept { return conversion_; }
 
-			[[nodiscard]] const kits::type_conversion_manager::conversion_saves& conversion_saves() const noexcept { return conversion_.saves(); }
+			[[nodiscard]] kits::type_conversion_manager::conversion_saves& conversion_saves() const noexcept { return conversion_.saves(); }
 
 			stack_holder_type::type::variable_type& add_object_no_check(const engine_type::type::name_type& name, engine_type::type::object_type object) const { return stack_holder().add_variable_no_check(name, std::move(object)); }
 
 			[[nodiscard]] engine_type::type::object_type get_object(const std::string_view name, engine_type::type::location_type& location) const { return engine_.get().get_object(name, location); }
 		};
+
+		inline stack_holder::scoped_function_scope::scoped_function_scope(dispatch_state& s)
+			: state{s} { state.get().stack_holder().emit_call(state.get().conversion_saves()); }
+
+		inline stack_holder::scoped_function_scope::~scoped_function_scope() noexcept { state.get().stack_holder().finish_call(state.get().conversion_saves()); }
+
+		inline void stack_holder::scoped_function_scope::push_params(kits::function_parameters&& params) { state.get().stack_holder().push_param(std::move(params)); }
 	}
 }
 

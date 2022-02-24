@@ -15,6 +15,31 @@
 namespace gal::lang
 {
 	//*********************************************
+	// keyword
+	//*********************************************
+	using keyword_define_name = GAL_UTILS_FIXED_STRING_TYPE("def");
+	using keyword_function_name = GAL_UTILS_FIXED_STRING_TYPE("fun");
+	using keyword_variable_name = GAL_UTILS_FIXED_STRING_TYPE("var");
+	using keyword_auto_name = GAL_UTILS_FIXED_STRING_TYPE("auto");
+	using keyword_true_name = GAL_UTILS_FIXED_STRING_TYPE("True");
+	using keyword_false_name = GAL_UTILS_FIXED_STRING_TYPE("False");
+	using keyword_class_name = GAL_UTILS_FIXED_STRING_TYPE("class");
+	using keyword_attribute_name = GAL_UTILS_FIXED_STRING_TYPE("attr");
+	using keyword_global_name = GAL_UTILS_FIXED_STRING_TYPE("global");
+	using keyword_placeholder_name = GAL_UTILS_FIXED_STRING_TYPE("_");
+	using keyword_comma_name = GAL_UTILS_FIXED_STRING_TYPE(",");
+	using keyword_while_name = GAL_UTILS_FIXED_STRING_TYPE("while");
+	using keyword_for_name = GAL_UTILS_FIXED_STRING_TYPE("for");
+	using keyword_break_name = GAL_UTILS_FIXED_STRING_TYPE("break");
+	using keyword_if_name = GAL_UTILS_FIXED_STRING_TYPE("if");
+	using keyword_else_name = GAL_UTILS_FIXED_STRING_TYPE("else");
+	using keyword_logical_and_name = GAL_UTILS_FIXED_STRING_TYPE("and");
+	using keyword_logical_or_name = GAL_UTILS_FIXED_STRING_TYPE("or");
+	using keyword_return_name = GAL_UTILS_FIXED_STRING_TYPE("return");
+
+
+
+	//*********************************************
 	// void type
 	//*********************************************
 	using void_type_name = GAL_UTILS_FIXED_STRING_TYPE("void");
@@ -136,6 +161,10 @@ namespace gal::lang
 
 	using exception_query_interface_name = GAL_UTILS_FIXED_STRING_TYPE("what");
 
+	using exception_eval_error_reason_interface_name			  = GAL_UTILS_FIXED_STRING_TYPE("reason");
+	using exception_eval_error_pretty_print_interface_name = GAL_UTILS_FIXED_STRING_TYPE("pretty_print");
+	using exception_eval_error_stack_trace_interface_name = GAL_UTILS_FIXED_STRING_TYPE("stack_trace");
+
 	//*********************************************
 	// arithmetic operators
 	//*********************************************
@@ -194,6 +223,18 @@ namespace gal::lang
 
 	// true if the two boxed_values share the same internal type
 	using operator_type_match_name = GAL_UTILS_FIXED_STRING_TYPE("type_match");
+
+	using file_position_type_name = GAL_UTILS_FIXED_STRING_TYPE("FilePosition");
+	using file_position_line_interface_name = GAL_UTILS_FIXED_STRING_TYPE("line");
+	using file_position_column_interface_name = GAL_UTILS_FIXED_STRING_TYPE("column");
+
+	using ast_node_type_name = GAL_UTILS_FIXED_STRING_TYPE("ASTNode");
+	using ast_node_type_interface_name = GAL_UTILS_FIXED_STRING_TYPE("type");
+	using ast_node_text_interface_name = GAL_UTILS_FIXED_STRING_TYPE("text");
+	using ast_node_location_begin_interface_name = GAL_UTILS_FIXED_STRING_TYPE("begin");
+	using ast_node_location_end_interface_name = GAL_UTILS_FIXED_STRING_TYPE("end");
+	using ast_node_filename_interface_name = GAL_UTILS_FIXED_STRING_TYPE("filename");
+
 }
 
 #endif // GAL_LANG_DEFINES_HPP

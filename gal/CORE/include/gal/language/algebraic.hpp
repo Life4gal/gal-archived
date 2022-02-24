@@ -82,6 +82,8 @@ namespace gal::lang
 			unary_minus,
 			// ~
 			unary_bitwise_complement,
+
+			operations_size
 		};
 
 		using operation_string_type = std::string_view;
@@ -130,6 +132,8 @@ namespace gal::lang
 					{operator_unary_minus_name::value},
 					{operator_unary_bitwise_complement_name::value}
 			};
+
+			static_assert(std::size(operation_names) == static_cast<std::size_t>(operations::operations_size));
 
 			return operation_names[static_cast<std::size_t>(operation)];
 		}
