@@ -69,6 +69,9 @@ namespace gal::lang
 	//*********************************************
 	using object_type_name = GAL_UTILS_FIXED_STRING_TYPE("Object");
 
+	using object_self_type_name = GAL_UTILS_FIXED_STRING_TYPE("__this");
+	using object_self_name = GAL_UTILS_FIXED_STRING_TYPE("this");
+
 	using object_type_info_interface_name = GAL_UTILS_FIXED_STRING_TYPE("type_info");
 	using object_is_undefined_interface_name = GAL_UTILS_FIXED_STRING_TYPE("is_undef");
 	using object_is_const_interface_name = GAL_UTILS_FIXED_STRING_TYPE("is_const");

@@ -351,6 +351,7 @@ namespace gal::lang
 	{
 		friend struct ast_node_base<ast_node>;
 
+	private:
 		static const ast_node& unwrap_child(const std::reference_wrapper<ast_node>& c) { return c.get(); }
 
 	protected:

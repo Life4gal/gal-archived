@@ -3,6 +3,8 @@
 #ifndef GAL_UTILS_ALGORITHM_HPP
 #define GAL_UTILS_ALGORITHM_HPP
 
+#include <ranges>
+
 namespace gal::utils
 {
 	template<typename Function, typename Iterator, typename... Iterators>
@@ -20,6 +22,20 @@ namespace gal::utils
 		};
 
 		while (begin != end) { real_function(begin, iterators...); }
+	}
+
+	template<typename Function, std::ranges::range Range, typename... Iterator>
+	constexpr void zip_invoke(
+			Function&& function,
+			Range&& r,
+			Iterator ... iterator
+			)
+	{
+		zip_invoke(
+				std::forward<Function>(function),
+				std::ranges::begin(r),
+				std::ranges::end(r),
+				iterator...);
 	}
 }
 
