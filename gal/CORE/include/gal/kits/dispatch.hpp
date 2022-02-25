@@ -367,8 +367,7 @@ namespace gal::lang
 				scoped_object_scope(stack_holder& stack, const variable_type& object)
 					: scoped_scope{stack}
 				{
-					// todo: this' s name?
-					stack.add_variable_no_check("__this", object);
+					stack.add_variable_no_check(object_self_type_name::value, object);
 				}
 
 				~scoped_object_scope() noexcept { stack.get().pop_scope(); }
@@ -429,7 +428,7 @@ namespace gal::lang
 			 */
 			template<template<typename...> typename Container, typename... AnyOther>
 				requires std::is_constructible_v<Container<scope_type::value_type, AnyOther...>, scope_type::const_iterator, scope_type::const_iterator>
-			[[nodiscard]] Container<scope_type::value_type, AnyOther...> recent_locals() const
+			[[nodiscard]] Container<scope_type::value_type, AnyOther...> copy_recent_locals() const
 			{
 				const auto& stack = recent_stack_data();
 				gal_assert(not stack.empty());
@@ -441,7 +440,7 @@ namespace gal::lang
 			 */
 			template<template<typename...> typename Container, typename... AnyOther>
 				requires std::is_constructible_v<Container<scope_type::key_type, scope_type::mapped_type, AnyOther...>, scope_type::const_iterator, scope_type::const_iterator>
-			[[nodiscard]] Container<scope_type::key_type, scope_type::mapped_type, AnyOther...> recent_locals() const
+			[[nodiscard]] Container<scope_type::key_type, scope_type::mapped_type, AnyOther...> copy_recent_locals() const
 			{
 				const auto& stack = recent_stack_data();
 				gal_assert(not stack.empty());
@@ -454,11 +453,11 @@ namespace gal::lang
 			 */
 			template<template<typename...> typename Container, typename... AnyOther>
 				requires std::is_constructible_v<Container<scope_type::value_type, AnyOther...>, scope_type::const_iterator, scope_type::const_iterator>
-			[[nodiscard]] Container<scope_type::value_type, AnyOther...> recent_parent_locals() const
+			[[nodiscard]] Container<scope_type::value_type, AnyOther...> copy_recent_parent_locals() const
 			{
 				if (const auto& stack = recent_stack_data();
 					stack.size() > 1) { return Container<scope_type::value_type, AnyOther...>{stack[1].begin(), stack[1].end()}; }
-				return recent_locals<Container, AnyOther...>();
+				return copy_recent_locals<Container, AnyOther...>();
 			}
 
 			/**
@@ -467,11 +466,11 @@ namespace gal::lang
 			 */
 			template<template<typename...> typename Container, typename... AnyOther>
 				requires std::is_constructible_v<Container<scope_type::key_type, scope_type::mapped_type, AnyOther...>, scope_type::const_iterator, scope_type::const_iterator>
-			[[nodiscard]] Container<scope_type::key_type, scope_type::mapped_type, AnyOther...> recent_parent_locals() const
+			[[nodiscard]] Container<scope_type::key_type, scope_type::mapped_type, AnyOther...> copy_recent_parent_locals() const
 			{
 				if (const auto& s = recent_stack_data();
 					s.size() > 1) { return Container<scope_type::key_type, scope_type::mapped_type, AnyOther...>{s[1].begin(), s[1].end()}; }
-				return recent_locals<Container, AnyOther...>();
+				return copy_recent_locals<Container, AnyOther...>();
 			}
 
 			/**

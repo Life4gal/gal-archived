@@ -340,7 +340,7 @@ namespace gal::lang
 			[[nodiscard]] std::string to_string(const std::string_view prepend = "") const
 			{
 				std::string result;
-				to_string_to(result);
+				to_string_to(result, prepend);
 
 				return result;
 			}
@@ -351,6 +351,7 @@ namespace gal::lang
 	{
 		friend struct ast_node_base<ast_node>;
 
+	private:
 		static const ast_node& unwrap_child(const std::reference_wrapper<ast_node>& c) { return c.get(); }
 
 	protected:

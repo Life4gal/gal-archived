@@ -555,7 +555,39 @@ namespace gal::lang::kits
 			m.add_function(operator_type_match_name::value,
 			               fun(&boxed_value::is_type_match));
 
+			register_class<file_position>(
+					m,
+					file_position_type_name::value,
+					{make_constructor<file_position()>(),
+					 make_constructor<file_position(file_position::size_type, file_position::size_type)>()},
+					{{file_position_line_interface_name::value, fun(&file_position::line)},
+					 {file_position_column_interface_name::value, fun(&file_position::column)}});
 
+			register_class<ast_node>(
+					m,
+					ast_node_type_name::value,
+					{},
+					{{ast_node_type_interface_name::value, fun(&ast_node::type)},
+					 {ast_node_text_interface_name::value, fun(&ast_node::text)},
+					 {ast_node_location_begin_interface_name::value, fun(&ast_node::begin)},
+					 {ast_node_location_end_interface_name::value, fun(&ast_node::end)},
+					 {ast_node_filename_interface_name::value, fun(&ast_node::filename)},
+					 {ast_node_to_string_interface_name::value, fun(&ast_node::to_string)},
+					 {ast_node_children_interface_name::value, fun([](const ast_node& node)
+					 {
+						 const auto& children = node.get_children();
+
+						 std::vector<boxed_value> ret{};
+						 ret.reserve(children.size());
+						 std::ranges::transform(
+								 children,
+								 std::back_inserter(ret),
+								 kits::var<const ast_node::children_type::value_type&>
+								 );
+						 return ret;
+					 })}
+					}
+					);
 		}
 	};
 }
