@@ -234,7 +234,8 @@ namespace gal::lang
 	using ast_node_location_begin_interface_name = GAL_UTILS_FIXED_STRING_TYPE("begin");
 	using ast_node_location_end_interface_name = GAL_UTILS_FIXED_STRING_TYPE("end");
 	using ast_node_filename_interface_name = GAL_UTILS_FIXED_STRING_TYPE("filename");
-
+	using ast_node_to_string_interface_name = GAL_UTILS_FIXED_STRING_TYPE("to_string");
+	using ast_node_children_interface_name = GAL_UTILS_FIXED_STRING_TYPE("children");
 }
 
 #endif // GAL_LANG_DEFINES_HPP

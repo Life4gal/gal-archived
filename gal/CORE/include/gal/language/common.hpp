@@ -340,7 +340,7 @@ namespace gal::lang
 			[[nodiscard]] std::string to_string(const std::string_view prepend = "") const
 			{
 				std::string result;
-				to_string_to(result);
+				to_string_to(result, prepend);
 
 				return result;
 			}
