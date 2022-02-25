@@ -65,7 +65,8 @@ namespace gal::lang::utility
 		// `constexpr` requires c++23
 		[[nodiscard]] /* constexpr */ bool bare_equal(const gal_type_info& other) const noexcept { return bare_ti_ == other.bare_ti_ || *bare_ti_ == *other.bare_ti_; }
 
-		[[nodiscard]] constexpr bool bare_equal(const std::type_info& other) const noexcept { return not is_undefined() && *bare_ti_ == other; }
+		// `constexpr` requires c++23
+		[[nodiscard]] /* constexpr */ bool bare_equal(const std::type_info& other) const noexcept { return not is_undefined() && *bare_ti_ == other; }
 
 		[[nodiscard]] bool before(const gal_type_info& other) const noexcept { return ti_->before(*other.ti_); }
 

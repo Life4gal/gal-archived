@@ -105,6 +105,7 @@ namespace gal::lang::kits
 			if (ti == utility::make_type_info<long>()) { return get_integral_type<sizeof(long), true>(); }
 			if (ti == utility::make_type_info<unsigned long>()) { return get_integral_type<sizeof(unsigned long), false>(); }
 			if (ti == utility::make_type_info<long long>()) { return get_integral_type<sizeof(long long), true>(); }
+			if (ti == utility::make_type_info<unsigned long long>()) { return get_integral_type<sizeof(unsigned long long), true>(); }
 
 			throw std::bad_any_cast{};
 		}
@@ -569,6 +570,7 @@ namespace gal::lang::kits
 			if (ti.bare_equal(utility::make_type_info<long>())) { return boxed_number{as<long>()}; }
 			if (ti.bare_equal(utility::make_type_info<unsigned long>())) { return boxed_number{as<unsigned long>()}; }
 			if (ti.bare_equal(utility::make_type_info<long long>())) { return boxed_number{as<long long>()}; }
+			if (ti.bare_equal(utility::make_type_info<unsigned long long>())) { return boxed_number{as<unsigned long long>()}; }
 
 			throw std::bad_any_cast{};
 		}

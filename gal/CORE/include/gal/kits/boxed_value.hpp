@@ -16,10 +16,12 @@ namespace gal::lang::kits
 	public:
 		struct void_type {};
 
+		using attribute_name_type = std::string;
+
 	private:
 		struct real_data
 		{
-			using attributes_type = std::map<std::string, std::shared_ptr<real_data>>;
+			using attributes_type = std::map<attribute_name_type, std::shared_ptr<real_data>>;
 
 			utility::gal_type_info ti;
 			std::any object;
@@ -189,6 +191,8 @@ namespace gal::lang::kits
 
 		[[nodiscard]] const utility::gal_type_info& type_info() const noexcept { return data_->ti; }
 
+		[[nodiscard]] static bool is_type_match(const boxed_value& lhs, const boxed_value& rhs) noexcept { return lhs.type_info() == rhs.type_info(); }
+
 		/**
 		 * @brief return true if the object is uninitialized
 		 */
@@ -242,7 +246,7 @@ namespace gal::lang::kits
 
 		[[nodiscard]] const void* get_const_ptr() const noexcept { return data_->data; }
 
-		[[nodiscard]] boxed_value get_attribute(const std::string& name) const
+		[[nodiscard]] boxed_value get_attribute(const attribute_name_type& name) const
 		{
 			if (not data_->attributes) { data_->attributes = std::make_unique<real_data::attributes_type>(); }
 
@@ -256,15 +260,15 @@ namespace gal::lang::kits
 			}
 		}
 
-		boxed_value& copy_attribute(const boxed_value& other)
+		boxed_value& copy_attributes(const boxed_value& other)
 		{
 			if (other.data_->attributes) { data_->attributes = std::make_unique<real_data::attributes_type>(*other.data_->attributes); }
 			return *this;
 		}
 
-		boxed_value& clone_attribute(const boxed_value& other)
+		boxed_value& clone_attributes(const boxed_value& other)
 		{
-			copy_attribute(other);
+			copy_attributes(other);
 			reset_return_value();
 			return *this;
 		}

@@ -3,6 +3,7 @@
 #ifndef GAL_LANG_KITS_UTILITY_HPP
 #define GAL_LANG_KITS_UTILITY_HPP
 
+#include <gal/defines.hpp>
 #include <gal/kits/operators.hpp>
 #include <gal/kits/proxy_constructor.hpp>
 
@@ -45,14 +46,14 @@ namespace gal::lang::kits
 			engine_module& m,
 			const std::string_view name,
 			const detail::dispatch_function::functions_type& constructors,
-			const engine_module::functions_type& functions
+			const std::vector<engine_module::functions_type::value_type>& functions
 			)
 	{
-		m.add_type_info(name, utility::make_type_info<T>());
+		m.add_type_info(engine_module::name_type{name}, utility::make_type_info<T>());
 
 		std::ranges::for_each(
 				constructors,
-				[&m, name](const auto& ctor) { m.add_function(name, ctor); });
+				[&m, name](const auto& ctor) { m.add_function(engine_module::name_type{name}, ctor); });
 
 		std::ranges::for_each(
 				functions,
@@ -60,7 +61,7 @@ namespace gal::lang::kits
 	}
 
 	template<typename T>
-	void register_default_constructor(const std::string_view name, engine_module& m) { m.add_function(name, make_constructor<T()>()); }
+	void register_default_constructor(const std::string_view name, engine_module& m) { m.add_function(engine_module::name_type{name}, make_constructor<T()>()); }
 
 	/**
 	* @brief Adds a copy constructor for the given type to the given Model.
@@ -70,7 +71,7 @@ namespace gal::lang::kits
 	* @param m The Module to add the copy constructor to.
 	*/
 	template<typename T>
-	void register_copy_constructor(const std::string_view name, engine_module& m) { m.add_function(name, make_constructor<T(const T&)>()); }
+	void register_copy_constructor(const std::string_view name, engine_module& m) { m.add_function(engine_module::name_type{name}, make_constructor<T(const T&)>()); }
 
 	/**
 	 * @brief Adds a move constructor for the given type to the given Model.
@@ -80,7 +81,7 @@ namespace gal::lang::kits
 	 * @param m The Module to add the move constructor to.
 	 */
 	template<typename T>
-	void register_move_constructor(const std::string_view name, engine_module& m) { m.add_function(name, make_constructor<T(T&&)>()); }
+	void register_move_constructor(const std::string_view name, engine_module& m) { m.add_function(engine_module::name_type{name}, make_constructor<T(T&&)>()); }
 
 	template<typename T, bool NeedMove, bool NeedCopy = true>
 	void register_basic_constructor(const std::string_view name, engine_module& m)
@@ -99,7 +100,7 @@ namespace gal::lang::kits
 	void register_arithmetic_boxed_cast(const std::string_view name, engine_module& m)
 	{
 		m.add_function(
-				name,
+				engine_module::name_type{name},
 				fun([](const boxed_number& num) { return num.as<T>(); }));
 	}
 
@@ -107,8 +108,7 @@ namespace gal::lang::kits
 		requires std::is_arithmetic_v<T>
 	void register_arithmetic_from_string(const std::string_view name, engine_module& m)
 	{
-		// todo: prefix?
-		engine_module::name_type n{"to_"};
+		engine_module::name_type n{number_cast_interface_prefix::value};
 		n.reserve(n.size() + name.size());
 		n.append(name);
 
@@ -134,13 +134,12 @@ namespace gal::lang::kits
 		requires std::is_arithmetic_v<T>
 	void register_arithmetic(const std::string_view name, engine_module& m)
 	{
-		m.add_type_info(name, utility::make_type_info<T>());
+		m.add_type_info(engine_module::name_type{name}, utility::make_type_info<T>());
 		register_default_constructor<T>(name, m);
 		register_arithmetic_boxed_cast<T>(name, m);
 		register_arithmetic_from_string<T>(name, m);
 
-		// todo: prefix?
-		engine_module::name_type n{"to_"};
+		engine_module::name_type n{number_cast_interface_prefix::value};
 		n.reserve(n.size() + name.size());
 		n.append(name);
 		m.add_function(std::move(n), fun([](const T t) { return t; }));

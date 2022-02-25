@@ -66,7 +66,7 @@ namespace gal::lang::kits
 			auto call = [&]<bool HasReturn, std::size_t... Index>(std::index_sequence<Index...>) -> std::conditional_t<HasReturn, Result, void>
 			{
 				if constexpr (HasReturn) { return function(boxed_cast<Params>(params[Index], &conversion)...); }
-				else { function(boxed_cast<Params>(params[Index], &conversion)...); }
+				else { return function(boxed_cast<Params>(params[Index], &conversion)...); }
 			};
 
 			if constexpr (std::is_same_v<Result, void>)
@@ -459,10 +459,12 @@ namespace gal::lang::kits
 				  guard_{std::move(guard)},
 				  param_types_{std::move(param_types)} {}
 
+			[[nodiscard]] bool has_parse_tree() const { return parse_ast_node_.operator bool(); }
+
 			[[nodiscard]] const parse_ast_node_type::element_type& get_parse_tree() const
 			{
 				if (parse_ast_node_) { return *parse_ast_node_; }
-				throw std::runtime_error{"Dynamic_proxy_function does not contain a parse_tree"};
+				throw std::runtime_error{"dynamic_proxy_function does not contain a parse_tree"};
 			}
 
 			[[nodiscard]] bool has_guard() const noexcept { return guard_.operator bool(); }
@@ -740,7 +742,7 @@ namespace gal::lang::kits
 			return false;
 		}
 
-		[[nodiscard]] bool match(const function_parameters& params, const type_conversion_state& conversion) const override
+		[[nodiscard]] bool match(const function_parameters& params, const type_conversion_state&) const override
 		{
 			if (static_cast<arity_size_type>(params.size()) != arity_size) { return false; }
 
