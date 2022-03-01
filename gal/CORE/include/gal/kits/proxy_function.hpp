@@ -410,9 +410,9 @@ namespace gal::lang::kits
 	namespace base
 	{
 		/**
-	 * @brief A proxy_function implementation that is not type safe, the called
-	 * function is expecting a std::vector<boxed_value> that it works with how it chooses.
-	 */
+		 * @brief A proxy_function implementation that is not type safe, the called
+		 * function is expecting a std::vector<boxed_value> that it works with how it chooses.
+		 */
 		class dynamic_proxy_function_base : public proxy_function_base
 		{
 		public:

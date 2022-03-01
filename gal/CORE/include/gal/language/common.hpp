@@ -73,13 +73,13 @@ namespace gal::lang
 		equation_t,
 		global_decl_t,
 		var_decl_t,
-
 		assign_decl_t,
 		class_decl_t,
-		attribute_decl_t,
 		def_t,
-		lambda_t,
 		method_t,
+		attribute_decl_t,
+
+		lambda_t,
 		reference_t,
 		block_t,
 		no_scope_block_t,
@@ -148,13 +148,13 @@ namespace gal::lang
 					{"equation"},
 					{"global_decl"},
 					{"var_decl"},
-
 					{"assign_decl"},
 					{"class_decl"},
-					{"attr_decl"},
 					{"def"},
-					{"lambda"},
 					{"method"},
+					{"attribute_decl"},
+
+					{"lambda"},
 					{"reference"},
 					{"block"},
 					{"no_scope_block"},
