@@ -348,70 +348,12 @@ namespace gal::lang::kits
 				case unary_not:
 				case unary_plus:
 				case unary_minus:
-				case unary_bitwise_complement: break;
+				case unary_bitwise_complement:
+				case operations_size:
+				default: ;
 			}
 
 			throw std::bad_any_cast{};
-		}
-
-		static auto binary_invoke(algebraic_invoker::operations operation, const boxed_value& lhs, const boxed_value& rhs)
-		{
-			auto lhs_visitor = [operation, &lhs, &rhs]<typename T>(const T& lhs_part)
-			{
-				auto rhs_visitor = [&lhs, operation, &lhs_part](const auto& rhs_part)
-				{
-					return do_binary_invoke(
-							lhs,
-							operation,
-							lhs.is_return_value() ? nullptr : static_cast<T*>(lhs.get_ptr()),
-							lhs_part,
-							rhs_part);
-				};
-
-				return visit(
-						rhs,
-						rhs_visitor);
-			};
-
-			return visit(
-					lhs,
-					lhs_visitor
-					);
-		}
-
-		static auto unary_invoke(const boxed_value& object, algebraic_invoker::operations operation)
-		{
-			auto unary_operator = [operation]<typename T>(const T& self)
-			{
-				switch (operation)// NOLINT(clang-diagnostic-switch-enum, clang-diagnostic-switch-enum)
-				{
-						using enum algebraic_invoker::operations;
-					case unary_not:
-					{
-						if constexpr (std::is_integral_v<T>) { return const_var(!self); }
-						else { break; }
-					}
-					case unary_plus: { return const_var(+self); }
-					case unary_minus:
-					{
-						if constexpr (std::is_unsigned_v<T>) { return const_var(-static_cast<std::make_signed_t<T>>(self)); }
-						else { return const_var(-self); }
-					}
-					case unary_bitwise_complement:
-					{
-						if constexpr (std::is_integral_v<T>) { return const_var(~self); }
-						else { break; }
-					}
-					default: { break; }
-				}
-
-				throw std::bad_any_cast{};
-			};
-
-			return visit(
-					object,
-					unary_operator
-					);
 		}
 
 		template<typename Target, typename Source>
@@ -454,6 +396,8 @@ namespace gal::lang::kits
 			) { return true; }
 			return false;
 		}
+
+		[[nodiscard]] static boxed_value clone(const boxed_value& object) { return boxed_number{object}.as(object.type_info()).value; }
 
 		template<typename Target>
 		[[nodiscard]] Target as() const
@@ -594,6 +538,64 @@ namespace gal::lang::kits
 			}
 
 			throw std::bad_any_cast{};
+		}
+
+		static auto binary_invoke(algebraic_invoker::operations operation, const boxed_value& lhs, const boxed_value& rhs)
+		{
+			auto lhs_visitor = [operation, &lhs, &rhs]<typename T>(const T& lhs_part)
+			{
+				auto rhs_visitor = [&lhs, operation, &lhs_part](const auto& rhs_part)
+				{
+					return do_binary_invoke(
+							lhs,
+							operation,
+							lhs.is_return_value() ? nullptr : static_cast<T*>(lhs.get_ptr()),
+							lhs_part,
+							rhs_part);
+				};
+
+				return visit(
+						rhs,
+						rhs_visitor);
+			};
+
+			return visit(
+					lhs,
+					lhs_visitor);
+		}
+
+		static auto unary_invoke(const boxed_value& object, algebraic_invoker::operations operation)
+		{
+			auto unary_operator = [operation]<typename T>(const T& self)
+			{
+				switch (operation)// NOLINT(clang-diagnostic-switch-enum, clang-diagnostic-switch-enum)
+				{
+						using enum algebraic_invoker::operations;
+					case unary_not:
+					{
+						if constexpr (std::is_integral_v<T>) { return const_var(!self); }
+						else { break; }
+					}
+					case unary_plus: { return const_var(+self); }
+					case unary_minus:
+					{
+						if constexpr (std::is_unsigned_v<T>) { return const_var(-static_cast<std::make_signed_t<T>>(self)); }
+						else { return const_var(-self); }
+					}
+					case unary_bitwise_complement:
+					{
+						if constexpr (std::is_integral_v<T>) { return const_var(~self); }
+						else { break; }
+					}
+					default: { break; }
+				}
+
+				throw std::bad_any_cast{};
+			};
+
+			return visit(
+					object,
+					unary_operator);
 		}
 
 		[[nodiscard]] static boxed_number operator_assign(const boxed_number& lhs, const boxed_number& rhs) { return boxed_number{binary_invoke(algebraic_invoker::operations::assign, lhs.value, rhs.value)}; }

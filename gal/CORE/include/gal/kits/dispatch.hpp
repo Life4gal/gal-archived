@@ -396,7 +396,7 @@ namespace gal::lang
 				scoped_function_scope(scoped_function_scope&&) = delete;
 				scoped_function_scope& operator=(scoped_function_scope&&) = delete;
 
-				void push_params(kits::function_parameters&& params);
+				void push_params(kits::function_parameters&& params) const;
 			};
 
 			stack_holder()
@@ -1399,7 +1399,7 @@ namespace gal::lang
 
 		inline stack_holder::scoped_function_scope::~scoped_function_scope() noexcept { state.get().stack_holder().finish_call(state.get().conversion_saves()); }
 
-		inline void stack_holder::scoped_function_scope::push_params(kits::function_parameters&& params) { state.get().stack_holder().push_param(std::move(params)); }
+		inline void stack_holder::scoped_function_scope::push_params(kits::function_parameters&& params) const { state.get().stack_holder().push_param(std::move(params)); }
 	}
 }
 

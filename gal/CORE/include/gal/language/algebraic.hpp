@@ -138,7 +138,7 @@ namespace gal::lang
 			return operation_names[static_cast<std::size_t>(operation)];
 		}
 
-		constexpr static operations to_operation(const operation_string_type string, const bool is_unary) noexcept
+		constexpr static operations to_operation(const operation_string_type string, const bool is_unary = false) noexcept
 		{
 			switch (
 				constexpr auto hash = [](const operation_string_type s) constexpr noexcept { return utils::hash_fnv1a<false>(s); };

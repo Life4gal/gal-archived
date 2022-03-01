@@ -183,7 +183,7 @@ namespace gal::lang::kits
 		 *
 		 * @note data_ pointers are not shared in this case
 		 */
-		boxed_value assign(const boxed_value& other) noexcept
+		boxed_value& assign(const boxed_value& other) noexcept
 		{
 			*data_ = *other.data_;
 			return *this;

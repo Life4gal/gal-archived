@@ -3,6 +3,8 @@
 #ifndef GAL_UTILS_INITIALIZER_LIST_HPP
 #define GAL_UTILS_INITIALIZER_LIST_HPP
 
+#include <initializer_list>
+
 namespace gal::utils
 {
 	template<typename T>
@@ -30,6 +32,10 @@ namespace gal::utils
 		constexpr explicit initializer_list(const_reference object) noexcept
 			: begin_{&object},
 			  end_{begin_ + 1} {}
+
+		constexpr explicit initializer_list(const std::initializer_list<value_type>& list) noexcept
+			: begin_{list.begin()},
+			  end_{list.end()} {}
 
 		template<template<typename...> typename Container, typename... AnyOther>
 			requires requires(const Container<value_type, AnyOther...>& container)

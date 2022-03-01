@@ -104,10 +104,13 @@ namespace gal::lang::kits
 	{
 	public:
 		using param_name_type = std::string;
+		using param_name_view_type = std::string_view;
 		using param_type_type = utility::gal_type_info;
 
 		using param_type = std::pair<param_name_type, param_type_type>;
+		using param_view_type = std::pair<param_name_view_type, param_type_type>;
 		using param_type_container_type = std::vector<param_type>;
+		using param_type_view_container_type = std::vector<param_view_type>;
 
 	private:
 		param_type_container_type types_;
@@ -133,11 +136,27 @@ namespace gal::lang::kits
 			: types_{std::move(types)},
 			  empty_{true} { check_empty(); }
 
+		explicit param_types(param_type_view_container_type types)
+			: empty_{true}
+		{
+			types_.reserve(types.size());
+			std::ranges::for_each(
+					types,
+					[this](const auto& pair) { types_.emplace_back(pair.first, pair.second); });
+			check_empty();
+		}
+
 		bool operator==(const param_types& other) const noexcept { return types_ == other.types_; }
 
 		void push_front(param_name_type name, param_type_type ti)
 		{
 			types_.emplace(types_.begin(), std::move(name), ti);
+			check_empty();
+		}
+
+		void push_front(param_name_view_type name, param_type_type ti)
+		{
+			types_.emplace(types_.begin(), name, ti);
 			check_empty();
 		}
 

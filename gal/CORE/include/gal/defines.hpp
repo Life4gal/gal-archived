@@ -37,8 +37,6 @@ namespace gal::lang
 	using keyword_logical_or_name = GAL_UTILS_FIXED_STRING_TYPE("or");
 	using keyword_return_name = GAL_UTILS_FIXED_STRING_TYPE("return");
 
-
-
 	//*********************************************
 	// void type
 	//*********************************************
@@ -71,6 +69,7 @@ namespace gal::lang
 
 	using object_self_type_name = GAL_UTILS_FIXED_STRING_TYPE("__this");
 	using object_self_name = GAL_UTILS_FIXED_STRING_TYPE("this");
+	using object_clone_interface_name = GAL_UTILS_FIXED_STRING_TYPE("clone");
 
 	using object_type_info_interface_name = GAL_UTILS_FIXED_STRING_TYPE("type_info");
 	using object_is_undefined_interface_name = GAL_UTILS_FIXED_STRING_TYPE("is_undef");
@@ -173,6 +172,7 @@ namespace gal::lang
 	//*********************************************
 	using operator_unknown_name = GAL_UTILS_FIXED_STRING_TYPE("unknown");
 	using operator_assign_name = GAL_UTILS_FIXED_STRING_TYPE("=");
+	using operator_assign_if_type_match_name = GAL_UTILS_FIXED_STRING_TYPE(":=");
 	using operator_equal_name = GAL_UTILS_FIXED_STRING_TYPE("==");
 	using operator_not_equal_name = GAL_UTILS_FIXED_STRING_TYPE("!=");
 	using operator_less_than_name = GAL_UTILS_FIXED_STRING_TYPE("<");

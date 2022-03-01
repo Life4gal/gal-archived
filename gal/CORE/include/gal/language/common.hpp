@@ -64,33 +64,27 @@ namespace gal::lang
 	enum class ast_node_type
 	{
 		id_t,
-
+		constant_t,
+		compiled_t,
+		binary_t,
+		fun_call_t,
+		arg_t,
+		arg_list_t,
+		equation_t,
+		global_decl_t,
 		var_decl_t,
+
 		assign_decl_t,
 		class_decl_t,
 		attribute_decl_t,
-		binary_decl_t,
-		constant_decl_t,
-		global_decl_t,
-
 		def_t,
 		lambda_t,
 		method_t,
 		reference_t,
-
 		block_t,
 		no_scope_block_t,
-
-		fun_call_t,
-		array_call,
-
-		arg_t,
-		arg_list_t,
-
+		array_call_t,
 		dot_access_t,
-
-		equation,
-
 		if_t,
 		while_t,
 		for_t,
@@ -102,24 +96,18 @@ namespace gal::lang
 		case_t,
 		default_t,
 		noop_t,
-
 		logical_and_t,
 		logical_or_t,
-
 		inline_array,
 		inline_map,
 		map_pair_t,
 		value_range_t,
 		inline_range_t,
-
 		try_t,
 		catch_t,
 		finally_t,
-
 		file_t,
 		unary_t,
-		compiled_t,
-
 		ast_node_type_size
 	};
 
@@ -151,33 +139,27 @@ namespace gal::lang
 			// todo: name
 			constexpr ast_node_type_string_type node_type_names[]{
 					{"id"},
-
+					{"constant"},
+					{"compiled"},
+					{"binary_operation"},
+					{"fun_call"},
+					{"arg"},
+					{"arg_list"},
+					{"equation"},
+					{"global_decl"},
 					{"var_decl"},
+
 					{"assign_decl"},
 					{"class_decl"},
 					{"attr_decl"},
-					{"bin_decl"},
-					{"const_decl"},
-					{"global_decl"},
-
 					{"def"},
 					{"lambda"},
 					{"method"},
 					{"reference"},
-
 					{"block"},
 					{"no_scope_block"},
-
-					{"fun_call"},
 					{"array_call"},
-
-					{"arg"},
-					{"arg_list"},
-
 					{"dot_access"},
-
-					{"equation"},
-
 					{"if"},
 					{"while"},
 					{"for"},
@@ -189,23 +171,18 @@ namespace gal::lang
 					{"case"},
 					{"default"},
 					{"noop"},
-
 					{"logical_and"},
 					{"logical_or"},
-
 					{"inline_array"},
 					{"inline_map"},
 					{"map_pair"},
 					{"value_range"},
 					{"inline_range"},
-
 					{"try"},
 					{"catch"},
 					{"finally"},
-
 					{"file"},
-					{"unary"},
-					{"compiled"}
+					{"unary_operation"},
 			};
 
 			static_assert(std::size(node_type_names) == static_cast<std::size_t>(ast_node_type::ast_node_type_size));
