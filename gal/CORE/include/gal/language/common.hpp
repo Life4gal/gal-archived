@@ -22,7 +22,6 @@ namespace gal::lang
 					hash(keyword_define_name::value),
 					hash(keyword_function_name::value),
 					hash(keyword_variable_name::value),
-					hash(keyword_auto_name::value),
 					hash(keyword_true_name::value),
 					hash(keyword_false_name::value),
 					hash(keyword_class_name::value),
@@ -65,9 +64,12 @@ namespace gal::lang
 	{
 		id_t,
 		constant_t,
+		reference_t,
 		compiled_t,
 		binary_t,
 		fun_call_t,
+		array_call_t,
+		dot_access_t,
 		arg_t,
 		arg_list_t,
 		equation_t,
@@ -75,16 +77,14 @@ namespace gal::lang
 		var_decl_t,
 		assign_decl_t,
 		class_decl_t,
+		attribute_decl_t,
 		def_t,
 		method_t,
-		attribute_decl_t,
-
 		lambda_t,
-		reference_t,
-		block_t,
+
 		no_scope_block_t,
-		array_call_t,
-		dot_access_t,
+		block_t,
+
 		if_t,
 		while_t,
 		for_t,
@@ -715,7 +715,7 @@ namespace gal::lang
 				return *static_cast<T*>(get_tracer_ptr());
 			}
 
-			[[nodiscard]] virtual ast_node_ptr parse(const std::string_view input, const std::string_view filename) = 0;
+			[[nodiscard]] virtual ast_node_ptr parse(std::string_view input, std::string_view filename) = 0;
 			virtual void debug_print(const ast_node& node, std::string_view prepend = "") const = 0;
 
 		private:
