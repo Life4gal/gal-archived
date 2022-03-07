@@ -354,6 +354,8 @@ namespace gal::lang
 				explicit scoped_scope(stack_holder& stack)
 					: stack{stack} { stack.new_scope(); }
 
+				explicit scoped_scope(dispatch_state& s);
+
 				~scoped_scope() noexcept { stack.get().pop_scope(); }
 
 				scoped_scope(const scoped_scope&) = delete;
@@ -365,10 +367,9 @@ namespace gal::lang
 			struct scoped_object_scope : scoped_scope
 			{
 				scoped_object_scope(stack_holder& stack, const variable_type& object)
-					: scoped_scope{stack}
-				{
-					stack.add_variable_no_check(object_self_type_name::value, object);
-				}
+					: scoped_scope{stack} { stack.add_variable_no_check(object_self_type_name::value, object); }
+
+				explicit scoped_object_scope(dispatch_state& s, const variable_type& object);
 
 				~scoped_object_scope() noexcept { stack.get().pop_scope(); }
 			};
@@ -380,7 +381,14 @@ namespace gal::lang
 				explicit scoped_stack_scope(stack_holder& stack)
 					: stack{stack} { stack.new_stack(); }
 
+				explicit scoped_stack_scope(dispatch_state& s);
+
 				~scoped_stack_scope() noexcept { stack.get().pop_stack(); }
+
+				scoped_stack_scope(const scoped_stack_scope&) = delete;
+				scoped_stack_scope& operator=(const scoped_stack_scope&) = delete;
+				scoped_stack_scope(scoped_stack_scope&&) = delete;
+				scoped_stack_scope& operator=(scoped_stack_scope&&) = delete;
 			};
 
 			struct scoped_function_scope
@@ -1393,6 +1401,15 @@ namespace gal::lang
 
 			[[nodiscard]] engine_type::type::object_type get_object(const std::string_view name, engine_type::type::location_type& location) const { return engine_.get().get_object(name, location); }
 		};
+
+		inline stack_holder::scoped_scope::scoped_scope(dispatch_state& s)
+			: scoped_scope{s.stack_holder()} {}
+
+		inline stack_holder::scoped_object_scope::scoped_object_scope(dispatch_state& s, const variable_type& object)
+			: scoped_object_scope{s.stack_holder(), object} {}
+
+		inline stack_holder::scoped_stack_scope::scoped_stack_scope(dispatch_state& s)
+			: scoped_stack_scope{s.stack_holder()} {}
 
 		inline stack_holder::scoped_function_scope::scoped_function_scope(dispatch_state& s)
 			: state{s} { state.get().stack_holder().emit_call(state.get().conversion_saves()); }

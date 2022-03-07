@@ -175,6 +175,15 @@ namespace gal::lang::eval
 	}
 
 	template<typename T>
+	struct noop_ast_node final : ast_node_impl_base<T>
+	{
+		noop_ast_node()
+			: ast_node_impl_base{ast_node_type::noop_t, {}, {}} {}
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return kits::void_var(); }
+	};
+
+	template<typename T>
 	struct id_ast_node final : ast_node_impl_base<T>
 	{
 	private:
@@ -250,6 +259,44 @@ namespace gal::lang::eval
 			  function{std::move(function)} {}
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return function(this->children, state); }
+	};
+
+	template<typename T>
+	struct unary_operator_ast_node final : ast_node_impl_base<T>
+	{
+	private:
+		algebraic_invoker::operations operation_;
+
+		mutable typename ast_node_impl_base<T>::dispatch_engine::location_type location_{};
+
+	public:
+		unary_operator_ast_node(
+				const algebraic_invoker::operation_string_type operation,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::unary_t, operation, std::move(location), std::move(children)},
+			  operation_{algebraic_invoker::to_operation(operation, true)} {}
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			const kits::boxed_value object{ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state)};
+
+			try
+			{
+				// short circuit arithmetic operations
+				if (not utils::is_any_enum_of(algebraic_invoker::operations::unknown, algebraic_invoker::operations::bitwise_and) &&
+				    object.type_info().is_arithmetic()) { return kits::boxed_number::unary_invoke(object, operation_); }
+
+				typename ast_node_impl_base<T>::stack_holder::scoped_function_scope scoped_function{state};
+
+				const kits::function_parameters params{object};
+				scoped_function.push_params(params);
+				state->call_function(this->text, location_, params, state.conversion());
+			}
+			catch (const kits::dispatch_error& e) { throw eval_error{std_format::format("Error with unary operator '{}' evaluation", this->text), e.parameters, e.functions, false, *state}; }
+
+			return kits::void_var();
+		}
 	};
 
 	template<typename T>
@@ -346,7 +393,7 @@ namespace gal::lang::eval
 				const algebraic_invoker::operation_string_type operation,
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
-			: ast_node_impl_base{operation, ast_node_type::binary_t, std::move(location), std::move(children)},
+			: ast_node_impl_base{ast_node_type::binary_t, operation, std::move(location), std::move(children)},
 			  operation_{algebraic_invoker::to_operation(operation)} {}
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return do_operation(state, operation_, this->text, ast_node_impl_base<T>::unwrap_child(this->children[0]).eval(state), ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state)); }
@@ -1387,6 +1434,472 @@ namespace gal::lang::eval
 
 			return kits::void_var();
 		}
+	};
+
+	template<typename T>
+	struct break_ast_node final : ast_node_impl_base<T>
+	{
+		break_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children
+				)
+			: ast_node_impl_base{ast_node_type::break_t, text, std::move(location), std::move(children)} { }
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			// todo: better way
+			throw detail::break_loop{};
+		}
+	};
+
+	template<typename T>
+	struct continue_ast_node final : ast_node_impl_base<T>
+	{
+		continue_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::continue_t, text, std::move(location), std::move(children)} { }
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			// todo: better way
+			throw detail::continue_loop{};
+		}
+	};
+
+	template<typename T>
+	struct file_ast_node final : ast_node_impl_base<T>
+	{
+		file_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::file_t, text, std::move(location), std::move(children)} {}
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			try
+			{
+				if (const auto size = this->children.size();
+					size > 0)
+				{
+					std::ranges::for_each(
+							this->children.begin(),
+							this->children.end() - 1,
+							[&state](const auto& child) { ast_node_impl_base<T>::unwrap_child(child).eval(state); });
+					return ast_node_impl_base<T>::unwrap_child(this->children.back()).eval(state);
+				}
+				return kits::void_var();
+			}
+			catch (const detail::continue_loop&) { throw eval_error{"Unexpected 'continue' statement outside of a loop"}; }
+			catch (const detail::break_loop&) { throw eval_error{"Unexpected 'break' statement outside of a loop"}; }
+		}
+	};
+
+	template<typename T>
+	struct return_ast_node final : ast_node_impl_base<T>
+	{
+		return_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::return_t, text, std::move(location), std::move(children)} { }
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			if (not this->children.empty()) { throw detail::return_value{ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state)}; }
+			throw detail::return_value{kits::void_var()};
+		}
+	};
+
+	template<typename T>
+	struct switch_ast_node final : ast_node_impl_base<T>
+	{
+	private:
+		mutable typename ast_node_impl_base<T>::dispatch_engine::location_type location_;
+
+	public:
+		switch_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::switch_t, text, std::move(location), std::move(children)} { }
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state.stack_holder()};
+
+			const kits::boxed_value match_value{ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state)};
+
+			bool breaking = false;
+			decltype(this->children.size()) current_case = 0;
+			bool has_matched = false;
+			while (not breaking && current_case < this->children.size())
+			{
+				try
+				{
+					if (auto& current = ast_node_impl_base<T>::unwrap_child(this->children[current_case]);
+						current.type == ast_node_type::case_t)
+					{
+						// This is a little odd, but because want to see both the switch and the case simultaneously, I do a downcast here.
+						try
+						{
+							if (has_matched ||
+							    kits::boxed_cast<bool>(
+									    state->call_function(operator_equal_name::value, location_, kits::function_parameters{match_value, ast_node_impl_base<T>::unwrap_child(current.children.front()).eval(state)}, state.conversion())))
+							{
+								current.eval(state);
+								has_matched = true;
+							}
+						}
+						catch (const kits::bad_boxed_cast&) { throw eval_error{"Internal error: case guard evaluation not boolean"}; }
+					}
+					else if (current.type == ast_node_type::default_t)
+					{
+						current.eval(state);
+						has_matched = true;
+					}
+				}
+				catch (detail::break_loop&) { breaking = true; }
+				++current_case;
+			}
+
+			return kits::void_var();
+		}
+	};
+
+	template<typename T>
+	struct case_ast_node final : ast_node_impl_base<T>
+	{
+		case_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::case_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 2); }
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state.stack_holder()};
+
+			ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state);
+
+			return kits::void_var();
+		}
+	};
+
+	template<typename T>
+	struct default_ast_node final : ast_node_impl_base<T>
+	{
+		default_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::case_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 1); }
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state.stack_holder()};
+
+			ast_node_impl_base<T>::unwrap_child(this->children[0]).eval(state);
+
+			return kits::void_var();
+		}
+	};
+
+	template<typename T>
+	struct logical_and_ast_node final : ast_node_impl_base<T>
+	{
+		logical_and_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::logical_and_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 2); }
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			return kits::const_var(
+					this->get_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children[0]).eval(state), state) &&
+					this->get_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state), state));
+		}
+	};
+
+	template<typename T>
+	struct logical_or_ast_node final : ast_node_impl_base<T>
+	{
+		logical_or_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::logical_or_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 2); }
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			return kits::const_var(
+					this->get_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children[0]).eval(state), state) ||
+					this->get_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state), state));
+		}
+	};
+
+	template<typename T>
+	struct inline_range_ast_node final : ast_node_impl_base<T>
+	{
+	private:
+		mutable typename ast_node_impl_base<T>::dispatch_engine::location_type location_{};
+
+	public:
+		inline_range_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::inline_range_t, text, std::move(location), std::move(children)} {}
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			try
+			{
+				const auto& cs = ast_node_impl_base<T>::unwrap_child(ast_node_impl_base<T>::unwrap_child(this->children.front()).children.front());
+
+				return state->call_function(
+						operator_range_generate_name::value,
+						location_,
+						kits::function_parameters{
+								ast_node_impl_base<T>::unwrap_child(cs.children[0]).eval(state),
+								ast_node_impl_base<T>::unwrap_child(cs.children[1]).eval(state)},
+						state.conversion());
+			}
+			catch (const kits::dispatch_error& e) { throw eval_error{std_format::format("Can not generate range vector while calling '{}'", operator_range_generate_name::value), e.parameters, e.functions, false, *state}; }
+		}
+	};
+
+	template<typename T>
+	struct inline_array_ast_node final : ast_node_impl_base<T>
+	{
+	private:
+		mutable typename ast_node_impl_base<T>::dispatch_engine::location_type location_{};
+
+	public:
+		inline_array_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::inline_array_t, text, std::move(location), std::move(children)} {}
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			return kits::const_var(
+					[this, &state]
+					{
+						try
+						{
+							// todo: container type
+							std::vector<kits::boxed_value> result{};
+
+							if (not this->children.empty())
+							{
+								const auto& cs = ast_node_impl_base<T>::unwrap_child(this->children.front());
+								result.reserve(cs.children.size());
+								cs.children | std::ranges::for_each(
+										[this, &result, &state](const auto& child) { result.push_back(detail::clone_if_necessary(ast_node_impl_base<T>::unwrap_child(child).eval(state), location_, state)); });
+							}
+
+							return std::move(result);
+						}
+						catch (const kits::dispatch_error& e)
+						{
+							throw eval_error{
+									std_format::format("Can not find appropriate '{}' or copy constructor while insert elements into vector", object_clone_interface_name::value),
+									e.parameters,
+									e.functions,
+									false,
+									*state};
+						}
+					}());
+		}
+	};
+
+	template<typename T>
+	struct inline_map_ast_node final : ast_node_impl_base<T>
+	{
+	private:
+		mutable typename ast_node_impl_base<T>::dispatch_engine::location_type location_{};
+
+	public:
+		inline_map_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::inline_map_t, text, std::move(location), std::move(children)} {}
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			return kits::const_var(
+					[this, &state]
+					{
+						try
+						{
+							// todo: container type
+							std::map<std::string, kits::boxed_value> result{};
+
+							ast_node_impl_base<T>::unwrap_child(this->children.front()) |
+									std::ranges::for_each([this, &result, &state](const auto& child)
+									{
+										const auto& c = ast_node_impl_base<T>::unwrap_child(child);
+										result.emplace(
+												state->template boxed_cast<std::string>(ast_node_impl_base<T>::unwrap_child(c.children[0]).eval(state)),
+												detail::clone_if_necessary(ast_node_impl_base<T>::unwrap_child(c.children[1]).eval(state), location_, state));
+									});
+
+							return std::move(result);
+						}
+						catch (const kits::dispatch_error& e)
+						{
+							throw eval_error{
+									std_format::format("Can not find appropriate '{}' or copy constructor while insert elements into map", object_clone_interface_name::value),
+									e.parameters,
+									e.functions,
+									false,
+									*state};
+						}
+					}());
+		}
+	};
+
+	template<typename T>
+	struct map_pair_ast_node final : ast_node_impl_base<T>
+	{
+		map_pair_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::map_pair_t, text, std::move(location), std::move(children)} {}
+	};
+
+	template<typename T>
+	struct value_range_ast_node final : ast_node_impl_base<T>
+	{
+		value_range_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::value_range_t, text, std::move(location), std::move(children)} {}
+	};
+
+	template<typename T>
+	struct try_ast_node final : ast_node_impl_base<T>
+	{
+		try_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::try_t, text, std::move(location), std::move(children)} {}
+
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
+		{
+			auto finalize = [this, &state]
+			{
+				if (const auto& back = ast_node_impl_base<T>::unwrap_child(this->children.back());
+					back.type == ast_node_type::finally_t) { ast_node_impl_base<T>::unwrap_child(back.children.front()).eval(state); }
+			};
+
+			auto handle_and_finalize = [this, &state, finalize]<typename E>(const E& exception) requires(std::is_base_of_v<std::exception, E> || std::is_same_v<E, kits::boxed_value>)
+			{
+				auto ret = [this, &state](const E& e)
+				{
+					auto end_point = this->children.size();
+					if (ast_node_impl_base<T>::unwrap_child(this->children.back()).type == ast_node_type::finally_t)
+					{
+						gal_assert(end_point > 0);
+						end_point = this->children.size() - 1;
+					}
+
+					return [this, &state, end_point, exception = [](const E& exc)
+							{
+								if constexpr (std::is_same_v<E, kits::boxed_value>) { return exc; }
+								else { return kits::boxed_value{std::ref(exc)}; }
+							}(e)]
+					{
+						for (decltype(end_point) i = 1; i < end_point; ++i)
+						{
+							typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state};
+
+							auto& catch_block = ast_node_impl_base<T>::unwrap_child(this->children[i]);
+
+							if (catch_block.children.size() == 1)
+							{
+								// no variable capture
+								return ast_node_impl_base<T>::unwrap_child(catch_block.children.front()).eval(state);
+							}
+
+							if (catch_block.children.size() == 2 || catch_block.children.size() == 3)
+							{
+								const auto& name = arg_list_ast_node<T>::get_arg_name(ast_node_impl_base<T>::unwrap_child(catch_block.children[0]));
+
+								if (kits::param_types{
+										    kits::param_types::param_type_container_type{arg_list_ast_node<T>::get_arg_type(ast_node_impl_base<T>::unwrap_child(catch_block.children[0]))},
+										    state}
+								    .match(kits::function_parameters{exception}, state.conversion())
+								    .first)
+								{
+									state.add_object_no_check(name, exception);
+
+									if (catch_block.children.size() == 2)
+									{
+										// variable capture
+										return ast_node_impl_base<T>::unwrap_child(catch_block.children[1]).eval(state);
+									}
+								}
+
+								return {};
+							}
+
+							if (const auto& back = ast_node_impl_base<T>::unwrap_child(this->children.back());
+								back.type == ast_node_type::finally_t) { ast_node_impl_base<T>::unwrap_child(back.children.front()).eval(state); }
+							throw eval_error{"Internal error: catch block size unrecognized"};
+						}
+					};
+				}(exception);
+
+				finalize();
+
+				return ret;
+			};
+
+			typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state};
+
+			try { return ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state); }
+			catch (const eval_error& e) { return handle_and_finalize(e); }
+			catch (const std::runtime_error& e) { return handle_and_finalize(e); }
+			catch (const std::out_of_range& e) { return handle_and_finalize(e); }
+			catch (const std::exception& e) { return handle_and_finalize(e); }
+			catch (const kits::boxed_value& e) { return handle_and_finalize(e); }
+			catch (...)
+			{
+				finalize();
+				throw;
+			}
+		}
+	};
+
+	template<typename T>
+	struct catch_ast_node final : ast_node_impl_base<T>
+	{
+		catch_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::catch_t, text, std::move(location), std::move(children)} {}
+	};
+
+	template<typename T>
+	struct finally_ast_node final : ast_node_impl_base<T>
+	{
+		finally_ast_node(
+				const std::string_view text,
+				parse_location location,
+				typename ast_node_impl_base<T>::children_type children)
+			: ast_node_impl_base{ast_node_type::finally_t, text, std::move(location), std::move(children)} {}
 	};
 }
 

@@ -62,10 +62,13 @@ namespace gal::lang
 	 */
 	enum class ast_node_type
 	{
+		noop_t,
+
 		id_t,
 		constant_t,
 		reference_t,
 		compiled_t,
+		unary_t,
 		binary_t,
 		fun_call_t,
 		array_call_t,
@@ -91,23 +94,25 @@ namespace gal::lang
 		ranged_for_t,
 		break_t,
 		continue_t,
+		file_t,
 		return_t,
 		switch_t,
 		case_t,
 		default_t,
-		noop_t,
+
 		logical_and_t,
 		logical_or_t,
-		inline_array,
-		inline_map,
+
+		inline_range_t,
+		inline_array_t,
+		inline_map_t,
 		map_pair_t,
 		value_range_t,
-		inline_range_t,
+
 		try_t,
 		catch_t,
 		finally_t,
-		file_t,
-		unary_t,
+
 		ast_node_type_size
 	};
 
@@ -138,11 +143,17 @@ namespace gal::lang
 		{
 			// todo: name
 			constexpr ast_node_type_string_type node_type_names[]{
+					{"noop"},
+
 					{"id"},
 					{"constant"},
+					{"reference"},
 					{"compiled"},
+					{"unary_operation"},
 					{"binary_operation"},
 					{"fun_call"},
+					{"array_call"},
+					{"dot_access"},
 					{"arg"},
 					{"arg_list"},
 					{"equation"},
@@ -150,39 +161,38 @@ namespace gal::lang
 					{"var_decl"},
 					{"assign_decl"},
 					{"class_decl"},
+					{"attribute_decl"},
 					{"def"},
 					{"method"},
-					{"attribute_decl"},
-
 					{"lambda"},
-					{"reference"},
-					{"block"},
+
 					{"no_scope_block"},
-					{"array_call"},
-					{"dot_access"},
+					{"block"},
+
 					{"if"},
 					{"while"},
 					{"for"},
 					{"ranged_for"},
 					{"break"},
 					{"continue"},
+					{"file"},
 					{"return"},
 					{"switch"},
 					{"case"},
 					{"default"},
-					{"noop"},
+
 					{"logical_and"},
 					{"logical_or"},
+
+					{"inline_range"},
 					{"inline_array"},
 					{"inline_map"},
 					{"map_pair"},
 					{"value_range"},
-					{"inline_range"},
+
 					{"try"},
 					{"catch"},
 					{"finally"},
-					{"file"},
-					{"unary_operation"},
 			};
 
 			static_assert(std::size(node_type_names) == static_cast<std::size_t>(ast_node_type::ast_node_type_size));

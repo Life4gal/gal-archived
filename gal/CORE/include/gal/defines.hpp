@@ -237,6 +237,8 @@ namespace gal::lang
 	// true if the two boxed_values share the same internal type
 	using operator_type_match_name = GAL_UTILS_FIXED_STRING_TYPE("type_match");
 
+	using operator_range_generate_name = GAL_UTILS_FIXED_STRING_TYPE("range_generate");
+
 	using file_position_type_name = GAL_UTILS_FIXED_STRING_TYPE("FilePosition");
 	using file_position_line_interface_name = GAL_UTILS_FIXED_STRING_TYPE("line");
 	using file_position_column_interface_name = GAL_UTILS_FIXED_STRING_TYPE("column");
