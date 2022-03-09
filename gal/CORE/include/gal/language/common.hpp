@@ -237,6 +237,7 @@ namespace gal::lang
 			template<typename>
 			friend struct ast_node_base;
 
+			// todo: type is not necessary
 			ast_node_type type;
 			// do not modify text.
 			std::string text;

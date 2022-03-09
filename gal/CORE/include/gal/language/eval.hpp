@@ -19,18 +19,28 @@ namespace gal::lang::eval
 	template<typename T>
 	using ast_node_impl_ptr = std::unique_ptr<ast_node_impl_base<T>>;
 
-	template<typename T, typename... Args>
-	[[nodiscard]] ast_node_impl_ptr<T> make_node(Args&&... args) { return std::make_unique<ast_node_impl_ptr<T>>(std::forward<Args>(args)...); }
+	/**
+	 * @see ast_node_impl_base -> friend utility function 'remake_node'
+	 */
+	template<typename NodeType, typename... Args>
+		requires std::is_base_of_v<ast_node_impl_base<typename NodeType::tracer_type>, NodeType>
+	[[nodiscard]] ast_node_impl_ptr<typename NodeType::tracer_type> make_node(Args&&... args) { return std::make_unique<NodeType>(std::forward<Args>(args)...); }
+
+	template<typename NodeType, typename PrevNodeType, typename... Args>
+		requires std::is_base_of_v<ast_node_impl_base<typename NodeType::tracer_type>, NodeType>
+	[[nodiscard]] ast_node_impl_ptr<typename NodeType::tracer_type> remake_node(PrevNodeType&& prev, Args&&... extra_args);
 
 	template<typename Tracer>
 	struct ast_node_impl_base : ast_node
 	{
+		using tracer_type = Tracer;
 		// although we would like to use concept in the template parameter list,
 		// unfortunately we can't use it in concept without knowing the type of ast_node_impl,
 		// so we can only use this unfriendly way.
-		static_assert(requires(const lang::detail::dispatch_state& s, const ast_node_impl_base<Tracer>* n)
+		static_assert(
+			requires(const lang::detail::dispatch_state& s, const ast_node_impl_base<tracer_type>* n)
 			{
-				Tracer::trace(s, n);
+				tracer_type::trace(s, n);
 			},
 			"invalid tracer");
 
@@ -38,7 +48,7 @@ namespace gal::lang::eval
 		using dispatch_engine = lang::detail::dispatch_engine;
 		using dispatch_state = lang::detail::dispatch_state;
 
-		using node_ptr_type = ast_node_impl_ptr<Tracer>;
+		using node_ptr_type = ast_node_impl_ptr<tracer_type>;
 		using children_type = std::vector<node_ptr_type>;
 
 	private:
@@ -48,6 +58,10 @@ namespace gal::lang::eval
 		template<typename>
 		friend struct compiled_ast_node;
 		children_type children_;
+
+		template<typename NodeType, typename PrevNodeType, typename... Args>
+			requires std::is_base_of_v<ast_node_impl_base<typename NodeType::tracer_type>, NodeType>
+		[[nodiscard]] friend ast_node_impl_ptr<typename NodeType::tracer_type> remake_node(PrevNodeType&& prev, Args&&... extra_args) { return make_node<NodeType>(std::move(prev.text), std::move(prev.location), std::move(prev.children_), std::forward<Args>(extra_args)...); }
 
 	public:
 		ast_node_impl_base(
@@ -97,13 +111,11 @@ namespace gal::lang::eval
 			}
 		}
 
-		[[nodiscard]] bool empty_may_compiled() const noexcept;
-
-		[[nodiscard]] typename children_type::size_type size_may_compiled() const noexcept;
-
-		[[nodiscard]] ast_node_impl_base<Tracer>& get_child_may_compiled(typename children_type::size_type index) noexcept;
-
-		[[nodiscard]] const ast_node_impl_base<Tracer>& get_child_may_compiled(typename children_type::size_type index) const noexcept { return const_cast<ast_node_impl_base<Tracer>&>(*this).get_child_may_compiled(index); }
+		void swap(children_type& children) noexcept
+		{
+			using std::swap;
+			swap(children_, children);
+		}
 
 		[[nodiscard]] typename children_type::size_type size() const noexcept { return children_.size(); }
 
@@ -111,7 +123,7 @@ namespace gal::lang::eval
 
 		[[nodiscard]] ast_node_impl_base<Tracer>& get_child(typename children_type::size_type index) noexcept { return unwrap_child(children_[index]); }
 
-		[[nodiscard]] const ast_node_impl_base<Tracer>& get_child(typename children_type::size_type index) const noexcept { return const_cast<ast_node_impl_base<Tracer>&>(*this).operator[](index); }
+		[[nodiscard]] const ast_node_impl_base<Tracer>& get_child(typename children_type::size_type index) const noexcept { return const_cast<ast_node_impl_base<Tracer>&>(*this).get_child(index); }
 
 		[[nodiscard]] ast_node_impl_base<Tracer>& front() noexcept { return unwrap_child(children_.front()); }
 
@@ -121,7 +133,6 @@ namespace gal::lang::eval
 
 		[[nodiscard]] const ast_node_impl_base<Tracer>& back() const noexcept { return const_cast<ast_node_impl_base<Tracer>&>(*this).back(); }
 
-	private:
 		struct child_iterator
 		{
 			using iterator_concept = typename children_type::iterator::iterator_concept;
@@ -132,6 +143,10 @@ namespace gal::lang::eval
 			using reference = typename children_type::iterator::reference;
 
 			typename children_type::iterator iterator{};
+
+			[[nodiscard]] typename children_type::iterator& base() noexcept { return iterator; }
+
+			[[nodiscard]] const typename children_type::iterator& base() const noexcept { return iterator; }
 
 			[[nodiscard]] decltype(auto) operator*() const noexcept { return unwrap_child(*iterator); }
 
@@ -180,7 +195,6 @@ namespace gal::lang::eval
 			decltype(auto) operator[](difference_type offset) const noexcept { return unwrap_child(iterator[offset]); }
 		};
 
-	public:
 		[[nodiscard]] auto begin() noexcept { child_iterator{children_.begin()}; }
 
 		[[nodiscard]] auto begin() const noexcept { return child_iterator{children_.begin()}; }
@@ -1999,29 +2013,6 @@ namespace gal::lang::eval
 				typename ast_node_impl_base<T>::children_type children)
 			: ast_node_impl_base{ast_node_type::finally_t, text, std::move(location), std::move(children)} {}
 	};
-
-	template<typename Tracer>
-	ast_node_impl_base<Tracer>& ast_node_impl_base<Tracer>::get_child_may_compiled(typename children_type::size_type index) noexcept
-	{
-		gal_assert(index < children_.size());
-		if (auto& child = unwrap_child(children_[index]);
-			child.type == ast_node_type::compiled_t) { return *dynamic_cast<compiled_ast_node<Tracer>&>(child).original_node; }
-		else { return child; }
-	}
-
-	template<typename Tracer>
-	bool ast_node_impl_base<Tracer>::empty_may_compiled() const noexcept
-	{
-		if (this->type == ast_node_type::compiled_t) { return dynamic_cast<const compiled_ast_node<Tracer>&>(*this).original_node->empty(); }
-		return children_.empty();
-	}
-
-	template<typename Tracer>
-	typename ast_node_impl_base<Tracer>::children_type::size_type ast_node_impl_base<Tracer>::size_may_compiled() const noexcept
-	{
-		if (this->type == ast_node_type::compiled_t) { return dynamic_cast<const compiled_ast_node<Tracer>&>(*this).original_node->size(); }
-		return children_.size();
-	}
 }
 
 #endif // GAL_LANG_KITS_EVAL_HPP
