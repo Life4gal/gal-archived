@@ -256,16 +256,16 @@ namespace gal::lang
 
 			[[nodiscard]] const parse_location::filename_type& filename() const noexcept { return *location.filename; }
 
-			[[nodiscard]] file_position begin() const noexcept { return location.location.begin; }
+			[[nodiscard]] file_position location_begin() const noexcept { return location.location.begin; }
 
-			[[nodiscard]] file_position end() const noexcept { return location.location.end; }
+			[[nodiscard]] file_position location_end() const noexcept { return location.location.end; }
 
 			void pretty_format_position_to(std::string& target) const
 			{
 				std_format::format_to(std::back_inserter(target),
 				                      "(line: {}, column: {} in file '{}')",
-				                      begin().line,
-				                      begin().column,
+				                      location_begin().line,
+				                      location_begin().column,
 				                      filename());
 			}
 
@@ -339,7 +339,7 @@ namespace gal::lang
 		friend struct ast_node_base<ast_node>;
 
 	private:
-		static const ast_node& unwrap_child(const std::reference_wrapper<ast_node>& c) { return c.get(); }
+		static ast_node& unwrap_child(const std::reference_wrapper<ast_node>& c) { return c.get(); }
 
 	protected:
 		using ast_node_base<ast_node>::ast_node_base;

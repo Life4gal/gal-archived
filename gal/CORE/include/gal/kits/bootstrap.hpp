@@ -570,8 +570,8 @@ namespace gal::lang::kits
 					{},
 					{{ast_node_type_interface_name::value, fun(&ast_node::type)},
 					 {ast_node_text_interface_name::value, fun(&ast_node::text)},
-					 {ast_node_location_begin_interface_name::value, fun(&ast_node::begin)},
-					 {ast_node_location_end_interface_name::value, fun(&ast_node::end)},
+					 {ast_node_location_begin_interface_name::value, fun(&ast_node::location_begin)},
+					 {ast_node_location_end_interface_name::value, fun(&ast_node::location_end)},
 					 {ast_node_filename_interface_name::value, fun(&ast_node::filename)},
 					 {ast_node_to_string_interface_name::value, fun(&ast_node::to_string)},
 					 {ast_node_children_interface_name::value, fun([](const ast_node& node)

@@ -10,6 +10,7 @@
 #include <gal/kits/operators.hpp>
 #include <gal/kits/utility.hpp>
 #include <gal/language/eval.hpp>
+#include <gal/language/optimizer.hpp>
 
 #include <iostream>
 

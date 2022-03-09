@@ -19,6 +19,9 @@ namespace gal::lang::eval
 	template<typename T>
 	using ast_node_impl_ptr = std::unique_ptr<ast_node_impl_base<T>>;
 
+	template<typename T, typename... Args>
+	[[nodiscard]] ast_node_impl_ptr<T> make_node(Args&&... args) { return std::make_unique<ast_node_impl_ptr<T>>(std::forward<Args>(args)...); }
+
 	template<typename Tracer>
 	struct ast_node_impl_base : ast_node
 	{
@@ -38,21 +41,22 @@ namespace gal::lang::eval
 		using node_ptr_type = ast_node_impl_ptr<Tracer>;
 		using children_type = std::vector<node_ptr_type>;
 
+	private:
 		friend struct ast_node_base<ast_node>;
+		static ast_node_impl_base& unwrap_child(const node_ptr_type& c) { return *c; }
 
-	protected:
-		static const ast_node_impl_base& unwrap_child(const node_ptr_type& c) { return *c; }
+		template<typename>
+		friend struct compiled_ast_node;
+		children_type children_;
 
 	public:
-		children_type children;
-
 		ast_node_impl_base(
 				const ast_node_type type,
 				std::string text,
 				const parse_location location,
 				children_type children = {})
 			: ast_node{type, std::move(text), location},
-			  children{std::move(children)} {}
+			  children_{std::move(children)} {}
 
 	protected:
 		virtual kits::boxed_value do_eval(const dispatch_state& state) const { throw std::runtime_error{"un-dispatched ast_node (internal error)"}; }
@@ -70,10 +74,10 @@ namespace gal::lang::eval
 		[[nodiscard]] ast_node::children_type get_children() const final
 		{
 			ast_node::children_type ret{};
-			ret.reserve(children.size());
+			ret.reserve(children_.size());
 
 			std::ranges::for_each(
-					children,
+					children_,
 					[&ret](const auto& child) { ret.emplace_back(*child); });
 
 			return ret;
@@ -92,6 +96,98 @@ namespace gal::lang::eval
 				throw;
 			}
 		}
+
+		[[nodiscard]] bool empty_may_compiled() const noexcept;
+
+		[[nodiscard]] typename children_type::size_type size_may_compiled() const noexcept;
+
+		[[nodiscard]] ast_node_impl_base<Tracer>& get_child_may_compiled(typename children_type::size_type index) noexcept;
+
+		[[nodiscard]] const ast_node_impl_base<Tracer>& get_child_may_compiled(typename children_type::size_type index) const noexcept { return const_cast<ast_node_impl_base<Tracer>&>(*this).get_child_may_compiled(index); }
+
+		[[nodiscard]] typename children_type::size_type size() const noexcept { return children_.size(); }
+
+		[[nodiscard]] bool empty() const noexcept { return children_.empty(); }
+
+		[[nodiscard]] ast_node_impl_base<Tracer>& get_child(typename children_type::size_type index) noexcept { return unwrap_child(children_[index]); }
+
+		[[nodiscard]] const ast_node_impl_base<Tracer>& get_child(typename children_type::size_type index) const noexcept { return const_cast<ast_node_impl_base<Tracer>&>(*this).operator[](index); }
+
+		[[nodiscard]] ast_node_impl_base<Tracer>& front() noexcept { return unwrap_child(children_.front()); }
+
+		[[nodiscard]] const ast_node_impl_base<Tracer>& front() const noexcept { return const_cast<ast_node_impl_base<Tracer>&>(*this).front(); }
+
+		[[nodiscard]] ast_node_impl_base<Tracer>& back() noexcept { return unwrap_child(children_.back()); }
+
+		[[nodiscard]] const ast_node_impl_base<Tracer>& back() const noexcept { return const_cast<ast_node_impl_base<Tracer>&>(*this).back(); }
+
+	private:
+		struct child_iterator
+		{
+			using iterator_concept = typename children_type::iterator::iterator_concept;
+			using iterator_category = typename children_type::iterator::iterator_category;
+			using value_type = typename children_type::iterator::value_type;
+			using difference_type = typename children_type::iterator::difference_type;
+			using pointer = typename children_type::iterator::pointer;
+			using reference = typename children_type::iterator::reference;
+
+			typename children_type::iterator iterator{};
+
+			[[nodiscard]] decltype(auto) operator*() const noexcept { return unwrap_child(*iterator); }
+
+			[[nodiscard]] decltype(auto) operator->() const noexcept { return &unwrap_child(*iterator); }
+
+			decltype(auto) operator++() noexcept
+			{
+				iterator.operator++();
+				return *this;
+			}
+
+			decltype(auto) operator++(int) noexcept
+			{
+				auto tmp = *this;
+				iterator.operator++(int{});
+				return tmp;
+			}
+
+			decltype(auto) operator+(difference_type offset) noexcept
+			{
+				auto tmp = *this;
+				tmp.iterator += offset;
+				return tmp;
+			}
+
+			decltype(auto) operator--() const noexcept
+			{
+				iterator.operator--();
+				return *this;
+			}
+
+			decltype(auto) operator--(int) const noexcept
+			{
+				auto tmp = *this;
+				iterator.operator--(int{});
+				return tmp;
+			}
+
+			decltype(auto) operator-(difference_type offset) noexcept
+			{
+				auto tmp = *this;
+				tmp.iterator -= offset;
+				return tmp;
+			}
+
+			decltype(auto) operator[](difference_type offset) const noexcept { return unwrap_child(iterator[offset]); }
+		};
+
+	public:
+		[[nodiscard]] auto begin() noexcept { child_iterator{children_.begin()}; }
+
+		[[nodiscard]] auto begin() const noexcept { return child_iterator{children_.begin()}; }
+
+		[[nodiscard]] auto end() noexcept { child_iterator{children_.end()}; }
+
+		[[nodiscard]] auto end() const noexcept { return child_iterator{children_.end()}; }
 	};
 
 
@@ -225,12 +321,12 @@ namespace gal::lang::eval
 				const std::string_view text,
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
-			: ast_node_impl_base{ast_node_type::reference_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 1); }
+			: ast_node_impl_base{ast_node_type::reference_t, text, std::move(location), std::move(children)} { gal_assert(this->size() == 1); }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
 			kits::boxed_value object;
-			state.add_object_no_check(this->children.front()->text, object);
+			state.add_object_no_check(this->front().text, object);
 			return object;
 		}
 	};
@@ -258,7 +354,7 @@ namespace gal::lang::eval
 			  original_node{std::move(original_node)},
 			  function{std::move(function)} {}
 
-		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return function(this->children, state); }
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return function(this->children_, state); }
 	};
 
 	template<typename T>
@@ -279,7 +375,7 @@ namespace gal::lang::eval
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
-			const kits::boxed_value object{ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state)};
+			const kits::boxed_value object{this->front().eval(state)};
 
 			try
 			{
@@ -349,7 +445,7 @@ namespace gal::lang::eval
 			  operation_{algebraic_invoker::to_operation(operation)},
 			  rhs_{std::move(rhs)} {}
 
-		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return do_operation(state, this->text, ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state)); }
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return do_operation(state, this->text, this->front().eval(state)); }
 	};
 
 	template<typename T>
@@ -396,7 +492,7 @@ namespace gal::lang::eval
 			: ast_node_impl_base{ast_node_type::binary_t, operation, std::move(location), std::move(children)},
 			  operation_{algebraic_invoker::to_operation(operation)} {}
 
-		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return do_operation(state, operation_, this->text, ast_node_impl_base<T>::unwrap_child(this->children[0]).eval(state), ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state)); }
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return do_operation(state, operation_, this->text, this->get_child(0).eval(state), this->get_child(1).eval(state)); }
 	};
 
 	template<typename T>
@@ -409,25 +505,26 @@ namespace gal::lang::eval
 			typename ast_node_impl_base<T>::stack_holder::scoped_function_scope function_scope{state};
 
 			std::vector<kits::boxed_value> params;
-			params.reserve(ast_node_impl_base<T>::unwrap_child(this->children[1]).children.size());
+			params.reserve(this->get_child(1).size());
+
 			std::ranges::for_each(
-					ast_node_impl_base<T>::unwrap_child(this->children[1]).children,
+					this->get_child(1),
 					[&params, &state](const auto& child) { params.push_back(child.eval(state)); });
 
 			if constexpr (SaveParams) { function_scope.push_params(kits::function_parameters{params}); }
 			else { }
 
-			kits::boxed_value function{ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state)};
+			kits::boxed_value function{this->front().eval(state)};
 
 			try { return (*state->template boxed_cast<const kits::proxy_function_base*>(function))(kits::function_parameters{params}, state.conversion()); }
-			catch (const kits::dispatch_error& e) { throw eval_error{std_format::format("{} with function '{}' called", e.what(), ast_node_impl_base<T>::unwrap_child(this->children.front()).text), e.parameters, e.functions, false, *state}; }
+			catch (const kits::dispatch_error& e) { throw eval_error{std_format::format("{} with function '{}' called", e.what(), this->front()).text, e.parameters, e.functions, false, *state}; }
 			catch (const kits::bad_boxed_cast&)
 			{
 				try
 				{
 					// handle the case where there is only 1 function to try to call and dispatch fails on it
 					throw eval_error{
-							std_format::format("Error with function '{}' called", ast_node_impl_base<T>::unwrap_child(this->children.front()).text),
+							std_format::format("Error with function '{}' called", this->front().text),
 							params,
 							kits::proxy_function_base::contained_functions_type{state->template boxed_cast<const kits::proxy_function_base::contained_functions_type::value_type&>(function)},
 							false,
@@ -436,19 +533,19 @@ namespace gal::lang::eval
 				catch (const kits::bad_boxed_cast&)
 				{
 					throw eval_error{
-							std_format::format("'{}' does not evaluate to a function", ast_node_impl_base<T>::unwrap_child(this->children.front()).pretty_print())};
+							std_format::format("'{}' does not evaluate to a function", this->front().pretty_print())};
 				}
 			}
 			catch (const kits::arity_error& e)
 			{
 				throw eval_error{
-						std_format::format("{} with function '{}' called", e.what(), ast_node_impl_base<T>::unwrap_child(this->children.front()).text)
+						std_format::format("{} with function '{}' called", e.what(), this->front().text)
 				};
 			}
 			catch (const kits::guard_error& e)
 			{
 				throw eval_error{
-						std_format::format("{} with function '{}' called", e.what(), ast_node_impl_base<T>::unwrap_child(this->children.front()).text)};
+						std_format::format("{} with function '{}' called", e.what(), this->front().text)};
 			}
 			catch (detail::return_value& ret) { return std::move(ret.value); }
 		}
@@ -458,7 +555,7 @@ namespace gal::lang::eval
 				const std::string_view text,
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
-			: ast_node_impl_base{ast_node_type::fun_call_t, text, std::move(location), std::move(children)} { gal_assert(not this->children.empty()); }
+			: ast_node_impl_base{ast_node_type::fun_call_t, text, std::move(location), std::move(children)} { gal_assert(not this->empty()); }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return do_eval<true>(state); }
 	};
@@ -488,7 +585,7 @@ namespace gal::lang::eval
 		{
 			typename ast_node_impl_base<T>::stack_holder::scoped_function_scope scoped_function{state};
 
-			kits::function_parameters params{ast_node_impl_base<T>::unwrap_child(this->children[0]).eval(state), ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state)};
+			kits::function_parameters params{this->get_child(0).eval(state), this->get_child(1).eval(state)};
 
 			try
 			{
@@ -515,23 +612,24 @@ namespace gal::lang::eval
 				typename ast_node_impl_base<T>::children_type children)
 			: ast_node_impl_base{ast_node_type::dot_access_t, text, std::move(location), std::move(children)},
 			  function_name_{
-					  utils::is_any_enum_of(ast_node_impl_base<T>::unwrap_child(this->children[1]).type, ast_node_type::fun_call_t, ast_node_type::array_call_t) ? ast_node_impl_base<T>::unwrap_child(ast_node_impl_base<T>::unwrap_child(this->children[1]).children.front()).text : ast_node_impl_base<T>::unwrap_child(this->children[1]).text
+					  utils::is_any_enum_of(this->get_child(1).type, ast_node_type::fun_call_t, ast_node_type::array_call_t) ? this->get_child(1).front().text : this->get_child(1).text
 			  } {}
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
 			typename ast_node_impl_base<T>::stack_holder::scoped_function_scope scoped_function{state};
 
-			auto ret = ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state);
+			auto ret = this->front().eval(state);
 
 			std::vector params{ret};
 
 			const bool has_function_params = [this, &params, &state]
 			{
-				if (ast_node_impl_base<T>::unwrap_child(this->children[1]).children.size() > 1)
+				if (this->get_child(1).size() > 1)
 				{
-					ast_node_impl_base<T>::unwrap_child(ast_node_impl_base<T>::unwrap_child(this->children[1]).children[1]).children |
-							std::ranges::for_each([&params, &state](const auto& c) { params.push_back(ast_node_impl_base<T>::unwrap_child(c).eval(state)); });
+					std::ranges::for_each(
+							this->get_child(1).get_child(1),
+							[&params, &state](const auto& c) { params.push_back(c.eval(state)); });
 
 					return true;
 				}
@@ -550,11 +648,11 @@ namespace gal::lang::eval
 			}
 			catch (detail::return_value& r) { ret = std::move(r.value); }
 
-			if (const auto c = ast_node_impl_base<T>::unwrap_child(this->children[1]); c.type == ast_node_type::array_call_t)
+			if (const auto c = this->get_child(1); c.type == ast_node_type::array_call_t)
 			{
 				try
 				{
-					const kits::function_parameters p{ret, ast_node_impl_base<T>::unwrap_child(c.children[1]).eval(state)};
+					const kits::function_parameters p{ret, c.get_child(1).eval(state)};
 					ret = state->call_function(container_subscript_interface_name::value, array_location_, p, state.conversion());
 				}
 				catch (const kits::dispatch_error& e) { throw eval_error{std_format::format("Can not find appropriate array lookup operator '{}'", container_subscript_interface_name::value), e.parameters, e.functions, false, *state}; }
@@ -585,37 +683,37 @@ namespace gal::lang::eval
 
 		static std::string_view get_arg_name(const ast_node_impl_base<T>& node)
 		{
-			if (node.children.empty()) { return node.text; }
-			if (node.children.size() == 1) { return node.children.front()->text; }
-			return node.children[1]->text;
+			if (node.empty()) { return node.text; }
+			if (node.size() == 1) { return node.front().text; }
+			return node.get_child(1).text;
 		}
 
 		static std::vector<std::string_view> get_arg_names(const ast_node_impl_base<T>& node)
 		{
 			std::vector<decltype(get_arg_name(node))> ret;
-			ret.reserve(node.children.size());
+			ret.reserve(node.size());
 
 			std::ranges::for_each(
-					node.children,
-					[&ret](const auto& child) { ret.push_back(get_arg_name(ast_node_impl_base<T>::unwrap_child(child))); });
+					node,
+					[&ret](const auto& child) { ret.push_back(get_arg_name(child)); });
 
 			return ret;
 		}
 
 		static std::pair<std::string_view, utility::gal_type_info> get_arg_type(const ast_node_impl_base<T>& node, const typename ast_node_impl_base<T>::dispatch_state& state)
 		{
-			if (node.children.size() < 2) { return {}; }
-			return {node.children.front()->text, state->get_type_info(node.children.front()->text, false)};
+			if (node.size() < 2) { return {}; }
+			return {node.front().text, state->get_type_info(node.front().text, false)};
 		}
 
 		static kits::param_types get_arg_types(const ast_node_impl_base<T>& node, const typename ast_node_impl_base<T>::dispatch_state& state)
 		{
 			std::vector<decltype(get_arg_type(node, state))> ret;
-			ret.reserve(node.children.size());
+			ret.reserve(node.size());
 
 			std::ranges::for_each(
-					node.children,
-					[&ret, &state](const auto& child) { ret.push_back(get_arg_type(ast_node_impl_base<T>::unwrap_child(child), state)); });
+					node,
+					[&ret, &state](const auto& child) { ret.push_back(get_arg_type(child, state)); });
 
 			return kits::param_types{ret};
 		}
@@ -636,7 +734,7 @@ namespace gal::lang::eval
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
 			: ast_node_impl_base{ast_node_type::equation_t, text, std::move(location), std::move(children)},
-			  operation_{algebraic_invoker::to_operation(this->text)} { gal_assert(this->children.size() == 2); }
+			  operation_{algebraic_invoker::to_operation(this->text)} { gal_assert(this->size() == 2); }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
@@ -648,8 +746,8 @@ namespace gal::lang::eval
 				// consider `var range = range(x)`
 				// if we declare the variable in scope first, then the name lookup fails
 				// for the RHS
-				auto rhs = ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state);
-				auto lhs = ast_node_impl_base<T>::unwrap_child(this->children[0]).eval(state);
+				auto rhs = this->get_child(1).eval(state);
+				auto lhs = this->get_child(0).eval(state);
 				return kits::function_parameters{lhs, rhs};
 			}();
 
@@ -667,9 +765,9 @@ namespace gal::lang::eval
 				{
 					if (params[0].is_undefined())
 					{
-						if (not this->children.empty() &&
-						    (ast_node_impl_base<T>::unwrap_child(this->children.front()).type == ast_node_type::reference_t ||
-						     (not ast_node_impl_base<T>::unwrap_child(this->children.front()).children.empty() && ast_node_impl_base<T>::unwrap_child(ast_node_impl_base<T>::unwrap_child(this->children.front()).children.front()).type == ast_node_type::reference_t))
+						if (not this->empty() &&
+						    (this->front().type == ast_node_type::reference_t ||
+						     (not this->front().empty() && this->front().front().type == ast_node_type::reference_t))
 						)
 						{
 							// todo: This does not handle the case of an unassigned reference variable being assigned outside of its declaration
@@ -736,8 +834,8 @@ namespace gal::lang::eval
 		{
 			const auto name = [&]() -> std::string_view
 			{
-				if (ast_node_impl_base<T>::unwrap_child(this->children.front()).type == ast_node_type::reference_t) { return ast_node_impl_base<T>::unwrap_child(ast_node_impl_base<T>::unwrap_child(this->children.front()).children.front()).text; }
-				return ast_node_impl_base<T>::unwrap_child(this->children.front()).text;
+				if (this->front().type == ast_node_type::reference_t) { return this->front().front().text; }
+				return this->front().text;
 			}();
 
 			return state->add_global_mutable_no_throw(name, {});
@@ -755,7 +853,7 @@ namespace gal::lang::eval
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
-			const auto& name = ast_node_impl_base<T>::unwrap_child(this->children.front()).text;
+			const auto& name = this->front().text;
 
 			try
 			{
@@ -782,11 +880,11 @@ namespace gal::lang::eval
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
-			const auto& name = ast_node_impl_base<T>::unwrap_child(this->children.front()).text;
+			const auto& name = this->front().text;
 
 			try
 			{
-				auto object = detail::clone_if_necessary(ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state), location_, state);
+				auto object = detail::clone_if_necessary(this->get_child(1).eval(state), location_, state);
 				object.reset_return_value();
 				state.add_object_no_check(name, object);
 				return object;
@@ -810,9 +908,9 @@ namespace gal::lang::eval
 
 			// todo: do this better
 			// put class name in current scope, so it can be looked up by the attrs and methods
-			state.add_object_no_check("_current_class_name", kits::const_var(ast_node_impl_base<T>::unwrap_child(this->children.front()).text));
+			state.add_object_no_check("_current_class_name", kits::const_var(this->front().text));
 
-			ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state);
+			this->get_child(1).eval(state);
 
 			return kits::void_var();
 		}
@@ -847,11 +945,11 @@ namespace gal::lang::eval
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
-			const auto& class_name = ast_node_impl_base<T>::unwrap_child(this->children.front()).text;
+			const auto& class_name = this->get_child(0).text;
 
 			try
 			{
-				const auto& attribute_name = ast_node_impl_base<T>::unwrap_child(this->children[1]).text;
+				const auto& attribute_name = this->get_child(1).text;
 
 				state->add_function(attribute_name,
 				                    std::make_shared<kits::dynamic_object_function>(
@@ -937,18 +1035,18 @@ namespace gal::lang::eval
 			  // This apparent use after move is safe because we are only
 			  // moving out the specific elements we need on each operation.
 			  body_node{get_body_node(std::move(children))},
-			  guard_node{get_guard_node(std::move(children), children.size() - this->children.size() == 2)} { }
+			  guard_node{get_guard_node(std::move(children), children.size() - this->size() == 2)} { }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
 			auto [num_params, param_names, param_types] = [this, &state]
 			{
-				if (this->children.size() > 1 && ast_node_impl_base<T>::unwrap_child(this->children[1]).type == ast_node_type::arg_list_t)
+				if (this->size() > 1 && this->get_child(1).type == ast_node_type::arg_list_t)
 				{
 					return std::make_tuple(
-							ast_node_impl_base<T>::unwrap_child(this->children[1]).children.size(),
-							arg_list_ast_node<T>::get_arg_names(ast_node_impl_base<T>::unwrap_child(this->children[1])),
-							arg_list_ast_node<T>::get_arg_types(ast_node_impl_base<T>::unwrap_child(this->children[1]), state));
+							this->get_child(1).size(),
+							arg_list_ast_node<T>::get_arg_names(this->get_child(1)),
+							arg_list_ast_node<T>::get_arg_types(this->get_child(1), state));
 				}
 				return {0, {}, {}};
 			}();
@@ -969,7 +1067,7 @@ namespace gal::lang::eval
 
 			try
 			{
-				const auto& name = ast_node_impl_base<T>::unwrap_child(this->children.front()).text;
+				const auto& name = this->front().text;
 				state->add_function(
 						name,
 						kits::make_dynamic_proxy_function(
@@ -1008,7 +1106,7 @@ namespace gal::lang::eval
 			  // This apparent use after move is safe because we are only
 			  // moving out the specific elements we need on each operation.
 			  body_node{def_ast_node<T>::get_body_node(std::move(children))},
-			  guard_node{def_ast_node<T>::get_guard_node(std::move(children), children.size() - this->children.size() == 2)} {}
+			  guard_node{def_ast_node<T>::get_guard_node(std::move(children), children.size() - this->size() == 2)} {}
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
@@ -1018,15 +1116,15 @@ namespace gal::lang::eval
 			// we maybe need modify param_types
 			// auto [param_types] = [this, &state, &param_names] 
 			// {
-			// 	auto args = arg_list_ast_node<T>::get_arg_names(ast_node_impl_base<T>::unwrap_child(this->children[2]));
+			// 	auto args = arg_list_ast_node<T>::get_arg_names(this->get_child(2));
 			// 	param_names.insert(param_names.end(), args.begin(), args.end());
-			// 	return arg_list_ast_node<T>::get_arg_types(ast_node_impl_base<T>::unwrap_child(this->children[2]), state);
+			// 	return arg_list_ast_node<T>::get_arg_types(this->get_child(2)), state);
 			// }();
 			{
-				auto args = arg_list_ast_node<T>::get_arg_names(ast_node_impl_base<T>::unwrap_child(this->children[2]));
+				auto args = arg_list_ast_node<T>::get_arg_names(this->get_child(2));
 				param_names.insert(param_names.end(), args.begin(), args.end());
 			}
-			auto param_types = arg_list_ast_node<T>::get_arg_types(ast_node_impl_base<T>::unwrap_child(this->children[2]), state);
+			auto param_types = arg_list_ast_node<T>::get_arg_types(this->get_child(2), state);
 
 			const auto num_params = param_names.size();
 
@@ -1046,8 +1144,8 @@ namespace gal::lang::eval
 
 			try
 			{
-				const auto& class_name = ast_node_impl_base<T>::unwrap_child(this->children[0]).text;
-				const auto& function_name = ast_node_impl_base<T>::unwrap_child(this->children[1]).text;
+				const auto& class_name = this->get_child(0).text;
+				const auto& function_name = this->get_child(1).text;
 
 				if (function_name == class_name)
 				{
@@ -1097,13 +1195,10 @@ namespace gal::lang::eval
 		using shared_node_type = std::shared_ptr<ast_node_impl_base<T>>;
 
 	private:
-		decltype(arg_list_ast_node<T>::get_arg_names(ast_node_impl_base<T>::unwrap_child(std::declval<ast_node_impl_base<T>>()->children[1]))) param_names_;
-		bool is_capture_this_;
+		decltype(arg_list_ast_node<T>::get_arg_names(std::declval<ast_node_impl_base<T>>()->get_child(1))) param_names_;
 		shared_node_type lambda_node_;
 
 	public:
-		static bool is_capture_this(const typename ast_node_impl_base<T>::children_type& children) noexcept { return children | std::ranges::any_of([](const auto& child) { return ast_node_impl_base<T>::unwrap_child(child).children.front()->text == object_self_name::value; }); }
-
 		lambda_ast_node(
 				const std::string_view text,
 				parse_location location,
@@ -1117,39 +1212,41 @@ namespace gal::lang::eval
 							  std::make_move_iterator(children.end() - 1)
 					  }
 			  },
-			  param_names_{arg_list_ast_node<T>::get_arg_names(ast_node_impl_base<T>::unwrap_child(this->children[1]))},
-			  is_capture_this_{is_capture_this(ast_node_impl_base<T>::unwrap_child(this->children.front()).children)},
+			  param_names_{arg_list_ast_node<T>::get_arg_names(this->get_child(1))},
 			  // This apparent use after move is safe because we are only
 			  // moving out the specific elements we need on each operation.
 			  lambda_node_{std::move(children.back())} {}
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
-			const auto captures = [&]
+			const auto [captures, is_capture_this] = [&]
 			{
 				utils::unordered_hash_map<std::string_view, kits::boxed_value> named_captures;
+				bool capture_this = false;
 
-				ast_node_impl_base<T>::unwrap_child(this->children.front()).children |
-						std::ranges::for_each([&named_captures, &state](const auto& c)
+				std::ranges::for_each(
+						this->front(),
+						[&named_captures, &capture_this, &state](const auto& c)
 						{
-							const auto& ucf = ast_node_impl_base<T>::unwrap_child(ast_node_impl_base<T>::unwrap_child(c).children.front());
-							named_captures.emplace(ucf.text, ucf.eval(state));
+							const auto& cf = c.front();
+							named_captures.emplace(cf.text, cf.eval(state));
+							capture_this = cf.text == object_self_name::value;
 						});
 
-				return named_captures;
+				return std::make_pair(std::move(named_captures), capture_this);
 			}();
 
 			const auto [num_params, param_types] = [this, &state]
 			{
-				const auto& params = ast_node_impl_base<T>::unwrap_child(this->children[1]);
-				return std::make_pair(params.children.size(), arg_list_ast_node<T>::get_arg_types(params, state));
+				const auto& params = this->get_child(1);
+				return std::make_pair(params.size(), arg_list_ast_node<T>::get_arg_types(params, state));
 			}();
 
 			auto engine = std::ref(*state);
 
 			return kits::boxed_value{
 					kits::make_dynamic_proxy_function(
-							[engine, this, &captures](const kits::function_parameters& params) { return detail::eval_function(engine, lambda_node_, params, param_names_, captures, is_capture_this_); },
+							[engine, this, &captures, is_capture_this](const kits::function_parameters& params) { return detail::eval_function(engine, lambda_node_, params, param_names_, captures, is_capture_this); },
 							static_cast<kits::proxy_function_base::arity_size_type>(num_params),
 							lambda_node_,
 							param_types)};
@@ -1165,14 +1262,13 @@ namespace gal::lang::eval
 		friend struct block_ast_node<T>;
 
 	private:
-		static kits::boxed_value do_eval(const typename ast_node_impl_base<T>::children_type& children, const typename ast_node_impl_base<T>::dispatch_state& state)
+		static kits::boxed_value do_eval(const ast_node_impl_base<T>& node, const typename ast_node_impl_base<T>::dispatch_state& state)
 		{
 			std::ranges::for_each(
-					children.begin(),
-					children.end() - 1,
-					[this, &state](const auto& c) { ast_node_impl_base<T>::unwrap_child(c).eval(state); });
+					node,
+					[&state](const auto& c) { c.eval(state); });
 
-			return ast_node_impl_base<T>::unwrap_child(children.back()).eval(state);
+			return node.back().eval(state);
 		}
 
 	public:
@@ -1182,7 +1278,7 @@ namespace gal::lang::eval
 				typename ast_node_impl_base<T>::children_type children)
 			: ast_node_impl_base{ast_node_type::no_scope_block_t, text, std::move(location), std::move(children)} {}
 
-		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return do_eval(this->children, state); }
+		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override { return do_eval(*this, state); }
 	};
 
 	template<typename T>
@@ -1198,7 +1294,7 @@ namespace gal::lang::eval
 		{
 			typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state.stack_holder()};
 
-			return no_scope_block_ast_node<T>::do_eval(this->children, state);
+			return no_scope_block_ast_node<T>::do_eval(*this, state);
 		}
 	};
 
@@ -1226,12 +1322,12 @@ namespace gal::lang::eval
 				const std::string_view text,
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
-			: ast_node_impl_base{ast_node_type::if_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 3); }
+			: ast_node_impl_base{ast_node_type::if_t, text, std::move(location), std::move(children)} { gal_assert(this->size() == 3); }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
-			if (this->get_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state), state)) { return ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state); }
-			return ast_node_impl_base<T>::unwrap_child(this->children[2]).eval(state);
+			if (this->get_bool_condition(this->get_child(0).eval(state), state)) { return this->get_child(1).eval(state); }
+			return this->get_child(2).eval(state);
 		}
 	};
 
@@ -1263,9 +1359,9 @@ namespace gal::lang::eval
 
 			try
 			{
-				while (this->get_scoped_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children.front()), state))
+				while (this->get_scoped_bool_condition(this->get_child(0), state))
 				{
-					try { ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state); }
+					try { this->get_child(1).eval(state); }
 					catch (detail::continue_loop&)
 					{
 						// we got a continued exception, which means all the remaining
@@ -1307,7 +1403,7 @@ namespace gal::lang::eval
 				const std::string_view text,
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
-			: ast_node_impl_base{ast_node_type::for_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 4); }
+			: ast_node_impl_base{ast_node_type::for_t, text, std::move(location), std::move(children)} { gal_assert(this->size() == 4); }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
@@ -1315,14 +1411,14 @@ namespace gal::lang::eval
 
 			try
 			{
-				for (ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state);
-				     this->get_scoped_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children[1]), state);
-				     ast_node_impl_base<T>::unwrap_child(this->children[2]).eval(state))
+				for (this->get_child(0).eval(state);
+				     this->get_scoped_bool_condition(this->get_child(1), state);
+				     this->get_child(2).eval(state))
 				{
 					try
 					{
 						// Body of Loop
-						ast_node_impl_base<T>::unwrap_child(this->children[3]);
+						this->get_child(3).eval(state);
 					}
 					catch (detail::continue_loop&)
 					{
@@ -1357,7 +1453,7 @@ namespace gal::lang::eval
 				const std::string_view text,
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
-			: ast_node_impl_base{ast_node_type::ranged_for_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 3); }
+			: ast_node_impl_base{ast_node_type::ranged_for_t, text, std::move(location), std::move(children)} { gal_assert(this->size() == 3); }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
@@ -1373,15 +1469,16 @@ namespace gal::lang::eval
 
 			const auto call_function = [&state](const auto& function, const auto& param) { return kits::dispatch(*function, kits::function_parameters{param}, state.conversion()); };
 
-			const auto& loop_var_name = ast_node_impl_base<T>::unwrap_child(this->children[0]).text;
-			auto range_expression_result = ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state);
+			const auto& loop_var_name = this->get_child(0).text;
+			auto range_expression_result = this->get_child(1).eval(state);
 
 			const auto do_loop = [&loop_var_name, this, &state](const auto& ranged)
 			{
 				try
 				{
-					ranged |
-							std::ranges::for_each([&loop_var_name, this, &state]<typename Var>(Var&& var)
+					std::ranges::for_each(
+							ranged,
+							[&loop_var_name, this, &state]<typename Var>(Var&& var)
 							{
 								// This scope push and pop might not be the best thing for perf,
 								// but we know it's 100% correct
@@ -1389,8 +1486,8 @@ namespace gal::lang::eval
 								if constexpr (std::is_same_v<Var, kits::boxed_value>) { state.add_object_no_check(loop_var_name, std::move(var)); }
 								else { state.add_object_no_check(loop_var_name, kits::boxed_value{std::ref(var)}); }
 
-								try { ast_node_impl_base<T>::unwrap_child(this->children[2]).eval(state); }
-								catch (detail::continue_loop&) {}
+								try { this->get_child(2).eval(state); }
+								catch (detail::continue_loop&) { }
 							});
 				}
 				catch (detail::break_loop&)
@@ -1419,7 +1516,7 @@ namespace gal::lang::eval
 					typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state.stack_holder()};
 
 					state.add_object_no_check(loop_var_name, call_function(front_function, ranged));
-					try { ast_node_impl_base<T>::unwrap_child(this->children[2]).eval(state); }
+					try { this->get_child(2).eval(state); }
 					catch (detail::continue_loop&)
 					{
 						// continue statement hit
@@ -1482,14 +1579,14 @@ namespace gal::lang::eval
 		{
 			try
 			{
-				if (const auto size = this->children.size();
+				if (const auto size = this->size();
 					size > 0)
 				{
 					std::ranges::for_each(
-							this->children.begin(),
-							this->children.end() - 1,
-							[&state](const auto& child) { ast_node_impl_base<T>::unwrap_child(child).eval(state); });
-					return ast_node_impl_base<T>::unwrap_child(this->children.back()).eval(state);
+							this->begin(),
+							this->end() - 1,
+							[&state](const auto& child) { child.eval(state); });
+					return this->back().eval(state);
 				}
 				return kits::void_var();
 			}
@@ -1509,7 +1606,7 @@ namespace gal::lang::eval
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
-			if (not this->children.empty()) { throw detail::return_value{ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state)}; }
+			if (not this->empty()) { throw detail::return_value{this->front().eval(state)}; }
 			throw detail::return_value{kits::void_var()};
 		}
 	};
@@ -1531,16 +1628,16 @@ namespace gal::lang::eval
 		{
 			typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state.stack_holder()};
 
-			const kits::boxed_value match_value{ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state)};
+			const kits::boxed_value match_value{this->front().eval(state)};
 
 			bool breaking = false;
-			decltype(this->children.size()) current_case = 0;
+			decltype(this->size()) current_case = 0;
 			bool has_matched = false;
-			while (not breaking && current_case < this->children.size())
+			while (not breaking && current_case < this->size())
 			{
 				try
 				{
-					if (auto& current = ast_node_impl_base<T>::unwrap_child(this->children[current_case]);
+					if (auto& current = this->get_child(current_case);
 						current.type == ast_node_type::case_t)
 					{
 						// This is a little odd, but because want to see both the switch and the case simultaneously, I do a downcast here.
@@ -1548,7 +1645,7 @@ namespace gal::lang::eval
 						{
 							if (has_matched ||
 							    kits::boxed_cast<bool>(
-									    state->call_function(operator_equal_name::value, location_, kits::function_parameters{match_value, ast_node_impl_base<T>::unwrap_child(current.children.front()).eval(state)}, state.conversion())))
+									    state->call_function(operator_equal_name::value, location_, kits::function_parameters{match_value, current.front().eval(state)}, state.conversion())))
 							{
 								current.eval(state);
 								has_matched = true;
@@ -1577,13 +1674,13 @@ namespace gal::lang::eval
 				const std::string_view text,
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
-			: ast_node_impl_base{ast_node_type::case_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 2); }
+			: ast_node_impl_base{ast_node_type::case_t, text, std::move(location), std::move(children)} { gal_assert(this->size() == 2); }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
 			typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state.stack_holder()};
 
-			ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state);
+			this->get_child(1).eval(state);
 
 			return kits::void_var();
 		}
@@ -1596,13 +1693,13 @@ namespace gal::lang::eval
 				const std::string_view text,
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
-			: ast_node_impl_base{ast_node_type::case_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 1); }
+			: ast_node_impl_base{ast_node_type::case_t, text, std::move(location), std::move(children)} { gal_assert(this->size() == 1); }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
 			typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state.stack_holder()};
 
-			ast_node_impl_base<T>::unwrap_child(this->children[0]).eval(state);
+			this->get_child(0).eval(state);
 
 			return kits::void_var();
 		}
@@ -1615,13 +1712,13 @@ namespace gal::lang::eval
 				const std::string_view text,
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
-			: ast_node_impl_base{ast_node_type::logical_and_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 2); }
+			: ast_node_impl_base{ast_node_type::logical_and_t, text, std::move(location), std::move(children)} { gal_assert(this->size() == 2); }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
 			return kits::const_var(
-					this->get_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children[0]).eval(state), state) &&
-					this->get_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state), state));
+					this->get_bool_condition(this->get_child(0).eval(state), state) &&
+					this->get_bool_condition(this->get_child(1).eval(state), state));
 		}
 	};
 
@@ -1632,13 +1729,13 @@ namespace gal::lang::eval
 				const std::string_view text,
 				parse_location location,
 				typename ast_node_impl_base<T>::children_type children)
-			: ast_node_impl_base{ast_node_type::logical_or_t, text, std::move(location), std::move(children)} { gal_assert(this->children.size() == 2); }
+			: ast_node_impl_base{ast_node_type::logical_or_t, text, std::move(location), std::move(children)} { gal_assert(this->size() == 2); }
 
 		kits::boxed_value do_eval(const typename ast_node_impl_base<T>::dispatch_state& state) const override
 		{
 			return kits::const_var(
-					this->get_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children[0]).eval(state), state) ||
-					this->get_bool_condition(ast_node_impl_base<T>::unwrap_child(this->children[1]).eval(state), state));
+					this->get_bool_condition(this->get_child(0).eval(state), state) ||
+					this->get_bool_condition(this->get_child(1).eval(state), state));
 		}
 	};
 
@@ -1659,14 +1756,14 @@ namespace gal::lang::eval
 		{
 			try
 			{
-				const auto& cs = ast_node_impl_base<T>::unwrap_child(ast_node_impl_base<T>::unwrap_child(this->children.front()).children.front());
+				const auto& cs = this->front().front();
 
 				return state->call_function(
 						operator_range_generate_name::value,
 						location_,
 						kits::function_parameters{
-								ast_node_impl_base<T>::unwrap_child(cs.children[0]).eval(state),
-								ast_node_impl_base<T>::unwrap_child(cs.children[1]).eval(state)},
+								cs.get_child(0).eval(state),
+								cs.get_child(1).eval(state)},
 						state.conversion());
 			}
 			catch (const kits::dispatch_error& e) { throw eval_error{std_format::format("Can not generate range vector while calling '{}'", operator_range_generate_name::value), e.parameters, e.functions, false, *state}; }
@@ -1696,12 +1793,13 @@ namespace gal::lang::eval
 							// todo: container type
 							std::vector<kits::boxed_value> result{};
 
-							if (not this->children.empty())
+							if (not this->empty())
 							{
-								const auto& cs = ast_node_impl_base<T>::unwrap_child(this->children.front());
-								result.reserve(cs.children.size());
-								cs.children | std::ranges::for_each(
-										[this, &result, &state](const auto& child) { result.push_back(detail::clone_if_necessary(ast_node_impl_base<T>::unwrap_child(child).eval(state), location_, state)); });
+								const auto& cs = this->front();
+								result.reserve(cs.size());
+								std::ranges::for_each(
+										cs,
+										[this, &result, &state](const auto& child) { result.push_back(detail::clone_if_necessary(child.eval(state), location_, state)); });
 							}
 
 							return std::move(result);
@@ -1742,13 +1840,13 @@ namespace gal::lang::eval
 							// todo: container type
 							std::map<std::string, kits::boxed_value> result{};
 
-							ast_node_impl_base<T>::unwrap_child(this->children.front()) |
-									std::ranges::for_each([this, &result, &state](const auto& child)
+							std::ranges::for_each(
+									this->front(),
+									[this, &result, &state](const auto& child)
 									{
-										const auto& c = ast_node_impl_base<T>::unwrap_child(child);
 										result.emplace(
-												state->template boxed_cast<std::string>(ast_node_impl_base<T>::unwrap_child(c.children[0]).eval(state)),
-												detail::clone_if_necessary(ast_node_impl_base<T>::unwrap_child(c.children[1]).eval(state), location_, state));
+												state->template boxed_cast<std::string>(child.get_child(0).eval(state)),
+												detail::clone_if_necessary(child.get_child(1).eval(state), location_, state));
 									});
 
 							return std::move(result);
@@ -1799,19 +1897,19 @@ namespace gal::lang::eval
 		{
 			auto finalize = [this, &state]
 			{
-				if (const auto& back = ast_node_impl_base<T>::unwrap_child(this->children.back());
-					back.type == ast_node_type::finally_t) { ast_node_impl_base<T>::unwrap_child(back.children.front()).eval(state); }
+				if (const auto& back = this->back();
+					back.type == ast_node_type::finally_t) { back.front().eval(state); }
 			};
 
 			auto handle_and_finalize = [this, &state, finalize]<typename E>(const E& exception) requires(std::is_base_of_v<std::exception, E> || std::is_same_v<E, kits::boxed_value>)
 			{
 				auto ret = [this, &state](const E& e)
 				{
-					auto end_point = this->children.size();
-					if (ast_node_impl_base<T>::unwrap_child(this->children.back()).type == ast_node_type::finally_t)
+					auto end_point = this->size();
+					if (this->back().type == ast_node_type::finally_t)
 					{
 						gal_assert(end_point > 0);
-						end_point = this->children.size() - 1;
+						end_point = this->size() - 1;
 					}
 
 					return [this, &state, end_point, exception = [](const E& exc)
@@ -1820,42 +1918,42 @@ namespace gal::lang::eval
 								else { return kits::boxed_value{std::ref(exc)}; }
 							}(e)]
 					{
-						for (decltype(end_point) i = 1; i < end_point; ++i)
+						for (decltype(this->size()) i = 1; i < end_point; ++i)
 						{
 							typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state};
 
-							auto& catch_block = ast_node_impl_base<T>::unwrap_child(this->children[i]);
+							auto& catch_block = this->get_child(i);
 
-							if (catch_block.children.size() == 1)
+							if (catch_block.size() == 1)
 							{
 								// no variable capture
-								return ast_node_impl_base<T>::unwrap_child(catch_block.children.front()).eval(state);
+								return catch_block.front().eval(state);
 							}
 
-							if (catch_block.children.size() == 2 || catch_block.children.size() == 3)
+							if (catch_block.size() == 2 || catch_block.size() == 3)
 							{
-								const auto& name = arg_list_ast_node<T>::get_arg_name(ast_node_impl_base<T>::unwrap_child(catch_block.children[0]));
+								const auto& name = arg_list_ast_node<T>::get_arg_name(catch_block.front());
 
 								if (kits::param_types{
-										    kits::param_types::param_type_container_type{arg_list_ast_node<T>::get_arg_type(ast_node_impl_base<T>::unwrap_child(catch_block.children[0]))},
+										    kits::param_types::param_type_container_type{arg_list_ast_node<T>::get_arg_type(catch_block.front())},
 										    state}
 								    .match(kits::function_parameters{exception}, state.conversion())
 								    .first)
 								{
 									state.add_object_no_check(name, exception);
 
-									if (catch_block.children.size() == 2)
+									if (catch_block.size() == 2)
 									{
 										// variable capture
-										return ast_node_impl_base<T>::unwrap_child(catch_block.children[1]).eval(state);
+										return catch_block.get_child(1).eval(state);
 									}
 								}
 
 								return {};
 							}
 
-							if (const auto& back = ast_node_impl_base<T>::unwrap_child(this->children.back());
-								back.type == ast_node_type::finally_t) { ast_node_impl_base<T>::unwrap_child(back.children.front()).eval(state); }
+							if (const auto& back = this->back();
+								back.type == ast_node_type::finally_t) { back.front().eval(state); }
 							throw eval_error{"Internal error: catch block size unrecognized"};
 						}
 					};
@@ -1868,7 +1966,7 @@ namespace gal::lang::eval
 
 			typename ast_node_impl_base<T>::stack_holder::scoped_scope scoped_scope{state};
 
-			try { return ast_node_impl_base<T>::unwrap_child(this->children.front()).eval(state); }
+			try { return this->front().eval(state); }
 			catch (const eval_error& e) { return handle_and_finalize(e); }
 			catch (const std::runtime_error& e) { return handle_and_finalize(e); }
 			catch (const std::out_of_range& e) { return handle_and_finalize(e); }
@@ -1901,6 +1999,29 @@ namespace gal::lang::eval
 				typename ast_node_impl_base<T>::children_type children)
 			: ast_node_impl_base{ast_node_type::finally_t, text, std::move(location), std::move(children)} {}
 	};
+
+	template<typename Tracer>
+	ast_node_impl_base<Tracer>& ast_node_impl_base<Tracer>::get_child_may_compiled(typename children_type::size_type index) noexcept
+	{
+		gal_assert(index < children_.size());
+		if (auto& child = unwrap_child(children_[index]);
+			child.type == ast_node_type::compiled_t) { return *dynamic_cast<compiled_ast_node<Tracer>&>(child).original_node; }
+		else { return child; }
+	}
+
+	template<typename Tracer>
+	bool ast_node_impl_base<Tracer>::empty_may_compiled() const noexcept
+	{
+		if (this->type == ast_node_type::compiled_t) { return dynamic_cast<const compiled_ast_node<Tracer>&>(*this).original_node->empty(); }
+		return children_.empty();
+	}
+
+	template<typename Tracer>
+	typename ast_node_impl_base<Tracer>::children_type::size_type ast_node_impl_base<Tracer>::size_may_compiled() const noexcept
+	{
+		if (this->type == ast_node_type::compiled_t) { return dynamic_cast<const compiled_ast_node<Tracer>&>(*this).original_node->size(); }
+		return children_.size();
+	}
 }
 
 #endif // GAL_LANG_KITS_EVAL_HPP
