@@ -11,79 +11,83 @@
 namespace gal::utils
 {
 	template<typename CharType, bool IsNullTerminate = true, typename CharTrait = std::char_traits<CharType>>
-	class string_block
-	{
-	public:
-		constexpr static bool is_null_terminate = IsNullTerminate;
-
-		using view_type = std::basic_string_view<CharType, CharTrait>;
-		using value_type = typename view_type::value_type;
-		using size_type = typename view_type::size_type;
-
-		constexpr explicit string_block(size_type capacity)
-			: memory_(new value_type[capacity]),
-			  capacity_(capacity),
-			  size_(0) {}
-
-		[[nodiscard]] constexpr static size_type length_of(view_type str) noexcept
-		{
-			if constexpr (is_null_terminate) { return str.length() + 1; }
-			else { return str.length(); }
-		}
-
-		[[nodiscard]] constexpr view_type append(view_type str)
-		{
-			// todo: shall we re-alloc more memory?
-			gal_assert(storable(str), "There is not enough space for this string.");
-
-			const auto dest = memory_.get() + size_;
-			std::ranges::copy(str, dest);
-
-			if constexpr (is_null_terminate) { dest[str.length()] = 0; }
-
-			size_ += length_of(str);
-			return {dest, str.length()};
-		}
-
-		[[nodiscard]] constexpr bool storable(view_type str) const noexcept { return available_space() >= length_of(str); }
-
-		[[nodiscard]] constexpr size_type available_space() const noexcept { return capacity_ - size_; }
-
-		[[nodiscard]] constexpr bool more_available_space_than(const string_block& other) { return available_space() > other.available_space(); }
-
-	private:
-		std::unique_ptr<value_type[]> memory_;
-		size_type capacity_;
-		size_type size_;
-	};
-
-	template<typename CharType, bool IsNullTerminate = true, typename CharTrait = std::char_traits<CharType>>
 	class string_pool
 	{
-	public:
+		template<typename BlockCharType, bool BlockIsNullTerminate, typename BlockCharTrait>
+		class string_block
+		{
+			template<typename, bool, typename>
+			friend class string_block;
+		public:
+			constexpr static bool is_null_terminate = IsNullTerminate;
+
+			using view_type = std::basic_string_view<CharType, CharTrait>;
+			using value_type = typename view_type::value_type;
+			using size_type = typename view_type::size_type;
+
+			constexpr static CharType invalid_char{'\0'};
+
+		private:
+			std::unique_ptr<value_type[]> memory_;
+			size_type capacity_;
+			size_type size_;
+
+		public:
+			constexpr explicit string_block(size_type capacity)
+				: memory_{std::make_unique<value_type[]>(capacity)},
+				  capacity_{capacity},
+				  size_{0} {}
+
+			[[nodiscard]] constexpr static size_type length_of(view_type str) noexcept
+			{
+				if constexpr (is_null_terminate) { return str.length() + 1; }
+				else { return str.length(); }
+			}
+
+			[[nodiscard]] constexpr view_type append(view_type str)
+			{
+				if (not storable(str))
+				{
+					gal_assert(storable(str), "There are not enough space for this string.");
+					return &invalid_char;
+				}
+
+				const auto dest = memory_.get() + size_;
+				std::ranges::copy(str, dest);
+
+				if constexpr (is_null_terminate) { dest[str.length()] = 0; }
+
+				size_ += length_of(str);
+				return {dest, str.length()};
+			}
+
+			[[nodiscard]] constexpr bool storable(view_type str) const noexcept { return available_space() >= length_of(str); }
+
+			[[nodiscard]] constexpr size_type available_space() const noexcept { return capacity_ - size_; }
+
+			[[nodiscard]] constexpr bool more_available_space_than(const string_block& other) { return available_space() > other.available_space(); }
+
+			friend constexpr void swap(string_block& lhs, string_block& rhs) noexcept
+			{
+				using std::swap;
+				swap(lhs.memory_, rhs.memory_);
+				swap(lhs.capacity_, rhs.capacity_);
+				swap(lhs.size_, rhs.size_);
+			}
+		};
+
 		using block_type = string_block<CharType, IsNullTerminate, CharTrait>;
 		using pool_type = std::vector<block_type>;
 
+	public:
 		using view_type = typename block_type::view_type;
 		using value_type = typename block_type::value_type;
 		using size_type = typename block_type::size_type;
 
-		constexpr string_pool() = default;
-
-		constexpr explicit string_pool(size_type capacity)
-			: capacity_(capacity) {}
-
-		[[nodiscard]] constexpr view_type append(view_type str) { return append_str_into_block(str, find_or_create_block(str)); }
-
-		[[nodiscard]] constexpr size_type size() const noexcept { return pool_.size(); }
-
-		[[nodiscard]] constexpr size_type capacity() const noexcept { return capacity_; }
-
-
-		// Only affect the block created after modification
-		constexpr void new_capacity(size_type capacity) noexcept { capacity_ = capacity; }
-
 	private:
+		pool_type pool_;
+		size_type capacity_;
+
 		using block_iterator = typename pool_type::iterator;
 
 		[[nodiscard]] constexpr view_type append_str_into_block(view_type str, block_iterator pos)
@@ -137,8 +141,30 @@ namespace gal::utils
 				it != block) { std::ranges::rotate(it, block, std::ranges::next(block)); }
 		}
 
-		pool_type pool_;
-		const size_type capacity_ = 8196;
+	public:
+		constexpr explicit string_pool(size_type capacity = 8196) noexcept(std::is_nothrow_default_constructible_v<pool_type>)
+			: capacity_(capacity) {}
+
+		template<std::same_as<string_pool>... Pools>
+		constexpr explicit string_pool(Pools&&... pools)
+		{
+			pool_.reserve((pools.pool_.size() + ...));
+
+			block_iterator iterator;
+			(((iterator = pool_.insert(pool_.end(), std::make_move_iterator(pools.pool_.begin()), std::make_move_iterator(pools.pool_.end()))),
+			  pools.pool_.clear(),
+			  std::ranges::inplace_merge(pool_.begin(), iterator, pool_.end(), [](const auto& a, const auto& b) { return not a.more_available_space_than(b); })),
+				...);
+		}
+
+		[[nodiscard]] constexpr view_type append(view_type str) { return append_str_into_block(str, find_or_create_block(str)); }
+
+		[[nodiscard]] constexpr size_type size() const noexcept { return pool_.size(); }
+
+		[[nodiscard]] constexpr size_type capacity() const noexcept { return capacity_; }
+
+		// Only affect the block created after modification
+		constexpr void resize(size_type capacity) noexcept { capacity_ = capacity; }
 	};
 }
 
