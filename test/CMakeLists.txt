@@ -20,9 +20,9 @@ set(
 )
 
 set(
-		${PROJECT_NAME}_SOURCE_CORE
-		
-		
+	${PROJECT_NAME}_SOURCE_CORE
+
+	test_gal/test_cast.cpp
 )
 
 add_executable(
@@ -52,7 +52,7 @@ target_link_libraries(
 		${PROJECT_NAME}
 		PRIVATE
 		gal::UTILS
-		# gal::CORE
+		gal::CORE
 		gtest_main
 )
 

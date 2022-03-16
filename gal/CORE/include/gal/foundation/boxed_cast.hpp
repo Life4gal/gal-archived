@@ -228,6 +228,19 @@ namespace gal::lang::foundation
 		};
 
 		/**
+		 * @brief for casting to std::shared_ptr-inner-const type
+		 */
+		template<typename Result>
+		struct cast_helper<std::shared_ptr<const Result>>
+		{
+			static std::shared_ptr<const Result> cast(const boxed_value& object, const type_conversion_state*)
+			{
+				if (not object.type_info().is_const()) { return std::const_pointer_cast<const Result>(std::any_cast<std::shared_ptr<Result>>(object.get())); }
+				return std::any_cast<std::shared_ptr<const Result>>(object.get());
+			}
+		};
+
+		/**
 		 * @brief for casting to const std::shared_ptr type
 		 */
 		template<typename Result>
@@ -243,7 +256,7 @@ namespace gal::lang::foundation
 
 			static auto cast(const boxed_value& object, const type_conversion_state*)
 			{
-				auto& result = std::any_cast<std::shared_ptr<Result>>(object.get());
+				std::shared_ptr<Result>& result = std::any_cast<std::shared_ptr<Result>>(object.get());
 				return object.pointer_sentinel(result);
 			}
 		};
@@ -253,19 +266,6 @@ namespace gal::lang::foundation
 		 */
 		template<typename Result>
 		struct cast_helper<const std::shared_ptr<Result>&> : cast_helper<std::shared_ptr<Result>> { };
-
-		/**
-		 * @brief for casting to std::shared_ptr-inner-const type
-		 */
-		template<typename Result>
-		struct cast_helper<std::shared_ptr<const Result>>
-		{
-			static std::shared_ptr<const Result> cast(const boxed_value& object, const type_conversion_state*)
-			{
-				if (not object.type_info().is_const()) { return std::const_pointer_cast<const Result>(std::any_cast<std::shared_ptr<Result>>(object.get())); }
-				return std::any_cast<std::shared_ptr<const Result>>(object.get());
-			}
-		};
 
 		/**
 		 * @brief for casting to const std::shared_ptr-inner-const type
