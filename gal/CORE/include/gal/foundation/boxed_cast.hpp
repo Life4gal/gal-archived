@@ -195,7 +195,7 @@ namespace gal::lang::foundation
 		template<typename Result>
 		struct cast_helper<std::unique_ptr<Result>&>
 		{
-			static std::unique_ptr<Result>& cast(const boxed_value& object, const type_conversion_state*) { return *std::any_cast<std::shared_ptr<std::unique_ptr<Result>>>(object.get()); }
+			static std::unique_ptr<Result>& cast(const boxed_value& object, const type_conversion_state*) { return *object.cast<std::shared_ptr<std::unique_ptr<Result>>>(); }
 		};
 
 		/**
@@ -205,7 +205,7 @@ namespace gal::lang::foundation
 		template<typename Result>
 		struct cast_helper<const std::unique_ptr<Result>&>
 		{
-			static std::unique_ptr<Result>& cast(const boxed_value& object, const type_conversion_state*) { return *std::any_cast<std::shared_ptr<std::unique_ptr<Result>>>(object.get()); }
+			static std::unique_ptr<Result>& cast(const boxed_value& object, const type_conversion_state*) { return *object.cast<std::shared_ptr<std::unique_ptr<Result>>>(); }
 		};
 
 		/**
@@ -215,7 +215,7 @@ namespace gal::lang::foundation
 		template<typename Result>
 		struct cast_helper<std::unique_ptr<Result>&&>
 		{
-			static std::unique_ptr<Result>&& cast(const boxed_value& object, const type_conversion_state*) { return std::move(*std::any_cast<std::shared_ptr<std::unique_ptr<Result>>>(object.get())); }
+			static std::unique_ptr<Result>&& cast(const boxed_value& object, const type_conversion_state*) { return std::move(*object.cast<std::shared_ptr<std::unique_ptr<Result>>>()); }
 		};
 
 		/**
@@ -224,7 +224,7 @@ namespace gal::lang::foundation
 		template<typename Result>
 		struct cast_helper<std::shared_ptr<Result>>
 		{
-			static std::shared_ptr<Result> cast(const boxed_value& object, const type_conversion_state*) { return std::any_cast<std::shared_ptr<Result>>(object.get()); }
+			static std::shared_ptr<Result> cast(const boxed_value& object, const type_conversion_state*) { return object.cast<std::shared_ptr<Result>>(); }
 		};
 
 		/**
@@ -235,8 +235,8 @@ namespace gal::lang::foundation
 		{
 			static std::shared_ptr<const Result> cast(const boxed_value& object, const type_conversion_state*)
 			{
-				if (not object.type_info().is_const()) { return std::const_pointer_cast<const Result>(std::any_cast<std::shared_ptr<Result>>(object.get())); }
-				return std::any_cast<std::shared_ptr<const Result>>(object.get());
+				if (not object.type_info().is_const()) { return std::const_pointer_cast<const Result>(object.cast<std::shared_ptr<Result>>()); }
+				return object.cast<std::shared_ptr<const Result>>();
 			}
 		};
 
@@ -256,7 +256,14 @@ namespace gal::lang::foundation
 
 			static auto cast(const boxed_value& object, const type_conversion_state*)
 			{
-				std::shared_ptr<Result>& result = std::any_cast<std::shared_ptr<Result>>(object.get());
+				// the compiler refuses to accept such a cast
+				// auto& result = std::any_cast<std::shared_ptr<Result>&>(object.get());
+				// null pointer error, smart pointer has been deleted
+				// auto& result = *std::any_cast<std::shared_ptr<Result>>(&const_cast<std::add_lvalue_reference_t<std::remove_cvref_t<decltype(object.get())>>>(object.get()));
+				// internal data should not be accessed directly
+				// auto& result = std::any_cast<std::shared_ptr<Result>&>(const_cast<boxed_value&>(object).get());
+
+				auto& result = object.cast<std::shared_ptr<Result>&>();
 				return object.pointer_sentinel(result);
 			}
 		};
@@ -360,14 +367,14 @@ namespace gal::lang::foundation
 		template<typename T>
 		struct cast_invoker
 		{
-			static decltype(auto) cast(const boxed_value& object, const type_conversion_state* conversion) { return default_cast_invoker<T>(object, conversion); }
+			static decltype(auto) cast(const boxed_value& object, const type_conversion_state* conversion) { return default_cast_invoker<T>::cast(object, conversion); }
 		};
 
 		class type_conversion_base
 		{
 		private:
-			const gal_type_info to_;
-			const gal_type_info from_;
+			gal_type_info to_;
+			gal_type_info from_;
 
 		protected:
 			type_conversion_base(gal_type_info to, gal_type_info from)

@@ -187,7 +187,8 @@ TEST(TestStringPool, TestCustomeCapacity)
 	{
 		constexpr static bool is_null_terminated = false;
 
-		constexpr std::size_t so_big_size = 1'000'000;
+		// constexpr std::size_t so_big_size = 1'000'000;
+		constexpr std::size_t so_big_size = 1'000;
 		string_pool<wchar_t, is_null_terminated> so_big_pool{so_big_size};
 
 		const auto str = so_big_pool.append(L"a long long long long long long long long str");
@@ -202,7 +203,8 @@ TEST(TestStringPool, TestCustomeCapacity)
 	{
 		constexpr static bool is_null_terminated = true;
 
-		constexpr std::size_t so_big_size = 1'000'000'000;
+		// constexpr std::size_t so_big_size = 1'000'000'000;
+		constexpr std::size_t so_big_size = 1'000;
 		string_pool<wchar_t, is_null_terminated> so_big_pool{so_big_size};
 
 		const auto str = so_big_pool.append(L"a long long long long long long long long str");

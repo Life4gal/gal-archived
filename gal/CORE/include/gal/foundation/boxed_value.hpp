@@ -26,6 +26,11 @@ namespace gal::lang::foundation
 		using class_member_data_type = std::map<class_member_data_name_type, class_member_data_data_type, std::less<>>;
 
 	private:
+		/**
+		 * @brief structure which holds the internal state of a boxed_value
+		 *
+		 * @todo get rid of any and merge it with this, reducing an allocation in the process
+		 */
 		struct member_data
 		{
 			using data_type = std::any;
@@ -122,11 +127,11 @@ namespace gal::lang::foundation
 			template<typename T>
 			static class_member_data_data_type make(std::shared_ptr<T>&& data, const bool is_xvalue)
 			{
-				// todo: evaluation order?
+				auto raw = data.get();
 				return std::make_shared<member_data>(
 						make_type_info<T>(),
 						member_data::data_type{std::move(data)},
-						data.get(),
+						raw,
 						false,
 						is_xvalue);
 			}
@@ -134,11 +139,11 @@ namespace gal::lang::foundation
 			template<typename T>
 			static class_member_data_data_type make(std::unique_ptr<T>&& data, const bool is_xvalue)
 			{
-				// todo: evaluation order?
+				auto raw = data.get();
 				return std::make_shared<member_data>(
 						make_type_info<T>(),
 						member_data::data_type{std::make_shared<std::unique_ptr<T>>(std::move(data))},
-						data.get(),
+						raw,
 						true,
 						is_xvalue);
 			}
@@ -155,11 +160,11 @@ namespace gal::lang::foundation
 			template<typename T>
 			static class_member_data_data_type make(std::reference_wrapper<T> data, const bool is_xvalue)
 			{
-				// todo: evaluation order?
+				auto& real = data.get();
 				return std::make_shared<member_data>(
 						make_type_info<T>(),
 						member_data::data_type{std::move(data)},
-						&data.get(),
+						&real,
 						true,
 						is_xvalue);
 			}
@@ -233,6 +238,10 @@ namespace gal::lang::foundation
 				std::reference_wrapper<std::shared_ptr<T>> ptr;
 				std::reference_wrapper<member_data> data;
 
+				sentinel(std::shared_ptr<T>& ptr, member_data& data)
+					: ptr{ptr},
+					  data{data} {}
+
 				sentinel(const sentinel&) = delete;
 				sentinel& operator=(const sentinel&) = delete;
 				sentinel(sentinel&&) = default;
@@ -242,7 +251,7 @@ namespace gal::lang::foundation
 				{
 					// save new pointer data
 					const auto p = ptr.get().get();
-					data.get().raw = p;
+					// data.get().raw = p;
 					data.get().const_raw = p;
 				}
 
@@ -250,10 +259,39 @@ namespace gal::lang::foundation
 				operator std::shared_ptr<T>&() const noexcept { return ptr.get(); }
 			};
 
-			return sentinel{.ptr = ptr, .data = *data_};
+			// return sentinel{.ptr = ptr, .data = *data_};
+			return sentinel{ptr, *data_};
 		}
 
-		[[nodiscard]] const member_data::data_type& get() const noexcept { return data_->data; }
+		[[nodiscard]] [[deprecated("use cast instead")]] member_data::data_type& get() noexcept { return data_->data; }
+
+		[[nodiscard]] [[deprecated("use cast instead")]] const member_data::data_type& get() const noexcept { return data_->data; }
+
+		/**
+		 * @throw std::bad_any_cast
+		 */
+		template<typename To>
+		[[nodiscard]] decltype(auto) cast() const
+		{
+			if constexpr (std::is_pointer_v<To>)
+			{
+				if constexpr (std::is_const_v<To>) { return std::any_cast<To>(&data_->data); }
+				else
+				{
+					// we won't change the object itself directly(?), but we need the object to be mutable
+					return std::any_cast<To>(&const_cast<boxed_value&>(*this).data_->data);
+				}
+			}
+			else
+			{
+				if constexpr (std::is_const_v<To>) { return std::any_cast<To>(data_->data); }
+				else
+				{
+					// we won't change the object itself directly(?), but we need the object to be mutable
+					return std::any_cast<To>(const_cast<boxed_value&>(*this).data_->data);
+				}
+			}
+		}
 
 		[[nodiscard]] void* get_raw() const noexcept { return data_->raw; }
 

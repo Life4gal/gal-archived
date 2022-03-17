@@ -46,11 +46,13 @@ namespace gal::lang::foundation
 			: ti_{ti},
 			  bare_ti_{bare_ti},
 			  flag_{
-					  (static_cast<flag_type>(is_void) & flag_void) |
-					  (static_cast<flag_type>(is_arithmetic) & flag_arithmetic) |
-					  (static_cast<flag_type>(is_const) & flag_const) |
-					  (static_cast<flag_type>(is_reference) & flag_reference) |
-					  (static_cast<flag_type>(is_pointer) & flag_pointer)} {}
+				(is_void ? flag_void : 0) |
+					  (is_arithmetic ? flag_arithmetic : 0) |
+					  (is_const ? flag_const : 0) |
+					  (is_reference ? flag_reference : 0) |
+					  (is_pointer ? flag_pointer : 0)}
+		{
+		}
 
 		constexpr gal_type_info() noexcept
 			: ti_{typeid(unknown_type)},

@@ -524,8 +524,8 @@ namespace gal::lang::foundation
 		boxed_number()
 			: value{0} {}
 
-		explicit boxed_number(boxed_value value)
-			: value{std::move(value)} { check_boxed_number(value); }
+		explicit boxed_number(boxed_value&& value)
+			: value{std::move(value)} { check_boxed_number(this->value); }
 
 		template<typename T>
 		explicit boxed_number(T t)
@@ -684,6 +684,26 @@ namespace gal::lang::foundation
 			throw std::bad_any_cast{};
 		}
 	};
+
+	namespace boxed_cast_detail
+	{
+		/**
+		 * @brief cast_helper for converting from boxed_value to boxed_number
+		 */
+		template<>
+		struct cast_helper<boxed_number>
+		{
+			static boxed_number cast(boxed_value&& object, const type_conversion_state*) { return boxed_number{std::move(object)}; }
+
+			static boxed_number cast(const boxed_value& object, const type_conversion_state*) { return boxed_number{object}; }
+		};
+
+		template<>
+		struct cast_helper<const boxed_number> : cast_helper<boxed_number> { };
+
+		template<>
+		struct cast_helper<const boxed_number&> : cast_helper<boxed_number> { };
+	}
 }
 
 #endif // GAL_LANG_FOUNDATION_BOXED_NUMBER_HPP

@@ -140,7 +140,10 @@ namespace gal::lang
 		    object.type_info().bare_equal(foundation::make_type_info<T>()) ||
 		    (conversion && not conversion->operator*().is_convertible_type<T>()))
 		{
-			try { return foundation::boxed_cast_detail::cast_helper<T>::cast(object, conversion); }
+			try
+			{
+				return foundation::boxed_cast_detail::cast_invoker<T>::cast(object, conversion);
+			}
 			catch (const std::bad_any_cast&) { }
 		}
 
