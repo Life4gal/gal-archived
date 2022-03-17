@@ -4,7 +4,7 @@
 #define GAL_LANG_KITS_DYNAMIC_OBJECT_FUNCTION_HPP
 
 #include <optional>
-#include <gal/kits/proxy_function.hpp>
+#include <gal/kits_old/proxy_function.hpp>
 
 namespace gal::lang::kits
 {

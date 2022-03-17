@@ -56,6 +56,10 @@ namespace gal::lang::foundation
 			: type_name_{std::move(type_name)},
 			  is_explicit_{false} {}
 
+		explicit dynamic_object(const type_name_type& type_name)
+				: type_name_{type_name},
+			  is_explicit_{false} {}
+
 		dynamic_object()
 			: dynamic_object{type_name_type{unknown_type_name}} {}
 

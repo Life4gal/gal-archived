@@ -3,7 +3,8 @@
 #ifndef GAL_LANG_FOUNDATION_BOXED_VALUE_HPP
 #define GAL_LANG_FOUNDATION_BOXED_VALUE_HPP
 
-#include <utils/string_pool.hpp>
+#include <utils/assert.hpp>
+#include <gal/foundation/string.hpp>
 #include <gal/foundation/type_info.hpp>
 #include <map>
 #include <any>
@@ -19,8 +20,8 @@ namespace gal::lang::foundation
 			using type = void;
 		};
 
-		using class_member_data_name_type = std::string;
-		using class_member_data_name_view_type = std::string_view;
+		using class_member_data_name_type = string_type;
+		using class_member_data_name_view_type = string_view_type;
 		using class_member_data_data_type = std::shared_ptr<member_data>;
 
 		using class_member_data_type = std::map<class_member_data_name_type, class_member_data_data_type, std::less<>>;

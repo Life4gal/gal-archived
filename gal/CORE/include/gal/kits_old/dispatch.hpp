@@ -3,11 +3,11 @@
 #ifndef GAL_LANG_KITS_DISPATCH_HPP
 #define GAL_LANG_KITS_DISPATCH_HPP
 
-#include <gal/kits/boxed_value.hpp>
-#include <gal/kits/boxed_value_cast.hpp>
-#include <gal/kits/dynamic_object.hpp>
-#include <gal/kits/proxy_function.hpp>
-#include <gal/utility/flat_continuous_map.hpp>
+#include <gal/kits_old/boxed_value.hpp>
+#include <gal/kits_old/boxed_value_cast.hpp>
+#include <gal/kits_old/dynamic_object.hpp>
+#include <gal/kits_old/proxy_function.hpp>
+#include <gal/utility_old/flat_continuous_map.hpp>
 
 #include <utils/format.hpp>
 #include <utils/enum_utils.hpp>

@@ -138,7 +138,7 @@ namespace gal::lang
 	{
 		if (not conversion ||
 		    object.type_info().bare_equal(foundation::make_type_info<T>()) ||
-		    (conversion && not conversion->operator*().is_convertible_type<T>()))
+		    (not conversion->operator*().is_convertible_type<T>()))
 		{
 			try
 			{
