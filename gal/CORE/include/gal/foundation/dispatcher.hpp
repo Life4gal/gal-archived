@@ -1,0 +1,6 @@
+#pragma once
+
+#ifndef GAL_LANG_DISPATCHER_HPP
+#define GAL_LANG_DISPATCHER_HPP
+
+#endif//GAL_LANG_DISPATCHER_HPP

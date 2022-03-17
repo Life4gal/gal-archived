@@ -1,0 +1,8 @@
+//
+// Created by life4 on 2022/3/17.
+//
+
+#ifndef GAL_LANG_FUNCTOR_MAKER_HPP
+#define GAL_LANG_FUNCTOR_MAKER_HPP
+
+#endif //GAL_LANG_FUNCTOR_MAKER_HPP
