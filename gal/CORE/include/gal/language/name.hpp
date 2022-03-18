@@ -8,6 +8,14 @@
 namespace gal::lang::lang
 {
 	//*********************************************
+	// object type & interface
+	//*********************************************
+	using object_type_name = GAL_UTILS_FIXED_STRING_TYPE("Object");
+
+	using object_self_type_name = GAL_UTILS_FIXED_STRING_TYPE("__this");
+	using object_self_name = GAL_UTILS_FIXED_STRING_TYPE("this");
+
+	//*********************************************
 	// dynamic object & interface
 	//*********************************************
 	using dynamic_object_type_name = GAL_UTILS_FIXED_STRING_TYPE("DynamicObject");

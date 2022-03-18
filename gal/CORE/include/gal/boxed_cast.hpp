@@ -54,12 +54,9 @@ namespace gal::lang
 	}
 
 	template<typename ValueType, template<typename...> typename Container, typename PushFunction, typename... AnyOther>
-		requires requires(Container<ValueType, AnyOther...>& container)
+		requires std::ranges::range<Container<ValueType, AnyOther...>> && requires(Container<ValueType, AnyOther...>& container)
 		         {
 			         container.reserve(container.size());
-			         {
-				         std::ranges::begin(container)
-			         } -> std::same_as<decltype(std::ranges::end(container))>;
 		         } &&
 		         (std::is_member_function_pointer_v<PushFunction> && requires(Container<ValueType, AnyOther...>& container, PushFunction push_function)
 		         {
@@ -75,7 +72,7 @@ namespace gal::lang
 				foundation::make_type_info<ValueType>(),
 				[push_function](const foundation::boxed_value& data)
 				{
-					const auto& source = foundation::boxed_cast_detail::cast_helper<const Container<foundation::boxed_value, AnyOther>&>::cast(data, nullptr);
+					const auto& source = foundation::boxed_cast_detail::cast_helper<const Container<foundation::boxed_value, AnyOther...>&>::cast(data, nullptr);
 
 					Container<ValueType, AnyOther...> ret{};
 					ret.reserve(source.size());
@@ -93,12 +90,7 @@ namespace gal::lang
 	}
 
 	template<typename KeyType, typename MappedType, template<typename...> typename Container, typename PushFunction, typename... AnyOther>
-		requires requires(Container<KeyType, MappedType, AnyOther...>& container)
-		         {
-			         {
-				         std::ranges::begin(container)
-			         } -> std::same_as<decltype(std::ranges::end(container))>;
-		         } &&
+		requires std::ranges::range<Container<KeyType, MappedType, AnyOther...>> &&
 		         (std::is_member_function_pointer_v<PushFunction> && requires(Container<KeyType, MappedType, AnyOther...>& container, PushFunction push_function)
 		         {
 			         (container.*push_function)(std::declval<std::pair<KeyType, MappedType>&&>());
@@ -121,7 +113,7 @@ namespace gal::lang
 							source,
 							[&, push_function](std::pair<KeyType, MappedType>&& pair)
 							{
-								if constexpr (std::is_member_function_pointer_v<PushFunction>) { (ret.*push_function)(std::forward<std::pair<KeyType, MappedType>>(pair)); }
+								if constexpr (std::is_member_function_pointer_v<PushFunction>) { (ret.*push_function)(std::move(pair)); }
 								else { push_function(ret, std::forward<std::pair<KeyType, MappedType>>(pair)); }
 							},
 							[](const auto& pair) { return std::make_pair(pair.first, foundation::boxed_cast_detail::cast_helper<MappedType>::cast(pair.second, nullptr)); });

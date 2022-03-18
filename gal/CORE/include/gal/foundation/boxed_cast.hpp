@@ -1,14 +1,14 @@
 #pragma once
 
 #ifndef GAL_LANG_FOUNDATION_BOXED_CAST_HPP
-#define GAL_LANG_FOUNDATION_BOXED_CAST_HPP
+	#define GAL_LANG_FOUNDATION_BOXED_CAST_HPP
 
-#include <gal/foundation/boxed_value.hpp>
-#include <gal/foundation/type_info.hpp>
-#include <utils/thread_storage.hpp>
-#include <atomic>
-#include <utils/format.hpp>
-#include <set>
+	#include <atomic>
+	#include <gal/foundation/boxed_value.hpp>
+	#include <gal/foundation/type_info.hpp>
+	#include <set>
+	#include <utils/format.hpp>
+	#include <utils/thread_storage.hpp>
 
 namespace gal::lang::foundation
 {
@@ -28,7 +28,7 @@ namespace gal::lang::foundation
 
 		public:
 			// gal_type_info contained in the boxed_value
-			gal_type_info from;
+			gal_type_info		  from;
 			// std::type_info of the desired (but failed) result type
 			const std::type_info* to;
 
@@ -129,7 +129,9 @@ namespace gal::lang::foundation
 		 * @brief for casting to any const type
 		 */
 		template<typename Result>
-		struct cast_helper<const Result> : cast_helper<Result> { };
+		struct cast_helper<const Result> : cast_helper<Result>
+		{
+		};
 
 		/**
 		 * @brief for casting to pointer type
@@ -153,13 +155,17 @@ namespace gal::lang::foundation
 		 * @brief for casting to pointer type
 		 */
 		template<typename Result>
-		struct cast_helper<Result* const&> : cast_helper<Result*> { };
+		struct cast_helper<Result* const&> : cast_helper<Result*>
+		{
+		};
 
 		/**
 		 * @brief for casting to const pointer type
 		 */
 		template<typename Result>
-		struct cast_helper<const Result* const&> : cast_helper<const Result*> { };
+		struct cast_helper<const Result* const&> : cast_helper<const Result*>
+		{
+		};
 
 		/**
 		 * @brief for casting to reference type
@@ -244,7 +250,9 @@ namespace gal::lang::foundation
 		 * @brief for casting to const std::shared_ptr type
 		 */
 		template<typename Result>
-		struct cast_helper<const std::shared_ptr<Result>> : cast_helper<std::shared_ptr<Result>> { };
+		struct cast_helper<const std::shared_ptr<Result>> : cast_helper<std::shared_ptr<Result>>
+		{
+		};
 
 		/**
 		 * @brief for casting to std::shared_ptr reference type
@@ -272,19 +280,25 @@ namespace gal::lang::foundation
 		 * @brief for casting to const std::shared_ptr reference type
 		 */
 		template<typename Result>
-		struct cast_helper<const std::shared_ptr<Result>&> : cast_helper<std::shared_ptr<Result>> { };
+		struct cast_helper<const std::shared_ptr<Result>&> : cast_helper<std::shared_ptr<Result>>
+		{
+		};
 
 		/**
 		 * @brief for casting to const std::shared_ptr-inner-const type
 		 */
 		template<typename Result>
-		struct cast_helper<const std::shared_ptr<const Result>> : cast_helper<std::shared_ptr<const Result>> { };
+		struct cast_helper<const std::shared_ptr<const Result>> : cast_helper<std::shared_ptr<const Result>>
+		{
+		};
 
 		/**
 		 * @brief for casting to const std::shared_ptr-inner-const reference type
 		 */
 		template<typename Result>
-		struct cast_helper<const std::shared_ptr<const Result>&> : cast_helper<std::shared_ptr<const Result>> { };
+		struct cast_helper<const std::shared_ptr<const Result>&> : cast_helper<std::shared_ptr<const Result>>
+		{
+		};
 
 		/**
 		 * @brief for casting to boxed_value type
@@ -299,7 +313,9 @@ namespace gal::lang::foundation
 		 * @brief for casting to const boxed_value type
 		 */
 		template<>
-		struct cast_helper<const boxed_value> : cast_helper<boxed_value> { };
+		struct cast_helper<const boxed_value> : cast_helper<boxed_value>
+		{
+		};
 
 		/**
 		 * @brief for casting to boxed_value reference type
@@ -314,43 +330,57 @@ namespace gal::lang::foundation
 		 * @brief for casting to const boxed_value reference type
 		 */
 		template<>
-		struct cast_helper<const boxed_value&> : cast_helper<boxed_value> { };
+		struct cast_helper<const boxed_value&> : cast_helper<boxed_value>
+		{
+		};
 
 		/**
 		 * @brief for casting to std::reference_wrapper type
 		 */
 		template<typename Result>
-		struct cast_helper<std::reference_wrapper<Result>> : cast_helper<Result&> { };
+		struct cast_helper<std::reference_wrapper<Result>> : cast_helper<Result&>
+		{
+		};
 
 		/**
 		 * @brief for casting to const std::reference_wrapper type
 		 */
 		template<typename Result>
-		struct cast_helper<const std::reference_wrapper<Result>> : cast_helper<Result&> { };
+		struct cast_helper<const std::reference_wrapper<Result>> : cast_helper<Result&>
+		{
+		};
 
 		/**
 		 * @brief for casting to const std::reference_wrapper reference type
 		 */
 		template<typename Result>
-		struct cast_helper<const std::reference_wrapper<Result>&> : cast_helper<Result&> { };
+		struct cast_helper<const std::reference_wrapper<Result>&> : cast_helper<Result&>
+		{
+		};
 
 		/**
 		 * @brief for casting to std::reference_wrapper-inner-const type
 		 */
 		template<typename Result>
-		struct cast_helper<std::reference_wrapper<const Result>> : cast_helper<const Result&> { };
+		struct cast_helper<std::reference_wrapper<const Result>> : cast_helper<const Result&>
+		{
+		};
 
 		/**
 		 * @brief for casting to const std::reference_wrapper-inner-const type
 		 */
 		template<typename Result>
-		struct cast_helper<const std::reference_wrapper<const Result>> : cast_helper<const Result&> { };
+		struct cast_helper<const std::reference_wrapper<const Result>> : cast_helper<const Result&>
+		{
+		};
 
 		/**
 		 * @brief for casting to const std::reference_wrapper-inner-const reference type
 		 */
 		template<typename Result>
-		struct cast_helper<const std::reference_wrapper<const Result>&> : cast_helper<const Result&> { };
+		struct cast_helper<const std::reference_wrapper<const Result>&> : cast_helper<const Result&>
+		{
+		};
 
 		/**
 		 * @note internal use only
@@ -384,18 +414,18 @@ namespace gal::lang::foundation
 		public:
 			type_conversion_base(const type_conversion_base&) = default;
 			type_conversion_base& operator=(const type_conversion_base&) = default;
-			type_conversion_base(type_conversion_base&&) = default;
+			type_conversion_base(type_conversion_base&&)				 = default;
 			type_conversion_base& operator=(type_conversion_base&&) = default;
 
-			virtual ~type_conversion_base() = default;
+			virtual ~type_conversion_base()							= default;
 
 			[[nodiscard]] constexpr virtual bool is_bidirectional() const noexcept { return true; }
 
-			[[nodiscard]] virtual boxed_value convert(const boxed_value& from) const = 0;
-			[[nodiscard]] virtual boxed_value convert_down(const boxed_value& to) const = 0;
+			[[nodiscard]] virtual boxed_value	 convert(const boxed_value& from) const	   = 0;
+			[[nodiscard]] virtual boxed_value	 convert_down(const boxed_value& to) const = 0;
 
-			[[nodiscard]] const gal_type_info& to() const noexcept { return to_; }
-			[[nodiscard]] const gal_type_info& from() const noexcept { return from_; }
+			[[nodiscard]] const gal_type_info&	 to() const noexcept { return to_; }
+			[[nodiscard]] const gal_type_info&	 from() const noexcept { return from_; }
 		};
 
 		template<bool IsStatic, typename From, typename To>
@@ -433,7 +463,10 @@ namespace gal::lang::foundation
 						auto& f = cast_helper<std::add_lvalue_reference_t<F>>::cast(from, nullptr);
 
 						if constexpr (IsStatic) { return static_cast<std::add_lvalue_reference_t<T>>(f); }
-						else { return dynamic_cast<std::add_lvalue_reference_t<T>>(f); }
+						else
+						{
+							return dynamic_cast<std::add_lvalue_reference_t<T>>(f);
+						}
 					};
 
 					if (from.is_const()) { return boxed_value{std::cref(do_cast.decltype(do_cast)::template operator()<const To, const From>())}; }
@@ -441,7 +474,10 @@ namespace gal::lang::foundation
 				}
 
 				if constexpr (IsStatic) { throw exception::bad_boxed_static_cast(from.type_info(), typeid(To), "Unknown static_cast_conversion"); }
-				else { throw exception::bad_boxed_dynamic_cast(from.type_info(), typeid(To), "Unknown dynamic_cast_conversion"); }
+				else
+				{
+					throw exception::bad_boxed_dynamic_cast(from.type_info(), typeid(To), "Unknown dynamic_cast_conversion");
+				}
 			}
 		};
 
@@ -454,9 +490,9 @@ namespace gal::lang::foundation
 
 			[[nodiscard]] constexpr bool is_bidirectional() const noexcept override { return false; }
 
-			[[nodiscard]] boxed_value convert(const boxed_value& from) const override { return caster<true, Derived, Base>::cast(from); }
+			[[nodiscard]] boxed_value	 convert(const boxed_value& from) const override { return caster<true, Derived, Base>::cast(from); }
 
-			[[nodiscard]] boxed_value convert_down(const boxed_value& to) const override { throw exception::bad_boxed_static_cast{to.type_info(), typeid(Derived), "Unable to cast down inheritance hierarchy with non-polymorphic types"}; }
+			[[nodiscard]] boxed_value	 convert_down(const boxed_value& to) const override { throw exception::bad_boxed_static_cast{to.type_info(), typeid(Derived), "Unable to cast down inheritance hierarchy with non-polymorphic types"}; }
 		};
 
 		template<typename Base, typename Derived>
@@ -487,18 +523,18 @@ namespace gal::lang::foundation
 
 			[[nodiscard]] constexpr bool is_bidirectional() const noexcept override { return false; }
 
-			[[nodiscard]] boxed_value convert(const boxed_value& from) const override { return function_(from); }
+			[[nodiscard]] boxed_value	 convert(const boxed_value& from) const override { return function_(from); }
 
-			[[nodiscard]] boxed_value convert_down(const boxed_value& to) const override { throw exception::bad_boxed_type_cast{"No conversion exists"}; }
+			[[nodiscard]] boxed_value	 convert_down(const boxed_value& to) const override { throw exception::bad_boxed_type_cast{"No conversion exists"}; }
 		};
-	}
+	}// namespace boxed_cast_detail
 
 	class type_conversion_manager
 	{
 	public:
 		struct conversion_saves
 		{
-			bool enable = false;
+			bool					 enable = false;
 			std::vector<boxed_value> saves;
 		};
 
@@ -507,26 +543,26 @@ namespace gal::lang::foundation
 			bool operator()(const std::type_info& lhs, const std::type_info& rhs) const noexcept { return lhs != rhs && lhs.before(rhs); }
 		};
 
-		using conversion_type = std::shared_ptr<boxed_cast_detail::type_conversion_base>;
+		using conversion_type		 = std::shared_ptr<boxed_cast_detail::type_conversion_base>;
 		using convertible_types_type = std::set<std::reference_wrapper<const std::type_info>, type_info_compare>;
 
 	private:
-		mutable utils::threading::shared_mutex mutex_;
+		mutable utils::threading::shared_mutex				  mutex_;
 		mutable utils::thread_storage<convertible_types_type> thread_cache_;
-		mutable utils::thread_storage<conversion_saves> conversion_saves_;
+		mutable utils::thread_storage<conversion_saves>		  conversion_saves_;
 
-		std::set<conversion_type> conversions_;
-		convertible_types_type convertible_types_;
-		std::atomic_size_t num_types_;
+		std::set<conversion_type>							  conversions_;
+		convertible_types_type								  convertible_types_;
+		std::atomic_size_t									  num_types_;
 
-		auto bidirectional_find(const gal_type_info& to, const gal_type_info& from) const
+		auto												  bidirectional_find(const gal_type_info& to, const gal_type_info& from) const
 		{
 			return std::ranges::find_if(
 					conversions_,
 					[&to, &from](const conversion_type& conversion)
 					{
 						return (conversion->to().bare_equal(to) && conversion->from().bare_equal(from)) ||
-						       (conversion->is_bidirectional() && conversion->from().bare_equal(to) && conversion->to().bare_equal(from));
+							   (conversion->is_bidirectional() && conversion->from().bare_equal(to) && conversion->to().bare_equal(from));
 					});
 		}
 
@@ -536,7 +572,8 @@ namespace gal::lang::foundation
 		{
 			return std::ranges::find_if(
 					conversions_,
-					[&to, &from](const conversion_type& conversion) { return conversion->to().bare_equal(to) && conversion->from().bare_equal(from); });
+					[&to, &from](const conversion_type& conversion)
+					{ return conversion->to().bare_equal(to) && conversion->from().bare_equal(from); });
 		}
 
 		auto find(const conversion_type& conversion) const { return find(conversion->to(), conversion->from()); }
@@ -553,9 +590,9 @@ namespace gal::lang::foundation
 
 		type_conversion_manager(const type_conversion_manager&) = delete;
 		type_conversion_manager& operator=(const type_conversion_manager&) = delete;
-		type_conversion_manager(type_conversion_manager&&) = delete;
+		type_conversion_manager(type_conversion_manager&&)				   = delete;
 		type_conversion_manager& operator=(type_conversion_manager&&) = delete;
-		~type_conversion_manager() = default;
+		~type_conversion_manager()									  = default;
 
 		[[nodiscard]] const convertible_types_type& get_cache() const
 		{
@@ -587,7 +624,10 @@ namespace gal::lang::foundation
 		}
 
 		template<typename T>
-		[[nodiscard]] bool is_convertible_type() const noexcept { return thread_cache_->contains(make_type_info<T>().bare_type_info()); }
+		[[nodiscard]] bool is_convertible_type() const noexcept
+		{
+			return thread_cache_->contains(make_type_info<T>().bare_type_info());
+		}
 
 		[[nodiscard]] bool is_convertible_type(const gal_type_info& to, const gal_type_info& from) const noexcept
 		{
@@ -597,7 +637,10 @@ namespace gal::lang::foundation
 		}
 
 		template<typename To, typename From>
-		[[nodiscard]] bool is_convertible_type() const noexcept { return is_convertible_type(make_type_info<To>(), make_type_info<From>()); }
+		[[nodiscard]] bool is_convertible_type() const noexcept
+		{
+			return is_convertible_type(make_type_info<To>(), make_type_info<From>());
+		}
 
 		conversion_type get_conversion(const gal_type_info& to, const gal_type_info& from) const
 		{
@@ -621,12 +664,21 @@ namespace gal::lang::foundation
 				if (saves.enable) { saves.saves.push_back(ret); }
 				return ret;
 			}
-			catch (const std::out_of_range&) { throw exception::bad_boxed_dynamic_cast(from.type_info(), to.bare_type_info(), "No known conversion"); }
-			catch (const std::bad_cast&) { throw exception::bad_boxed_dynamic_cast(from.type_info(), to.bare_type_info(), "Unable to perform dynamic_cast operation"); }
+			catch (const std::out_of_range&)
+			{
+				throw exception::bad_boxed_dynamic_cast(from.type_info(), to.bare_type_info(), "No known conversion");
+			}
+			catch (const std::bad_cast&)
+			{
+				throw exception::bad_boxed_dynamic_cast(from.type_info(), to.bare_type_info(), "Unable to perform dynamic_cast operation");
+			}
 		}
 
 		template<typename To>
-		[[nodiscard]] boxed_value boxed_type_conversion(conversion_saves& saves, const boxed_value& from) const { return boxed_type_conversion(make_type_info<To>(), saves, from); }
+		[[nodiscard]] boxed_value boxed_type_conversion(conversion_saves& saves, const boxed_value& from) const
+		{
+			return boxed_type_conversion(make_type_info<To>(), saves, from);
+		}
 
 		[[nodiscard]] boxed_value boxed_type_down_conversion(const gal_type_info& from, conversion_saves& saves, const boxed_value& to) const
 		{
@@ -636,14 +688,23 @@ namespace gal::lang::foundation
 				if (saves.enable) { saves.saves.push_back(ret); }
 				return ret;
 			}
-			catch (const std::out_of_range&) { throw exception::bad_boxed_dynamic_cast(to.type_info(), from.bare_type_info(), "No known conversion"); }
-			catch (const std::bad_cast&) { throw exception::bad_boxed_dynamic_cast(to.type_info(), from.bare_type_info(), "Unable to perform dynamic_cast operation"); }
+			catch (const std::out_of_range&)
+			{
+				throw exception::bad_boxed_dynamic_cast(to.type_info(), from.bare_type_info(), "No known conversion");
+			}
+			catch (const std::bad_cast&)
+			{
+				throw exception::bad_boxed_dynamic_cast(to.type_info(), from.bare_type_info(), "Unable to perform dynamic_cast operation");
+			}
 		}
 
 		template<typename From>
-		[[nodiscard]] boxed_value boxed_type_down_conversion(conversion_saves& saves, const boxed_value& to) const { return boxed_type_down_conversion(make_type_info<From>(), saves, to); }
+		[[nodiscard]] boxed_value boxed_type_down_conversion(conversion_saves& saves, const boxed_value& to) const
+		{
+			return boxed_type_down_conversion(make_type_info<From>(), saves, to);
+		}
 
-		constexpr static void enable_conversion_saves(conversion_saves& saves, const bool enable) noexcept { saves.enable = enable; }
+		constexpr static void				enable_conversion_saves(conversion_saves& saves, const bool enable) noexcept { saves.enable = enable; }
 
 		[[nodiscard]] constexpr static auto take_conversion_saves(conversion_saves& saves) noexcept
 		{
@@ -659,27 +720,26 @@ namespace gal::lang::foundation
 	{
 	private:
 		std::reference_wrapper<const type_conversion_manager> conversions_;
-		std::reference_wrapper<type_conversion_manager::conversion_saves> saves_;
 
 	public:
 		type_conversion_state(
-				const type_conversion_manager& conversions,
-				type_conversion_manager::conversion_saves& saves)
-			: conversions_{conversions},
-			  saves_{saves} {}
+				const type_conversion_manager& conversions)
+			: conversions_{conversions}
+		{
+		}
 
 		[[nodiscard]] const type_conversion_manager& operator*() const noexcept { return conversions_.get(); }
 
 		[[nodiscard]] const type_conversion_manager* operator->() const noexcept { return &conversions_.get(); }
 
-		[[nodiscard]] auto& saves() const noexcept { return saves_.get(); }
+		[[nodiscard]] auto&							 saves() const noexcept { return this->operator*().get_conversion_saves(); }
 	};
 
 	using type_conversion_type = std::shared_ptr<boxed_cast_detail::type_conversion_base>;
 
 	template<typename T, typename... Args>
-		requires std::is_base_of_v<boxed_cast_detail::type_conversion_base, T>
+	requires std::is_base_of_v<boxed_cast_detail::type_conversion_base, T>
 	[[nodiscard]] type_conversion_type make_type_conversion(Args&&... args) { return std::make_shared<T>(std::forward<Args>(args)...); }
-}
+}// namespace gal::lang::foundation
 
-#endif // GAL_LANG_FOUNDATION_BOXED_CAST_HPP
+#endif// GAL_LANG_FOUNDATION_BOXED_CAST_HPP
