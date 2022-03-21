@@ -7,6 +7,10 @@
 #include <gal/language/name.hpp>
 #include <gal/functor_maker.hpp>
 #include <gal/foundation/dispatcher.hpp>
+#include <gal/foundation/operator_register.hpp>
+#include <gal/function_register.hpp>
+#include <gal/exception_handler.hpp>
+#include <gal/language/common.hpp>
 
 int main()
 {

@@ -30,6 +30,9 @@ namespace gal::lang::foundation
 
 	using immutable_proxy_functions_type = std::vector<immutable_proxy_function>;
 	using mutable_proxy_functions_type = std::vector<mutable_proxy_function>;
+
+	using proxy_functions_type = immutable_proxy_functions_type;
+	using proxy_functions_view_type = std::span<proxy_function>;
 }
 
 #endif // GAL_LANG_FOUNDATION_PARAMETERS_HPP
