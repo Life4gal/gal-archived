@@ -1,9 +1,9 @@
 #pragma once
 
 #ifndef GAL_LANG_EXCEPTION_HANDLER_HPP
-	#define GAL_LANG_EXCEPTION_HANDLER_HPP
+#define GAL_LANG_EXCEPTION_HANDLER_HPP
 
-	#include <gal/foundation/exception_handler.hpp>
+#include <gal/foundation/exception_handler.hpp>
 
 namespace gal::lang
 {
@@ -75,10 +75,7 @@ namespace gal::lang
 	using exception_handler_type = std::shared_ptr<foundation::exception_handler_base>;
 
 	template<typename... T>
-	[[nodiscard]] exception_handler_type make_exception_handler()
-	{
-		return std::make_shared<foundation::exception_handler<T...>>();
-	}
+	[[nodiscard]] exception_handler_type make_exception_handler() { return std::make_shared<foundation::exception_handler<T...>>(); }
 }// namespace gal::lang
 
 #endif//GAL_LANG_EXCEPTION_HANDLER_HPP

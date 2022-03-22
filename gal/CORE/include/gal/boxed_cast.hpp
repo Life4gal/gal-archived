@@ -154,13 +154,13 @@ namespace gal::lang
 					// try going the other way
 					return foundation::boxed_cast_detail::cast_helper<T>::cast(conversion->operator*().boxed_type_down_conversion<T>(conversion->saves(), object), conversion);
 				}
-				catch (const std::bad_any_cast&) { throw foundation::exception::bad_boxed_cast{object.type_info(), typeid(T)}; }
+				catch (const std::bad_any_cast&) { throw exception::bad_boxed_cast{object.type_info(), typeid(T)}; }
 			}
 		}
 
 		// If it's not convertible, just throw the error, don't waste the time on the
 		// attempted dynamic_cast
-		throw foundation::exception::bad_boxed_cast{object.type_info(), typeid(T)};
+		throw exception::bad_boxed_cast{object.type_info(), typeid(T)};
 	}
 }
 

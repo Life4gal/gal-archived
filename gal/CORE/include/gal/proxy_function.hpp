@@ -1,18 +1,18 @@
 #pragma once
 
 #ifndef GAL_LANG_PROXY_FUNCTION_HPP
-	#define GAL_LANG_PROXY_FUNCTION_HPP
+#define GAL_LANG_PROXY_FUNCTION_HPP
 
-	#include <gal/foundation/proxy_function.hpp>
-	#include <utils/algorithm.hpp>
+#include <gal/foundation/proxy_function.hpp>
+#include <utils/algorithm.hpp>
 
 namespace gal::lang
 {
 	template<typename Functions>
-	requires std::is_same_v<typename Functions::value_type, foundation::immutable_proxy_function> || std::is_same_v<typename Functions::value_type, foundation::mutable_proxy_function>
+		requires std::is_same_v<typename Functions::value_type, foundation::immutable_proxy_function> || std::is_same_v<typename Functions::value_type, foundation::mutable_proxy_function>
 	[[nodiscard]] foundation::boxed_value dispatch(
-			const Functions&						 functions,
-			const foundation::parameters_view_type	 parameters,
+			const Functions& functions,
+			const foundation::parameters_view_type parameters,
 			const foundation::type_conversion_state& conversion)
 	{
 		std::vector<std::pair<std::size_t, std::reference_wrapper<const foundation::proxy_function_base>>> ordered_functions{};
@@ -29,8 +29,7 @@ namespace gal::lang
 						std::size_t num_diffs = 0;
 
 						utils::zip_invoke(
-								[&num_diffs](const auto& type, const auto& object)
-								{ if (not type.bare_equal(object.type_info())) { ++num_diffs; } },
+								[&num_diffs](const auto& type, const auto& object) { if (not type.bare_equal(object.type_info())) { ++num_diffs; } },
 								function->types().begin() + 1,
 								function->types().end(),
 								parameters.begin());
@@ -43,20 +42,16 @@ namespace gal::lang
 		{
 			for (const auto& [order, function]: ordered_functions)
 			{
-				using namespace foundation::exception;
-				try
-				{
-					if (order == i && (i == 0 || function.get().filter(parameters, conversion))) { return function.get()(parameters, conversion); }
-				}
-				catch (const bad_boxed_cast&)
+				try { if (order == i && (i == 0 || function.get().filter(parameters, conversion))) { return function.get()(parameters, conversion); } }
+				catch (const exception::bad_boxed_cast&)
 				{
 					// parameter failed to cast, try again
 				}
-				catch (const arity_error&)
+				catch (const exception::arity_error&)
 				{
 					// invalid num params, try again
 				}
-				catch (const guard_error&)
+				catch (const exception::guard_error&)
 				{
 					// guard failed to allow the function to execute, try again
 				}
@@ -65,9 +60,8 @@ namespace gal::lang
 
 		return foundation::proxy_function_detail::dispatch_with_conversion(
 				ordered_functions |
-						std::views::values |
-						std::views::transform([](const std::reference_wrapper<const foundation::proxy_function_base>& f) -> const foundation::proxy_function_base&
-											  { return f.get(); }),
+				std::views::values |
+				std::views::transform([](const std::reference_wrapper<const foundation::proxy_function_base>& f) -> const foundation::proxy_function_base& { return f.get(); }),
 				parameters,
 				conversion,
 				functions);

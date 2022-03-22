@@ -11,6 +11,7 @@
 #include <gal/function_register.hpp>
 #include <gal/exception_handler.hpp>
 #include <gal/language/common.hpp>
+#include <gal/language/eval.hpp>
 
 int main()
 {

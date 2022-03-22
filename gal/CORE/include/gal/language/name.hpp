@@ -8,6 +8,35 @@
 namespace gal::lang::lang
 {
 	//*********************************************
+	// keyword
+	//*********************************************
+	using keyword_define_name = GAL_UTILS_FIXED_STRING_TYPE("def");
+	using keyword_function_name = GAL_UTILS_FIXED_STRING_TYPE("fun");
+	using keyword_variable_name = GAL_UTILS_FIXED_STRING_TYPE("var");
+	using keyword_true_name = GAL_UTILS_FIXED_STRING_TYPE("True");
+	using keyword_false_name = GAL_UTILS_FIXED_STRING_TYPE("False");
+	using keyword_class_name = GAL_UTILS_FIXED_STRING_TYPE("class");
+	using keyword_attribute_name = GAL_UTILS_FIXED_STRING_TYPE("attr");
+	using keyword_global_name = GAL_UTILS_FIXED_STRING_TYPE("global");
+	using keyword_placeholder_name = GAL_UTILS_FIXED_STRING_TYPE("_");
+	using keyword_comma_name = GAL_UTILS_FIXED_STRING_TYPE(",");
+	using keyword_while_name = GAL_UTILS_FIXED_STRING_TYPE("while");
+	using keyword_for_name = GAL_UTILS_FIXED_STRING_TYPE("for");
+	using keyword_break_name = GAL_UTILS_FIXED_STRING_TYPE("break");
+	using keyword_if_name = GAL_UTILS_FIXED_STRING_TYPE("if");
+	using keyword_else_name = GAL_UTILS_FIXED_STRING_TYPE("else");
+	using keyword_logical_and_name = GAL_UTILS_FIXED_STRING_TYPE("and");
+	using keyword_logical_or_name = GAL_UTILS_FIXED_STRING_TYPE("or");
+	using keyword_return_name = GAL_UTILS_FIXED_STRING_TYPE("return");
+
+	// Not actually keywords below :)
+	using keyword_class_scope_name = GAL_UTILS_FIXED_STRING_TYPE("::");
+	using keyword_set_guard_name = GAL_UTILS_FIXED_STRING_TYPE("expect");
+	using keyword_block_begin_name = GAL_UTILS_FIXED_STRING_TYPE(":");
+	using keyword_function_parameter_bracket_name = GAL_UTILS_BILATERAL_FIXED_STRING_TYPE("(", ")");
+	using keyword_for_loop_variable_delimiter_name = GAL_UTILS_FIXED_STRING_TYPE(";");
+
+	//*********************************************
 	// object type & interface
 	//*********************************************
 	using object_type_name = GAL_UTILS_FIXED_STRING_TYPE("Object");

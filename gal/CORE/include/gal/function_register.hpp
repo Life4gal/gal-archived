@@ -1,9 +1,9 @@
 #pragma once
 
 #ifndef GAL_LANG_FUNCTION_REGISTER_HPP
-	#define GAL_LANG_FUNCTION_REGISTER_HPP
+#define GAL_LANG_FUNCTION_REGISTER_HPP
 
-	#include <gal/foundation/function_register.hpp>
+#include <gal/foundation/function_register.hpp>
 
 namespace gal::lang
 {
@@ -19,10 +19,7 @@ namespace gal::lang
 	 * @endcode
 	 */
 	template<typename Function>
-	[[nodiscard]] foundation::proxy_function fun(Function&& function)
-	{
-		return foundation::function_register::register_function(std::forward<Function>(function), utils::make_function_signature(function));
-	}
+	[[nodiscard]] foundation::proxy_function fun(Function&& function) { return foundation::function_register::register_function(std::forward<Function>(function), utils::make_function_signature(function)); }
 
 	/**
 	 * @brief Creates a new proxy_function object from a free function, member function or data member.
@@ -34,34 +31,19 @@ namespace gal::lang
 	 * @endcode
 	 */
 	template<typename Function, typename... PreBindParams>
-	[[nodiscard]] foundation::proxy_function fun(Function&& function, PreBindParams... params)
-	{
-		return fun(std::bind_front(std::forward<Function>(function), std::forward<PreBindParams>(params)...));
-	}
+	[[nodiscard]] foundation::proxy_function fun(Function&& function, PreBindParams ... params) { return fun(std::bind_front(std::forward<Function>(function), std::forward<PreBindParams>(params)...)); }
 
 	template<typename ConstructorSignature>
-	[[nodiscard]] foundation::proxy_function ctor()
-	{
-		return foundation::function_register::register_constructor<ConstructorSignature>();
-	}
+	[[nodiscard]] foundation::proxy_function ctor() { return foundation::function_register::register_constructor<ConstructorSignature>(); }
 
 	template<typename Class>
-	[[nodiscard]] foundation::proxy_function default_ctor()
-	{
-		return ctor<Class()>();
-	}
+	[[nodiscard]] foundation::proxy_function default_ctor() { return ctor<Class()>(); }
 
 	template<typename Class>
-	[[nodiscard]] foundation::proxy_function copy_ctor()
-	{
-		return ctor<Class(const Class&)>();
-	}
+	[[nodiscard]] foundation::proxy_function copy_ctor() { return ctor<Class(const Class&)>(); }
 
 	template<typename Class>
-	[[nodiscard]] foundation::proxy_function move_ctor()
-	{
-		return ctor<Class(Class &&)>();
-	}
+	[[nodiscard]] foundation::proxy_function move_ctor() { return ctor<Class(Class&&)>(); }
 
 	/**
 	 * @brief Single step command for registering a class.
@@ -92,9 +74,9 @@ namespace gal::lang
 	 */
 	template<typename T>
 	void register_class(
-			foundation::engine_core&																 core,
-			const foundation::engine_core::name_view_type											 name,
-			foundation::proxy_functions_type&&														 constructors,
+			foundation::engine_core& core,
+			const foundation::engine_core::name_view_type name,
+			foundation::proxy_functions_type&& constructors,
 			// todo: container?
 			std::vector<std::pair<foundation::engine_core::name_type, foundation::proxy_function>>&& functions)
 	{
@@ -102,28 +84,22 @@ namespace gal::lang
 
 		std::ranges::for_each(
 				constructors,
-				[&core, name](auto&& ctor)
-				{
-					core.add_function(name, std::move(ctor));
-				});
+				[&core, name](auto&& ctor) { core.add_function(name, std::move(ctor)); });
 
 		std::ranges::for_each(
 				functions,
-				[&core, name](auto&& pair)
-				{
-					core.add_function(std::move(pair.first), std::move(pair.second));
-				});
+				[&core, name](auto&& pair) { core.add_function(std::move(pair.first), std::move(pair.second)); });
 	}
 
-//	template<typename Target>
-//	requires std::is_arithmetic_v<Target>
-//	void register_arithmetic(
-//			foundation::engine_core&					  core,
-//			const foundation::engine_core::name_view_type name)
-//	{
-//		core.add_function(name, fun([](const foundation::boxed_number& number)
-//									{ return number.template as<Target>(); }));
-//	}
+	//	template<typename Target>
+	//	requires std::is_arithmetic_v<Target>
+	//	void register_arithmetic(
+	//			foundation::engine_core&					  core,
+	//			const foundation::engine_core::name_view_type name)
+	//	{
+	//		core.add_function(name, fun([](const foundation::boxed_number& number)
+	//									{ return number.template as<Target>(); }));
+	//	}
 }// namespace gal::lang
 
 #endif//GAL_LANG_FUNCTION_REGISTER_HPP

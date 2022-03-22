@@ -1,10 +1,10 @@
 #pragma once
 
 #ifndef GAL_LANG_FUNCTOR_MAKER_HPP
-	#define GAL_LANG_FUNCTOR_MAKER_HPP
+#define GAL_LANG_FUNCTOR_MAKER_HPP
 
-	#include <gal/foundation/functor_maker.hpp>
-	#include <gal/foundation/type_info.hpp>
+#include <gal/foundation/functor_maker.hpp>
+#include <gal/foundation/type_info.hpp>
 
 namespace gal::lang
 {
@@ -18,20 +18,17 @@ namespace gal::lang
 	template<typename FunctionSignature>
 	std::function<FunctionSignature> make_functor(
 			foundation::immutable_proxy_functions_type&& functions,
-			const foundation::type_conversion_state*	 conversion)
+			const foundation::type_conversion_state* conversion)
 	{
 		const auto has_arity_match = std::ranges::any_of(
 				functions,
 				[](const auto& function)
 				{
 					return function->get_arity() == foundation::proxy_function_base::no_parameters_arity ||
-						   foundation::functor_maker_detail::arity(static_cast<FunctionSignature*>(nullptr)) == static_cast<decltype(foundation::functor_maker_detail::arity(static_cast<FunctionSignature*>(nullptr)))>(function->get_arity());
+					       foundation::functor_maker_detail::arity(static_cast<FunctionSignature*>(nullptr)) == static_cast<decltype(foundation::functor_maker_detail::arity(static_cast<FunctionSignature*>(nullptr)))>(function->get_arity());
 				});
 
-		if (not has_arity_match)
-		{
-			throw foundation::exception::bad_boxed_cast{foundation::make_type_info<foundation::immutable_proxy_function>(), typeid(std::function<FunctionSignature>)};
-		}
+		if (not has_arity_match) { throw exception::bad_boxed_cast{foundation::make_type_info<foundation::immutable_proxy_function>(), typeid(std::function<FunctionSignature>)}; }
 		return foundation::functor_maker_detail::make_function_invoker(static_cast<FunctionSignature*>(nullptr), std::move(functions), conversion);
 	}
 
@@ -46,11 +43,8 @@ namespace gal::lang
 	 */
 	template<typename FunctionSignature>
 	std::function<FunctionSignature> make_functor(
-			foundation::immutable_proxy_function&&	 function,
-			const foundation::type_conversion_state* conversion)
-	{
-		return make_functor<FunctionSignature>(foundation::immutable_proxy_functions_type{std::move(function)}, conversion);
-	}
+			foundation::immutable_proxy_function&& function,
+			const foundation::type_conversion_state* conversion) { return make_functor<FunctionSignature>(foundation::immutable_proxy_functions_type{std::move(function)}, conversion); }
 
 	/**
 	 * @brief Helper for automatically unboxing a boxed_value that contains
@@ -58,11 +52,8 @@ namespace gal::lang
 	 */
 	template<typename FunctionSignature>
 	std::function<FunctionSignature> make_functor(
-			const foundation::boxed_value&			 object,
-			const foundation::type_conversion_state* conversion)
-	{
-		return make_functor<FunctionSignature>(boxed_cast<foundation::immutable_proxy_function>(object, conversion), conversion);
-	}
+			const foundation::boxed_value& object,
+			const foundation::type_conversion_state* conversion) { return make_functor<FunctionSignature>(boxed_cast<foundation::immutable_proxy_function>(object, conversion), conversion); }
 }// namespace gal::lang
 
 #endif//GAL_LANG_FUNCTOR_MAKER_HPP
