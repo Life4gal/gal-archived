@@ -1,20 +1,21 @@
-#include <gal/defines.hpp>
+#include <iostream>
 
-#include <gal/kits/return_handler.hpp>
-#include <gal/kits/proxy_function.hpp>
-#include <gal/kits/call_function.hpp>
-#include <gal/kits/register_function.hpp>
-#include <gal/kits/bootstrap.hpp>
-#include <gal/kits/proxy_constructor.hpp>
-#include <gal/kits/dispatch.hpp>
-#include <gal/kits/operators.hpp>
-#include <gal/kits/utility.hpp>
+#include <gal/boxed_value.hpp>
+#include <gal/boxed_cast.hpp>
+#include <gal/proxy_function.hpp>
+#include <gal/foundation/dynamic_object_function.hpp>
+#include <gal/language/name.hpp>
+#include <gal/functor_maker.hpp>
+#include <gal/foundation/dispatcher.hpp>
+#include <gal/foundation/operator_register.hpp>
+#include <gal/function_register.hpp>
+#include <gal/exception_handler.hpp>
+#include <gal/language/common.hpp>
 #include <gal/language/eval.hpp>
 #include <gal/language/optimizer.hpp>
-
-#include <iostream>
+#include <gal/foundation/bootstrap.hpp>
 
 int main()
 {
-	std::cout << "hello GAL ast_node: " << gal::lang::ast_node_type_name::value << '\n';
+	std::cout << "hello " << gal::lang::lang::dynamic_object_type_name::value << '\n';
 }

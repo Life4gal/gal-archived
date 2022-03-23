@@ -10,16 +10,7 @@
 #endif
 
 #ifndef GAL_NO_ASSERT
-#if __has_include(<source_location>)
-#include <source_location>
-using std_source_location = std::source_location;
-#elif __has_include(<experimental/source_location>)
-		#include <experimental/source_location>
-using std_source_location = std::experimental::source_location;
-#else
-		#error "assert requires <source_location>"
-#endif
-
+#include <utils/source_location.hpp>
 #include <string_view>
 #endif
 

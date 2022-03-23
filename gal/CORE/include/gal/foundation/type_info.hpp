@@ -1,13 +1,13 @@
 #pragma once
 
-#ifndef GAL_LANG_UTILITY_TYPE_INFO_HPP
-	#define GAL_LANG_UTILITY_TYPE_INFO_HPP
+#ifndef GAL_LANG_FOUNDATION_TYPE_INFO_HPP
+#define GAL_LANG_FOUNDATION_TYPE_INFO_HPP
 
 #include<type_traits>
 #include<typeinfo>
 #include<memory>
 
-namespace gal::lang::utility
+namespace gal::lang::foundation
 {
 	// MSVC' s stl 's type_info in the global namespace :(
 	class gal_type_info
@@ -22,14 +22,16 @@ namespace gal::lang::utility
 		constexpr static flag_type flag_pointer = 1 << 4;
 
 		constexpr static flag_type flag_undefined = 1 << 5;
-		constexpr static const char* undefined_type_name = "unknown";
+		constexpr static const char* undefined_type_name = "unknown-type";
 
 	private:
-		struct unknown_type {};
+		struct unknown_type { };
 
-		// pointers are used for CopyConstructible && CopyAssignable
-		const std::type_info* ti_;
-		const std::type_info* bare_ti_;
+		using real_type_info_type = std::reference_wrapper<const std::type_info>;
+
+		// reference_wrapper are used for CopyConstructible && CopyAssignable
+		real_type_info_type ti_;
+		real_type_info_type bare_ti_;
 		flag_type flag_;
 
 	public:
@@ -40,45 +42,45 @@ namespace gal::lang::utility
 				const bool is_reference,
 				const bool is_pointer,
 				const std::type_info& ti,
-				const std::type_info& bare_ti
-				) noexcept
-			: ti_{&ti},
-			  bare_ti_{&bare_ti},
+				const std::type_info& bare_ti) noexcept
+			: ti_{ti},
+			  bare_ti_{bare_ti},
 			  flag_{
-					  (static_cast<flag_type>(is_void) & flag_void) |
-					  (static_cast<flag_type>(is_arithmetic) & flag_arithmetic) |
-					  (static_cast<flag_type>(is_const) & flag_const) |
-					  (static_cast<flag_type>(is_reference) & flag_reference) |
-					  (static_cast<flag_type>(is_pointer) & flag_pointer)
-			  } {}
+				(is_void ? flag_void : 0) |
+					  (is_arithmetic ? flag_arithmetic : 0) |
+					  (is_const ? flag_const : 0) |
+					  (is_reference ? flag_reference : 0) |
+					  (is_pointer ? flag_pointer : 0)}
+		{
+		}
 
 		constexpr gal_type_info() noexcept
-			: ti_{&typeid(unknown_type)},
-			  bare_ti_{&typeid(unknown_type)},
+			: ti_{typeid(unknown_type)},
+			  bare_ti_{typeid(unknown_type)},
 			  flag_{flag_undefined} {}
 
 		// `constexpr` requires c++23
-		[[nodiscard]] /* constexpr */ bool operator==(const gal_type_info& other) const noexcept { return ti_ == other.ti_ || *ti_ == *other.ti_; }
+		[[nodiscard]] /* constexpr */ bool operator==(const gal_type_info& other) const noexcept { return ti_.get() == other.ti_.get(); }
 
-		[[nodiscard]] constexpr bool operator==(const std::type_info& other) const noexcept { return not is_undefined() && *ti_ == other; }
-
-		// `constexpr` requires c++23
-		[[nodiscard]] /* constexpr */ bool bare_equal(const gal_type_info& other) const noexcept { return bare_ti_ == other.bare_ti_ || *bare_ti_ == *other.bare_ti_; }
+		[[nodiscard]] constexpr bool operator==(const std::type_info& other) const noexcept { return not is_undefined() && ti_.get() == other; }
 
 		// `constexpr` requires c++23
-		[[nodiscard]] /* constexpr */ bool bare_equal(const std::type_info& other) const noexcept { return not is_undefined() && *bare_ti_ == other; }
+		[[nodiscard]] /* constexpr */ bool bare_equal(const gal_type_info& other) const noexcept { return bare_ti_.get() == other.bare_ti_.get(); }
 
-		[[nodiscard]] bool before(const gal_type_info& other) const noexcept { return ti_->before(*other.ti_); }
+		// `constexpr` requires c++23
+		[[nodiscard]] /* constexpr */ bool bare_equal(const std::type_info& other) const noexcept { return not is_undefined() && bare_ti_.get() == other; }
+
+		[[nodiscard]] bool before(const gal_type_info& other) const noexcept { return ti_.get().before(other.ti_.get()); }
 
 		[[nodiscard]] const char* name() const noexcept
 		{
-			if (not is_undefined()) { return ti_->name(); }
+			if (not is_undefined()) { return ti_.get().name(); }
 			return undefined_type_name;
 		}
 
 		[[nodiscard]] const char* bare_name() const noexcept
 		{
-			if (not is_undefined()) { return bare_ti_->name(); }
+			if (not is_undefined()) { return bare_ti_.get().name(); }
 			return undefined_type_name;
 		}
 
@@ -89,10 +91,15 @@ namespace gal::lang::utility
 		[[nodiscard]] constexpr bool is_pointer() const noexcept { return flag_ & flag_pointer; }
 		[[nodiscard]] constexpr bool is_undefined() const noexcept { return flag_ & flag_undefined; }
 
-		[[nodiscard]] constexpr const std::type_info& bare_type_info() const noexcept { return *bare_ti_; }
+		[[nodiscard]] constexpr const std::type_info& bare_type_info() const noexcept { return bare_ti_.get(); }
 	};
 
-	namespace detail
+	static_assert(std::is_copy_constructible_v<gal_type_info>);
+	static_assert(std::is_copy_assignable_v<gal_type_info>);
+	static_assert(std::is_move_constructible_v<gal_type_info>);
+	static_assert(std::is_move_assignable_v<gal_type_info>);
+
+	namespace type_info_detail
 	{
 		template<typename T>
 		struct bare_type
@@ -143,7 +150,7 @@ namespace gal::lang::utility
 		};
 
 		template<typename T>
-		struct type_info_factory<std::shared_ptr<T>&> : type_info_factory<std::shared_ptr<T>> {};
+		struct type_info_factory<std::shared_ptr<T>&> : type_info_factory<std::shared_ptr<T>> { };
 
 		template<typename T>
 		struct type_info_factory<const std::shared_ptr<T>&>
@@ -227,7 +234,9 @@ namespace gal::lang::utility
 						typeid(bare_type_t<T>)};
 			}
 		};
-	}// namespace detail
+	}
+
+	constexpr auto make_invalid_type_info() noexcept { return gal_type_info{}; }
 
 	/**
 	 * @brief Creates a type_info object representing the templated type.
@@ -235,7 +244,7 @@ namespace gal::lang::utility
 	 * @return type_info for T
 	 */
 	template<typename T>
-	constexpr auto make_type_info() noexcept { return detail::type_info_factory<T>::make(); }
+	constexpr auto make_type_info() noexcept { return type_info_detail::type_info_factory<T>::make(); }
 
 	/**
 	 * @brief Creates a type_info object representing the type passed in.
@@ -243,7 +252,7 @@ namespace gal::lang::utility
 	 * @return type_info for T
 	 */
 	template<typename T>
-	constexpr auto make_type_info(const T&) noexcept { return detail::type_info_factory<T>::make(); }
+	constexpr auto make_type_info(const T&) noexcept { return type_info_detail::type_info_factory<T>::make(); }
 }
 
-#endif // GAL_LANG_UTILITY_TYPE_INFO_HPP
+#endif // GAL_LANG_FOUNDATION_TYPE_INFO_HPP

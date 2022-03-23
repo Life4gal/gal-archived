@@ -20,9 +20,9 @@ set(
 )
 
 set(
-		${PROJECT_NAME}_SOURCE_CORE
-		
-		
+	${PROJECT_NAME}_SOURCE_CORE
+
+	test_gal/test_cast.cpp
 )
 
 add_executable(
@@ -32,19 +32,21 @@ add_executable(
 		${${PROJECT_NAME}_SOURCE_CORE}
 )
 
-if(MSVC)
-	target_compile_features(
-			${PROJECT_NAME}
-			PRIVATE
-			cxx_std_23
-	)
-else()
-	target_compile_features(
-			${PROJECT_NAME}
-			PRIVATE
-			cxx_std_20
-	)
-endif(MSVC)
+target_compile_features(
+		${PROJECT_NAME}
+		PRIVATE
+
+		$<$<CXX_COMPILER_ID:MSVC>:cxx_std_23>
+		$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:cxx_std_20>		
+)
+
+target_compile_options(
+	${PROJECT_NAME}
+	PRIVATE
+
+	$<$<CXX_COMPILER_ID:MSVC>:/bigobj>
+	$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wa,-mbig-obj>
+)
 
 include(${GAL_3RDPARTY_PATH}/google-test.cmake)
 
@@ -52,7 +54,7 @@ target_link_libraries(
 		${PROJECT_NAME}
 		PRIVATE
 		gal::UTILS
-		# gal::CORE
+		gal::CORE
 		gtest_main
 )
 

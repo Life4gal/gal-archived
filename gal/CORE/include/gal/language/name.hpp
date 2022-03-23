@@ -1,18 +1,11 @@
 #pragma once
 
-#ifndef GAL_LANG_DEFINES_HPP
-#define GAL_LANG_DEFINES_HPP
+#ifndef GAL_LANG_LANGUAGE_NAME_HPP
+#define GAL_LANG_LANGUAGE_NAME_HPP
 
-#include<vector>
-#include<string_view>
-#include<string>
-#include<memory>
+#include <utils/fixed_string.hpp>
 
-#include<utils/fixed_string.hpp>
-
-#define GAL_LANG_ARITHMETIC_DIVIDE_ZERO_PROTECT
-
-namespace gal::lang
+namespace gal::lang::lang
 {
 	//*********************************************
 	// keyword
@@ -83,12 +76,11 @@ namespace gal::lang
 	using object_is_null_interface_name = GAL_UTILS_FIXED_STRING_TYPE("is_null");
 	using object_is_reference_interface_name = GAL_UTILS_FIXED_STRING_TYPE("is_ref");
 	using object_is_pointer_interface_name = GAL_UTILS_FIXED_STRING_TYPE("is_ptr");
-	using object_is_return_value_interface_name = GAL_UTILS_FIXED_STRING_TYPE("is_return_value");
-	using object_reset_return_value_interface_name = GAL_UTILS_FIXED_STRING_TYPE("reset_return_value");
+	using object_is_xvalue_interface_name = GAL_UTILS_FIXED_STRING_TYPE("is_xvalue");
+	using object_to_lvalue_interface_name = GAL_UTILS_FIXED_STRING_TYPE("to_lvalue");
 	using object_is_type_of_interface_name = GAL_UTILS_FIXED_STRING_TYPE("is_type_of");
-	using object_get_attribute_interface_name = GAL_UTILS_FIXED_STRING_TYPE("get_attr");
-	using object_copy_attributes_interface_name = GAL_UTILS_FIXED_STRING_TYPE("copy_attrs");
-	using object_clone_attributes_interface_name = GAL_UTILS_FIXED_STRING_TYPE("clone_attrs");
+	using object_get_member_interface_name = GAL_UTILS_FIXED_STRING_TYPE("get_member");
+	using object_clone_members_interface_name = GAL_UTILS_FIXED_STRING_TYPE("clone_members");
 
 	//*********************************************
 	// number type & interface
@@ -150,9 +142,9 @@ namespace gal::lang
 	using dynamic_object_type_name = GAL_UTILS_FIXED_STRING_TYPE("DynamicObject");
 
 	using dynamic_object_get_type_name_interface_name = GAL_UTILS_FIXED_STRING_TYPE("get_type_name");
-	using dynamic_object_get_attributes_interface_name = GAL_UTILS_FIXED_STRING_TYPE("get_attrs");
-	using dynamic_object_get_attribute_interface_name = GAL_UTILS_FIXED_STRING_TYPE("get_attr");
-	using dynamic_object_has_attribute_interface_name = GAL_UTILS_FIXED_STRING_TYPE("has_attr");
+	using dynamic_object_get_members_interface_name = GAL_UTILS_FIXED_STRING_TYPE("get_members");
+	using dynamic_object_get_member_interface_name = GAL_UTILS_FIXED_STRING_TYPE("get_member");
+	using dynamic_object_has_member_interface_name = GAL_UTILS_FIXED_STRING_TYPE("has_member");
 	using dynamic_object_set_explicit_interface_name = GAL_UTILS_FIXED_STRING_TYPE("set_explicit");
 	using dynamic_object_is_explicit_interface_name = GAL_UTILS_FIXED_STRING_TYPE("is_explicit");
 	using dynamic_object_method_missing_interface_name = GAL_UTILS_FIXED_STRING_TYPE("method_missing");
@@ -239,12 +231,11 @@ namespace gal::lang
 
 	using operator_range_generate_name = GAL_UTILS_FIXED_STRING_TYPE("range_generate");
 
-	using file_position_type_name = GAL_UTILS_FIXED_STRING_TYPE("FilePosition");
+	using file_point_type_name = GAL_UTILS_FIXED_STRING_TYPE("FilePosition");
 	using file_position_line_interface_name = GAL_UTILS_FIXED_STRING_TYPE("line");
 	using file_position_column_interface_name = GAL_UTILS_FIXED_STRING_TYPE("column");
 
 	using ast_node_type_name = GAL_UTILS_FIXED_STRING_TYPE("ASTNode");
-	using ast_node_type_interface_name = GAL_UTILS_FIXED_STRING_TYPE("type");
 	using ast_node_text_interface_name = GAL_UTILS_FIXED_STRING_TYPE("text");
 	using ast_node_location_begin_interface_name = GAL_UTILS_FIXED_STRING_TYPE("begin");
 	using ast_node_location_end_interface_name = GAL_UTILS_FIXED_STRING_TYPE("end");
@@ -253,4 +244,4 @@ namespace gal::lang
 	using ast_node_children_interface_name = GAL_UTILS_FIXED_STRING_TYPE("children");
 }
 
-#endif // GAL_LANG_DEFINES_HPP
+#endif // GAL_LANG_LANGUAGE_NAME_HPP

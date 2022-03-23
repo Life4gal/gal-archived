@@ -4,6 +4,7 @@
 #define GAL_UTILS_INITIALIZER_LIST_HPP
 
 #include <initializer_list>
+#include <ranges>
 
 namespace gal::utils
 {
@@ -79,7 +80,15 @@ namespace gal::utils
 
 		[[nodiscard]] constexpr bool empty() const noexcept { return size() == 0; }
 
-		[[nodiscard]] constexpr const_reference operator[](const std::size_t index) const noexcept { return begin()[index]; }
+		[[nodiscard]] constexpr const_reference operator[](const size_type index) const noexcept { return begin()[index]; }
+
+		[[nodiscard]] constexpr initializer_list<value_type> sub_list(const size_type begin, const size_type num) const { return {begin_ + begin, begin_ + begin + num}; }
+
+		[[nodiscard]] constexpr initializer_list<value_type> sub_list(const size_type begin) const { return {begin_ + begin, end_}; }
+
+		[[nodiscard]] constexpr initializer_list<value_type> front_sub_list(const size_type num) const { return {begin_, begin_ + num}; }
+
+		[[nodiscard]] constexpr initializer_list<value_type> back_sub_list(const size_type num) const { return {end_ - num, end_}; }
 
 		template<template<typename...> typename Container, typename... AnyOther>
 			requires std::is_constructible_v<Container<value_type, AnyOther...>, const_iterator, const_iterator>
