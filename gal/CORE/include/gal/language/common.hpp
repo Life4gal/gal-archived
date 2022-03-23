@@ -84,7 +84,7 @@ namespace gal::lang
 			var_decl_t,
 			assign_decl_t,
 			class_decl_t,
-			attribute_decl_t,
+			member_decl_t,
 			def_t,
 			method_t,
 			lambda_t,
@@ -427,6 +427,30 @@ namespace gal::lang
 
 			eval_error(
 					const std::string_view reason,
+					const foundation::parameters_type& params,
+					const foundation::proxy_functions_type& functions,
+					const bool has_dot_notation,
+					const foundation::dispatcher_detail::dispatcher& dispatcher)
+				: eval_error{reason, foundation::parameters_view_type{params}, foundation::proxy_functions_view_type{functions}, has_dot_notation, dispatcher} {}
+
+			eval_error(
+					const std::string_view reason,
+					const foundation::parameters_view_type params,
+					const foundation::proxy_functions_type& functions,
+					const bool has_dot_notation,
+					const foundation::dispatcher_detail::dispatcher& dispatcher)
+				: eval_error{reason, params, foundation::proxy_functions_view_type{functions}, has_dot_notation, dispatcher} {}
+
+			eval_error(
+					const std::string_view reason,
+					const foundation::parameters_type& params,
+					const foundation::proxy_functions_view_type functions,
+					const bool has_dot_notation,
+					const foundation::dispatcher_detail::dispatcher& dispatcher)
+				: eval_error{reason, foundation::parameters_view_type{params}, functions, has_dot_notation, dispatcher} {}
+
+			eval_error(
+					const std::string_view reason,
 					const std::string_view filename,
 					const lang::file_point begin_position)
 				: std::runtime_error{format(reason, filename, begin_position)},
@@ -468,7 +492,7 @@ namespace gal::lang
 			#define GAL_AST_SET_RTTI(class_name)                    \
 		constexpr static auto get_rtti_index() noexcept \
 		{                                               \
-			return ast_rtti<class_name>::value;         \
+			return common_detail::ast_rtti<class_name>::value;         \
 		}
 
 			template<typename T>
@@ -512,8 +536,12 @@ namespace gal::lang
 				explicit operator const ast_node_common_base<U>&() const { return reinterpret_cast<const ast_node_common_base<U>&>(*this); }
 
 			public:
+				// todo: the following four interfaces have a fatal problem, they are not compatible with nodes with different tracers but the same type.
 				template<has_rtti_index TargetNode>
 				[[nodiscard]] constexpr bool is() const noexcept { return class_index_ == TargetNode::get_rtti_index(); }
+
+				template<has_rtti_index... TargetNode>
+				[[nodiscard]] constexpr bool is_any() const noexcept { return ((class_index_ == TargetNode::get_rtti_index()) || ...); }
 
 				template<has_rtti_index TargetNode>
 				[[nodiscard]] constexpr TargetNode* as() noexcept { return class_index_ == TargetNode::get_rtti_index() ? static_cast<TargetNode*>(this) : nullptr; }
@@ -713,6 +741,10 @@ namespace gal::lang
 				: ast_node_base{index, std::move(text), std::move(location)},
 				  children_{std::move(children)} {}
 
+			template<typename NodeType, typename... Args>
+				requires std::is_base_of_v<ast_node<typename NodeType::tracer_type>, NodeType>
+			[[nodiscard]] ast_node_ptr<typename NodeType::tracer_type> remake_node(Args&&... extra_args) && { return make_node<NodeType>(NodeType::get_rtti_index(), std::move(text), std::move(location), std::move(children_), std::forward<Args>(extra_args)...); }
+
 		protected:
 			[[nodiscard]] virtual foundation::boxed_value do_eval(const foundation::dispatcher_detail::dispatcher_state& state) const { throw std::runtime_error{"un-dispatched ast_node (internal error)"}; }
 
@@ -777,9 +809,9 @@ namespace gal::lang
 
 				[[nodiscard]] const typename children_type::iterator& base() const noexcept { return iterator; }
 
-				[[nodiscard]] decltype(auto) operator*() const noexcept { return unwrap_child(*iterator); }
+				[[nodiscard]] decltype(auto) operator*() const noexcept { return **iterator; }
 
-				[[nodiscard]] decltype(auto) operator->() const noexcept { return &unwrap_child(*iterator); }
+				[[nodiscard]] decltype(auto) operator->() const noexcept { return &**iterator; }
 
 				decltype(auto) operator++() noexcept
 				{
@@ -821,7 +853,7 @@ namespace gal::lang
 					return tmp;
 				}
 
-				decltype(auto) operator[](difference_type offset) const noexcept { return unwrap_child(iterator[offset]); }
+				decltype(auto) operator[](difference_type offset) const noexcept { return *iterator[offset]; }
 			};
 
 			[[nodiscard]] auto begin() noexcept { child_iterator{children_.begin()}; }
@@ -899,6 +931,57 @@ namespace gal::lang
 				fun->get_parse_tree().pretty_format_position_to(target);
 			}
 		}
+	}
+
+	class parser_base
+	{
+	public:
+		parser_base() = default;
+		virtual ~parser_base() noexcept = default;
+
+		parser_base(parser_base&&) = default;
+
+		parser_base& operator=(const parser_base&) = delete;
+		parser_base& operator=(parser_base&&) = delete;
+
+	protected:
+		parser_base(const parser_base&) = default;
+
+	public:
+		template<typename T>
+		[[nodiscard]] T& get_tracer() noexcept
+		{
+			gal_assert(get_tracer_ptr());
+			return *static_cast<T*>(get_tracer_ptr());
+		}
+
+		[[nodiscard]] virtual std::unique_ptr<lang::ast_node_base> parse(std::string_view input, std::string_view filename) = 0;
+		virtual void debug_print(const lang::ast_node_base& node, std::string_view prepend = "") const = 0;
+
+	private:
+		[[nodiscard]] virtual void* get_tracer_ptr() = 0;
+	};
+
+	// todo: better way
+	namespace interrupt_type
+	{
+		/**
+		 * @brief Special type for returned values
+		 */
+		struct return_value
+		{
+			foundation::boxed_value value;
+		};
+
+		/**
+		 * @brief Special type indicating a call to 'break'
+		 */
+		struct break_loop { };
+
+		/**
+		 * @brief Special type indicating a call to 'continue'
+		 */
+		struct continue_loop { };
 	}
 }// namespace gal::lang
 

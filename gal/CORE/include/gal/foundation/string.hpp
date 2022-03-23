@@ -10,6 +10,7 @@ namespace gal::lang::foundation
 {
 	// todo: all types that store strings only store string_view, and the use of string memory is handed over to string_pool
 
+	// do not modify these types below!
 	using string_type = std::string;
 	using string_view_type = std::string_view;
 }

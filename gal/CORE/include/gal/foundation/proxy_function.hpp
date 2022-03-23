@@ -53,7 +53,7 @@ namespace gal::lang
 		{
 		public:
 			foundation::parameters_type parameters;
-			foundation::immutable_proxy_functions_type functions;
+			foundation::proxy_functions_type functions;
 
 			dispatch_error(
 					foundation::parameters_type&& parameters,
@@ -133,8 +133,9 @@ namespace gal::lang
 		class parameter_type_mapper
 		{
 		public:
-			// do not store the name, the storage of the name should be handed over to the string pool
-			using parameter_name_type = std::string_view;
+			// todo: do not store the name, the storage of the name should be handed over to the string pool
+			using parameter_name_type = string_type;
+			using parameter_name_view_type = string_view_type;
 			using parameter_type_type = gal_type_info;
 
 			using parameter_type_mapping_type = std::vector<std::pair<parameter_name_type, parameter_type_type>>;
@@ -521,6 +522,14 @@ namespace gal::lang
 				: dynamic_proxy_function_base{arity, std::move(node), std::move(mapper), std::move(guard)},
 				  function_{std::move(function)} {}
 		};
+
+		template<typename Callable, typename... Args>
+		[[nodiscard]] proxy_function make_dynamic_proxy_function(Callable&& function, Args&&... args)
+		{
+			return std::make_shared<dynamic_proxy_function<Callable>>(
+					std::forward<Callable>(function),
+					std::forward<Args>(args)...);
+		}
 
 		/**
 		 * @brief An object used by bound_function to represent "_" parameters

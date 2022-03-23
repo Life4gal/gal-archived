@@ -336,6 +336,7 @@ namespace gal::lang
 			{
 				friend class dispatcher;
 				friend class dispatcher_state;
+				friend struct scoped_function_scope;
 
 				using name_type = engine_core::name_type;
 				using name_view_type = engine_core::name_view_type;
@@ -652,6 +653,10 @@ namespace gal::lang
 				explicit scoped_function_scope(const dispatcher_state& state)
 					: state{state} {}
 
+				void push_params(engine_stack::param_list_type&& params) const;
+
+				void push_params(engine_stack::param_list_view_type params) const;
+
 			private:
 				friend struct scoped_object<scoped_function_scope>;
 
@@ -836,10 +841,7 @@ namespace gal::lang
 						if (const auto it = functions.find(name);
 							it != functions.end())
 						{
-							for (const auto& f: *it->second)
-							{
-								if (*func == *f) { throw gal::lang::exception::name_conflict_error{name}; }
-							}
+							for (const auto& f: *it->second) { if (*func == *f) { throw gal::lang::exception::name_conflict_error{name}; } }
 
 							auto copy_fs = *it->second;
 							// tightly control vec growth
@@ -1194,7 +1196,7 @@ namespace gal::lang
 					cache_location.emplace(functions);
 
 					const auto do_member_function_call = [this, &conversion](
-																 const exception::arity_error::size_type num_params,
+							const exception::arity_error::size_type num_params,
 							const parameters_view_type ps,
 							const dispatch_function::functions_type& fs) -> variable_type
 					{
@@ -1412,17 +1414,17 @@ namespace gal::lang
 				: d_{d},
 				  conversion_{d.manager_} {}
 
-			inline auto& dispatcher_state::stack() const noexcept { return this->operator*().stack_; }
+			inline auto& dispatcher_state::stack() const noexcept { return *this->operator*().stack_; }
 
-			inline dispatcher_state::variable_type& dispatcher_state::add_object_no_check(const name_view_type name, dispatcher_state::variable_type&& object) const { return stack()->add_variable_no_check(name, std::move(object)); }
+			inline dispatcher_state::variable_type& dispatcher_state::add_object_no_check(const name_view_type name, dispatcher_state::variable_type&& object) const { return stack().add_variable_no_check(name, std::move(object)); }
 
-			inline dispatcher_state::variable_type& dispatcher_state::add_object_no_check(const name_view_type name, const variable_type& object) const { return stack()->add_variable_no_check(name, object); }
+			inline dispatcher_state::variable_type& dispatcher_state::add_object_no_check(const name_view_type name, const variable_type& object) const { return stack().add_variable_no_check(name, object); }
 
 			dispatcher_state::variable_type& dispatcher_state::get_object(const name_view_type name, auto& cache_location) const { return this->operator*().get_object(name, cache_location); }
 
-			inline void scoped_scope::do_construct() const { state.get().stack()->new_scope(); }
+			inline void scoped_scope::do_construct() const { state.get().stack().new_scope(); }
 
-			inline void scoped_scope::do_destruct() const { state.get().stack()->pop_scope(); }
+			inline void scoped_scope::do_destruct() const { state.get().stack().pop_scope(); }
 
 			inline scoped_object_scope::scoped_object_scope(const dispatcher_state& state, engine_core::variable_type&& object)
 				: scoped_scope{state} { state.add_object_no_check(lang::object_self_type_name::value, std::move(object)); }
@@ -1430,13 +1432,17 @@ namespace gal::lang
 			inline scoped_object_scope::scoped_object_scope(const dispatcher_state& state, const engine_core::variable_type& object)
 				: scoped_scope{state} { state.add_object_no_check(lang::object_self_type_name::value, object); }
 
-			inline void scoped_stack_scope::do_construct() const { state.get().stack()->new_stack(); }
+			inline void scoped_stack_scope::do_construct() const { state.get().stack().new_stack(); }
 
-			inline void scoped_stack_scope::do_destruct() const { state.get().stack()->pop_stack(); }
+			inline void scoped_stack_scope::do_destruct() const { state.get().stack().pop_stack(); }
 
-			inline void scoped_function_scope::do_construct() const { state.get().stack()->emit_call(state.get().conversion_saves()); }
+			inline void scoped_function_scope::push_params(engine_stack::param_list_type&& params) const { state.get().stack().push_param(std::move(params)); }
 
-			inline void scoped_function_scope::do_destruct() const { state.get().stack()->finish_call(state.get().conversion_saves()); }
+			inline void scoped_function_scope::push_params(const engine_stack::param_list_view_type params) const { state.get().stack().push_param(params); }
+
+			inline void scoped_function_scope::do_construct() const { state.get().stack().emit_call(state.get().conversion_saves()); }
+
+			inline void scoped_function_scope::do_destruct() const { state.get().stack().finish_call(state.get().conversion_saves()); }
 		}// namespace dispatcher_detail
 	}
 }// namespace gal::lang::foundation
