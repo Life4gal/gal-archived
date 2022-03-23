@@ -95,7 +95,7 @@ namespace gal::lang
 			{
 				try
 				{
-					[&, i = parameters_type::size_type{0}]() mutable { (boxed_cast<Params>(params[i++], &conversion), ...); }();
+					[&, i = parameters_type::size_type{0}]() mutable { ((void)boxed_cast<Params>(params[i++], &conversion), ...); }();
 
 					return true;
 				}
@@ -730,7 +730,7 @@ namespace gal::lang
 				return false;
 			}
 
-			[[nodiscard]] bool match(const parameters_view_type params, const type_conversion_state& conversion) const override
+			[[nodiscard]] bool match(const parameters_view_type params, const type_conversion_state&) const override
 			{
 				if (arity_size != static_cast<arity_size_type>(params.size())) { return false; }
 

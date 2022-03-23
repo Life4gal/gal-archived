@@ -80,26 +80,16 @@ namespace gal::lang
 			// todo: container?
 			std::vector<std::pair<foundation::engine_core::name_type, foundation::proxy_function>>&& functions)
 	{
-		core.add_type_info(name, foundation::make_type_info<T>());
+		core.add_type_info(foundation::engine_core::name_type{name}, foundation::make_type_info<T>());
 
 		std::ranges::for_each(
 				constructors,
-				[&core, name](auto&& ctor) { core.add_function(name, std::move(ctor)); });
+				[&core, name](auto&& ctor) { core.add_function(foundation::engine_core::name_type{name}, std::move(ctor)); });
 
 		std::ranges::for_each(
 				functions,
-				[&core, name](auto&& pair) { core.add_function(std::move(pair.first), std::move(pair.second)); });
+				[&core](auto&& pair) { core.add_function(std::move(pair.first), std::move(pair.second)); });
 	}
-
-	//	template<typename Target>
-	//	requires std::is_arithmetic_v<Target>
-	//	void register_arithmetic(
-	//			foundation::engine_core&					  core,
-	//			const foundation::engine_core::name_view_type name)
-	//	{
-	//		core.add_function(name, fun([](const foundation::boxed_number& number)
-	//									{ return number.template as<Target>(); }));
-	//	}
 }// namespace gal::lang
 
 #endif//GAL_LANG_FUNCTION_REGISTER_HPP

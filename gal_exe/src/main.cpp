@@ -12,6 +12,8 @@
 #include <gal/exception_handler.hpp>
 #include <gal/language/common.hpp>
 #include <gal/language/eval.hpp>
+#include <gal/language/optimizer.hpp>
+#include <gal/foundation/bootstrap.hpp>
 
 int main()
 {

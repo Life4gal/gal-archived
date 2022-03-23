@@ -646,6 +646,22 @@ namespace gal::lang
 			static const ast_node_base& unwrap_child(const std::reference_wrapper<ast_node_base>& child) noexcept { return child.get(); }
 
 		public:
+			[[nodiscard]] foundation::parameters_type get_boxed_children() const
+			{
+				const auto& children = get_children();
+
+				foundation::parameters_type ret{};
+				ret.reserve(children.size());
+
+				std::ranges::transform(
+						children,
+						std::back_inserter(ret),
+						// see virtual function get_children
+						var<const std::vector<std::reference_wrapper<ast_node_base>>::value_type&>);
+
+				return ret;
+			}
+
 			virtual ~ast_node_base() noexcept = default;
 			ast_node_base(const ast_node_base&) = default;
 			ast_node_base& operator=(const ast_node_base&) = default;

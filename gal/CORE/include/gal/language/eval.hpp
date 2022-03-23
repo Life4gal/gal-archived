@@ -76,6 +76,19 @@ namespace gal::lang
 	namespace lang
 	{
 		template<typename T>
+		struct noop_ast_node final : ast_node<T>
+		{
+		private:
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_detail::dispatcher_state& state) const override { return void_var(); }
+
+		public:
+			GAL_AST_SET_RTTI(noop_ast_node<T>)
+
+			noop_ast_node()
+				: ast_node{get_rtti_index(), {}, {}} {}
+		};
+
+		template<typename T>
 		struct id_ast_node final : ast_node<T>
 		{
 		private:
