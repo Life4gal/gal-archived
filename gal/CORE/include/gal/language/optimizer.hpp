@@ -17,72 +17,65 @@ namespace gal::lang::lang
 			explicit optimizer(Optimizers ... optimizers)
 				: Optimizers{std::move(optimizers)}... {}
 
-			template<typename Tracer>
-			auto optimize(ast_node_ptr<Tracer> p)
+			auto optimize(ast_node_ptr p)
 			{
 				((p = static_cast<Optimizers&>(*this)(std::move(p))), ...);
 				return p;
 			}
 		};
 
-		template<typename Tracer>
-		[[nodiscard]] bool node_empty(const ast_node<Tracer>& node) noexcept
+		[[nodiscard]] inline bool node_empty(const ast_node& node) noexcept
 		{
-			if (node.template is<compiled_ast_node<Tracer>>()) { return dynamic_cast<const compiled_ast_node<Tracer>&>(node).original_node->empty(); }
+			if (node.is<compiled_ast_node>()) { return dynamic_cast<const compiled_ast_node&>(node).original_node->empty(); }
 			return node.empty();
 		}
 
-		template<typename Tracer>
-		[[nodiscard]] auto node_size(const ast_node<Tracer>& node) noexcept
+		[[nodiscard]] inline auto node_size(const ast_node& node) noexcept
 		{
-			if (node.template is<compiled_ast_node<Tracer>>()) { return dynamic_cast<const compiled_ast_node<Tracer>&>(node).original_node->size(); }
+			if (node.is<compiled_ast_node>()) { return dynamic_cast<const compiled_ast_node&>(node).original_node->size(); }
 			return node.size();
 		}
 
-		template<typename Tracer>
-		[[nodiscard]] decltype(auto) node_child(ast_node<Tracer>& node, typename ast_node<Tracer>::children_type::size_type offset) noexcept
+		[[nodiscard]] inline ast_node& node_child(ast_node& node, const ast_node::children_type::size_type offset) noexcept
 		{
 			gal_assert(offset < node_size(node));
 			if (auto& child = node.get_child(offset);
-				child.template is<compiled_ast_node<Tracer>>()) { return *dynamic_cast<compiled_ast_node<Tracer>&>(child).original_node; }
+				child.is<compiled_ast_node>()) { return *dynamic_cast<compiled_ast_node&>(child).original_node; }
 			else { return child; }
 		}
 
-		template<typename Tracer>
-		[[nodiscard]] decltype(auto) node_child(const ast_node<Tracer>& node, typename ast_node<Tracer>::children_type::size_type offset) noexcept
+		[[nodiscard]] inline const ast_node& node_child(const ast_node& node, const ast_node::children_type::size_type offset) noexcept
 		{
 			gal_assert(offset < node_size(node));
 			if (auto& child = node.get_child(offset);
-				child.template is<compiled_ast_node<Tracer>>()) { return *dynamic_cast<compiled_ast_node<Tracer>&>(child).original_node; }
+				child.is<compiled_ast_node>()) { return *dynamic_cast<const compiled_ast_node&>(child).original_node; }
 			else { return child; }
 		}
 
-		template<typename Tracer>
-		[[nodiscard]] bool node_has_var_decl(const ast_node<Tracer>& node) noexcept
+		[[nodiscard]] inline bool node_has_var_decl(const ast_node& node) noexcept
 		{
-			if (node.template is_any<var_decl_ast_node<Tracer>, assign_decl_ast_node<Tracer>, reference_ast_node<Tracer>>()) { return true; }
+			if (node.is_any<var_decl_ast_node, assign_decl_ast_node, reference_ast_node>()) { return true; }
 
 			return std::ranges::any_of(
 					node,
 					[](const auto& child)
 					{
-						return not child.template is_any<block_ast_node<Tracer>, for_ast_node<Tracer>, ranged_for_ast_node<Tracer>>() &&
+						return not child.template is_any<block_ast_node, for_ast_node, ranged_for_ast_node>() &&
 						       node_has_var_decl(child);
 					});
 		}
 
 		struct return_optimizer
 		{
-			template<typename T>
-			ast_node_ptr<T> operator()(ast_node_ptr<T> p)
+			ast_node_ptr operator()(ast_node_ptr p) const
 			{
-				if (p->template is_any<def_ast_node<T>, lambda_ast_node<T>>() && not p->empty())
+				if (p->is_any<def_ast_node, lambda_ast_node>() && not p->empty())
 				{
 					if (auto& back = p->back();
-						back.template is<block_ast_node<T>>())
+						back.is<block_ast_node>())
 					{
 						if (auto& block_back = back.back();
-							block_back.template is<return_ast_node<T>>()) { if (block_back.size() == 1) { block_back = std::move(block_back.front()); } }
+							block_back.is<return_ast_node>()) { if (block_back.size() == 1) { block_back = std::move(block_back.front()); } }
 					}
 				}
 
@@ -92,16 +85,15 @@ namespace gal::lang::lang
 
 		struct block_optimizer
 		{
-			template<typename T>
-			ast_node_ptr<T> operator()(ast_node_ptr<T> p)
+			ast_node_ptr operator()(ast_node_ptr p) const
 			{
-				if (p->template is<block_ast_node<T>>())
+				if (p->is<block_ast_node>())
 				{
 					if (not node_has_var_decl(*p))
 					{
-						if (p->size() == 1) { return std::move(p->front()); }
+						if (p->size() == 1) { return std::move(p->get_child_ptr(0)); }
 
-						return std::move(*p).template remake_node<no_scope_block_ast_node<T>>();
+						return std::move(*p).remake_node<no_scope_block_ast_node>();
 					}
 				}
 
@@ -111,21 +103,21 @@ namespace gal::lang::lang
 
 		struct dead_code_optimizer
 		{
-			template<typename T>
-			ast_node_ptr<T> operator()(ast_node_ptr<T> p)
+			ast_node_ptr operator()(ast_node_ptr p) const
 			{
-				if (p->template is<block_ast_node<T>>())
+				if (p->is<block_ast_node>())
 				{
-					typename ast_node<T>::children_type children{};
+					ast_node::children_type children{};
 					p->swap(children);
 
-					children.erase(std::ranges::remove_if(
+					const auto view = std::ranges::remove_if(
 							children,
-							[](const auto& child) { return child.template is_any<noop_ast_node<T>, id_ast_node<T>, constant_ast_node<T>>(); }));
+							[](const auto& child) { return child->template is_any<noop_ast_node, id_ast_node, constant_ast_node>(); });
+					children.erase(view.begin(), view.end());
 
 					p->swap(children);
 
-					return std::move(*p).template remake_node<block_ast_node<T>>();
+					return std::move(*p).remake_node<block_ast_node>();
 				}
 
 				return p;

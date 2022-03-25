@@ -161,7 +161,7 @@ namespace gal::lang::lang
 
 	using exception_query_interface_name = GAL_UTILS_FIXED_STRING_TYPE("what");
 
-	using exception_eval_error_reason_interface_name			  = GAL_UTILS_FIXED_STRING_TYPE("reason");
+	using exception_eval_error_reason_interface_name = GAL_UTILS_FIXED_STRING_TYPE("reason");
 	using exception_eval_error_pretty_print_interface_name = GAL_UTILS_FIXED_STRING_TYPE("pretty_print");
 	using exception_eval_error_stack_trace_interface_name = GAL_UTILS_FIXED_STRING_TYPE("stack_trace");
 
@@ -231,9 +231,9 @@ namespace gal::lang::lang
 
 	using operator_range_generate_name = GAL_UTILS_FIXED_STRING_TYPE("range_generate");
 
-	using file_point_type_name = GAL_UTILS_FIXED_STRING_TYPE("FilePosition");
-	using file_position_line_interface_name = GAL_UTILS_FIXED_STRING_TYPE("line");
-	using file_position_column_interface_name = GAL_UTILS_FIXED_STRING_TYPE("column");
+	using file_point_type_name = GAL_UTILS_FIXED_STRING_TYPE("FilePoint");
+	using file_point_line_interface_name = GAL_UTILS_FIXED_STRING_TYPE("line");
+	using file_point_column_interface_name = GAL_UTILS_FIXED_STRING_TYPE("column");
 
 	using ast_node_type_name = GAL_UTILS_FIXED_STRING_TYPE("ASTNode");
 	using ast_node_text_interface_name = GAL_UTILS_FIXED_STRING_TYPE("text");

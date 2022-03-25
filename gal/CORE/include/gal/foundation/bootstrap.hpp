@@ -539,7 +539,7 @@ namespace gal::lang::foundation
 						  ret.reserve(error.stack_traces.size());
 						  std::ranges::transform(error.stack_traces,
 						                         std::back_inserter(ret),
-						                         &var<const lang::ast_node_trace&>);
+						                         &var<const lang::ast_node_tracer&>);
 						  return ret;
 					  })}});
 
@@ -583,20 +583,20 @@ namespace gal::lang::foundation
 					lang::file_point_type_name::value,
 					{default_ctor<lang::file_point>(),
 					 ctor<lang::file_point(lang::file_point::size_type, lang::file_point::size_type)>()},
-					{{lang::file_position_line_interface_name::value, fun(&lang::file_point::line)},
-					 {lang::file_position_column_interface_name::value, fun(&lang::file_point::column)}});
+					{{lang::file_point_line_interface_name::value, fun(&lang::file_point::line)},
+					 {lang::file_point_column_interface_name::value, fun(&lang::file_point::column)}});
 
-			register_class<lang::ast_node_base>(
+			register_class<lang::ast_node>(
 					core,
 					lang::ast_node_type_name::value,
 					{},
 					{
-							{lang::ast_node_text_interface_name::value, fun(&lang::ast_node_base::text)},
-							{lang::ast_node_location_begin_interface_name::value, fun(&lang::ast_node_base::location_begin)},
-							{lang::ast_node_location_end_interface_name::value, fun(&lang::ast_node_base::location_end)},
-							{lang::ast_node_filename_interface_name::value, fun(&lang::ast_node_base::filename)},
-							{lang::ast_node_to_string_interface_name::value, fun(&lang::ast_node_base::to_string)},
-							{lang::ast_node_children_interface_name::value, fun(&lang::ast_node_base::get_boxed_children)}});
+							// {lang::ast_node_text_interface_name::value, fun(&lang::ast_node::text_)},
+							{lang::ast_node_location_begin_interface_name::value, fun(&lang::ast_node::location_begin)},
+							{lang::ast_node_location_end_interface_name::value, fun(&lang::ast_node::location_end)},
+							{lang::ast_node_filename_interface_name::value, fun(&lang::ast_node::filename)},
+							{lang::ast_node_to_string_interface_name::value, fun(&lang::ast_node::to_string)},
+							{lang::ast_node_children_interface_name::value, fun(&lang::ast_node::get_boxed_children)}});
 		}
 	};
 }

@@ -9,7 +9,7 @@
 namespace gal::utils
 {
 	template<typename T>
-	class initializer_list
+	class container_view
 	{
 	public:
 		using value_type = T;
@@ -26,18 +26,20 @@ namespace gal::utils
 		const_iterator end_;
 
 	public:
-		constexpr initializer_list(const const_iterator begin, const const_iterator end) noexcept
+		constexpr container_view(const const_iterator begin, const const_iterator end) noexcept
 			: begin_{begin},
 			  end_{end} {}
 
-		constexpr explicit initializer_list(const_reference object) noexcept
+		constexpr explicit container_view(const_reference object) noexcept
 			: begin_{&object},
 			  end_{begin_ + 1} {}
 
-		constexpr explicit initializer_list(const std::initializer_list<value_type>& list) noexcept
+		// todo: explicit?
+		constexpr /* explicit */ container_view(const std::initializer_list<value_type>& list) noexcept
 			: begin_{list.begin()},
 			  end_{list.end()} {}
 
+		// todo: explicit?
 		template<template<typename...> typename Container, typename... AnyOther>
 			requires requires(const Container<value_type, AnyOther...>& container)
 			{
@@ -47,10 +49,12 @@ namespace gal::utils
 					container.data()
 				} -> std::convertible_to<const_iterator>;
 			}
-		constexpr explicit initializer_list(const Container<value_type, AnyOther...>& container) noexcept
+		// ReSharper disable once CppNonExplicitConvertingConstructor
+		constexpr /* explicit */ container_view(const Container<value_type, AnyOther...>& container) noexcept
 			: begin_{container.empty() ? nullptr : container.data()},
 			  end_{container.empty() ? nullptr : container.data() + container.size()} {}
 
+		// todo: explicit?
 		template<size_type Size, template<typename, size_type> typename Container>
 			requires(Size != 0) && requires(Container<value_type, Size> container)
 			{
@@ -58,13 +62,14 @@ namespace gal::utils
 					container.data()
 				} -> std::convertible_to<const_iterator>;
 			}
-		constexpr explicit initializer_list(const Container<value_type, Size>& container) noexcept
+		// ReSharper disable once CppNonExplicitConvertingConstructor
+		constexpr /* explicit */ container_view(const Container<value_type, Size>& container) noexcept
 			: begin_{container.data()},
 			  end_{container.data() + Size} {}
 
 		template<size_type Size, template<typename, size_type> typename Container>
 			requires(Size == 0)
-		constexpr explicit initializer_list(const Container<value_type, Size>&) noexcept
+		constexpr explicit container_view(const Container<value_type, Size>&) noexcept
 			: begin_{nullptr},
 			  end_{nullptr} {}
 
@@ -82,13 +87,13 @@ namespace gal::utils
 
 		[[nodiscard]] constexpr const_reference operator[](const size_type index) const noexcept { return begin()[index]; }
 
-		[[nodiscard]] constexpr initializer_list<value_type> sub_list(const size_type begin, const size_type num) const { return {begin_ + begin, begin_ + begin + num}; }
+		[[nodiscard]] constexpr container_view<value_type> sub_list(const size_type begin, const size_type num) const { return {begin_ + begin, begin_ + begin + num}; }
 
-		[[nodiscard]] constexpr initializer_list<value_type> sub_list(const size_type begin) const { return {begin_ + begin, end_}; }
+		[[nodiscard]] constexpr container_view<value_type> sub_list(const size_type begin) const { return {begin_ + begin, end_}; }
 
-		[[nodiscard]] constexpr initializer_list<value_type> front_sub_list(const size_type num) const { return {begin_, begin_ + num}; }
+		[[nodiscard]] constexpr container_view<value_type> front_sub_list(const size_type num) const { return {begin_, begin_ + num}; }
 
-		[[nodiscard]] constexpr initializer_list<value_type> back_sub_list(const size_type num) const { return {end_ - num, end_}; }
+		[[nodiscard]] constexpr container_view<value_type> back_sub_list(const size_type num) const { return {end_ - num, end_}; }
 
 		template<template<typename...> typename Container, typename... AnyOther>
 			requires std::is_constructible_v<Container<value_type, AnyOther...>, const_iterator, const_iterator>

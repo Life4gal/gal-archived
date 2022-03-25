@@ -78,6 +78,12 @@ namespace gal::lang::foundation
 			  is_member_{is_member} { gal_assert(function_->get_arity() > 0 || function_->get_arity() < 0, "dynamic_object_function must have at least one parameter (this)."); }
 
 		dynamic_object_function(
+				const string_view_type name,
+				proxy_function&& function,
+				const bool is_member = false)
+			: dynamic_object_function{string_type{name}, std::move(function), is_member} {}
+
+		dynamic_object_function(
 				string_type&& name,
 				proxy_function&& function,
 				const gal_type_info& type,
@@ -88,6 +94,13 @@ namespace gal::lang::foundation
 			  type_{not type.is_undefined() ? std::make_optional(type) : std::nullopt},
 			  object_type_{make_type_info<dynamic_object>()},
 			  is_member_{is_member} { gal_assert(function_->get_arity() > 0 || function_->get_arity() < 0, "dynamic_object_function must have at least one parameter (this)."); }
+
+		dynamic_object_function(
+				const string_view_type name,
+				proxy_function&& function,
+				const gal_type_info& type,
+				const bool is_member = false)
+			: dynamic_object_function{string_type{name}, std::move(function), type, is_member} {}
 
 		dynamic_object_function(const dynamic_object_function&) = delete;
 		dynamic_object_function& operator=(const dynamic_object_function&) = delete;
@@ -149,6 +162,11 @@ namespace gal::lang::foundation
 					  function->get_arity() - 1},
 			  name_{std::move(name)},
 			  function_{std::move(function)} { gal_assert(function_->get_arity() > 0 || function_->get_arity() < 0, "dynamic_object_function must have at least one parameter (this)."); }
+
+		dynamic_object_constructor(
+				const string_view_type name,
+				proxy_function&& function)
+			: dynamic_object_constructor{string_type{name}, std::move(function)} {}
 
 		[[nodiscard]] bool operator==(const proxy_function_base& other) const noexcept override
 		{

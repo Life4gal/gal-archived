@@ -15,7 +15,7 @@ namespace gal::lang
 {
 	namespace lang
 	{
-		struct ast_node_base;
+		struct ast_node;
 	}// namespace lang
 
 	namespace exception
@@ -53,7 +53,7 @@ namespace gal::lang
 		{
 		public:
 			foundation::parameters_type parameters;
-			foundation::proxy_functions_type functions;
+			foundation::immutable_proxy_functions_type functions;
 
 			dispatch_error(
 					foundation::parameters_type&& parameters,
@@ -139,6 +139,7 @@ namespace gal::lang
 			using parameter_type_type = gal_type_info;
 
 			using parameter_type_mapping_type = std::vector<std::pair<parameter_name_type, parameter_type_type>>;
+			using parameter_view_type_mapping_type = std::vector<std::pair<parameter_name_view_type, parameter_type_type>>;
 
 		private:
 			parameter_type_mapping_type mapping_;
@@ -151,7 +152,7 @@ namespace gal::lang
 						[](const auto name) { return name.empty(); });
 			}
 
-			void check_empty(const parameter_name_type name) { if (empty_ && not name.empty()) { empty_ = false; } }
+			void check_empty(const parameter_name_view_type name) { if (empty_ && not name.empty()) { empty_ = false; } }
 
 		public:
 			parameter_type_mapper()
@@ -161,13 +162,24 @@ namespace gal::lang
 				: mapping_{std::move(mapping)},
 				  empty_{check_empty()} {}
 
+			explicit parameter_type_mapper(parameter_view_type_mapping_type&& mapping)
+			{
+				mapping_.reserve(mapping.size());
+				std::ranges::for_each(
+						mapping,
+						[this](auto&& pair) { add(pair.first, pair.second); });
+				check_empty();
+			}
+
 			[[nodiscard]] bool operator==(const parameter_type_mapper& other) const { return mapping_ == other.mapping_; }
 
-			void add(parameter_name_type name, parameter_type_type type) { check_empty(mapping_.emplace_back(name, type).first); }
+			void add(parameter_name_type&& name, parameter_type_type type) { check_empty(mapping_.emplace_back(std::move(name), type).first); }
+
+			void add(const parameter_name_view_type name, parameter_type_type type) { check_empty(mapping_.emplace_back(name, type).first); }
 
 			[[nodiscard]] parameters_type convert(const parameters_view_type params, const type_conversion_state& conversion) const
 			{
-				auto ret = params.to<std::vector>();
+				auto ret = params.to<parameters_type>();
 
 				const auto dynamic_object_type_info = make_type_info<dynamic_object>();
 
@@ -394,7 +406,7 @@ namespace gal::lang
 		class dynamic_proxy_function_base : public proxy_function_base
 		{
 		public:
-			using parse_ast_node_type = std::shared_ptr<lang::ast_node_base>;
+			using parse_ast_node_type = std::shared_ptr<lang::ast_node>;
 
 		private:
 			parse_ast_node_type parse_ast_node_;
@@ -487,7 +499,7 @@ namespace gal::lang
 		};
 
 		template<typename Callable>
-			requires(std::is_invocable_v<Callable, parameters_view_type> || std::is_invocable_v<Callable, parameters_type>)
+			requires(std::is_invocable_v<Callable, parameters_view_type> || std::is_invocable_v<Callable, const parameters_type&>)
 		class dynamic_proxy_function final : public dynamic_proxy_function_base
 		{
 		private:
@@ -516,9 +528,9 @@ namespace gal::lang
 			dynamic_proxy_function(
 					Callable&& function,
 					const arity_size_type arity,
-					parse_ast_node_type&& node,
-					parameter_type_mapper&& mapper,
-					proxy_function&& guard)
+					parse_ast_node_type node = {},
+					parameter_type_mapper&& mapper = {},
+					proxy_function&& guard = {})
 				: dynamic_proxy_function_base{arity, std::move(node), std::move(mapper), std::move(guard)},
 				  function_{std::move(function)} {}
 		};
@@ -834,15 +846,15 @@ namespace gal::lang
 						});
 
 				try { return (*matching)(parameters_view_type{new_parameters}, conversion); }
-				catch (const gal::lang::exception::bad_boxed_cast&)
+				catch (const exception::bad_boxed_cast&)
 				{
 					// parameter failed to cast
 				}
-				catch (const gal::lang::exception::arity_error&)
+				catch (const exception::arity_error&)
 				{
 					// invalid num params
 				}
-				catch (const gal::lang::exception::guard_error&)
+				catch (const exception::guard_error&)
 				{
 					// guard failed to allow the function to execute
 				}

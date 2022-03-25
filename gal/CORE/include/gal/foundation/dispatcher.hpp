@@ -1427,10 +1427,10 @@ namespace gal::lang
 			inline void scoped_scope::do_destruct() const { state.get().stack().pop_scope(); }
 
 			inline scoped_object_scope::scoped_object_scope(const dispatcher_state& state, engine_core::variable_type&& object)
-				: scoped_scope{state} { state.add_object_no_check(lang::object_self_type_name::value, std::move(object)); }
+				: scoped_scope{state} { (void)state.add_object_no_check(lang::object_self_type_name::value, std::move(object)); }
 
 			inline scoped_object_scope::scoped_object_scope(const dispatcher_state& state, const engine_core::variable_type& object)
-				: scoped_scope{state} { state.add_object_no_check(lang::object_self_type_name::value, object); }
+				: scoped_scope{state} { (void)state.add_object_no_check(lang::object_self_type_name::value, object); }
 
 			inline void scoped_stack_scope::do_construct() const { state.get().stack().new_stack(); }
 

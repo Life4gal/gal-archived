@@ -12,7 +12,7 @@ namespace gal::lang
 {
 	namespace lang
 	{
-		struct ast_node_trace;
+		struct ast_node_tracer;
 
 		struct name_validator
 		{
@@ -261,7 +261,7 @@ namespace gal::lang
 			std::string filename;
 			lang::file_point begin_position;
 			std::string detail;
-			std::vector<lang::ast_node_trace> stack_traces;
+			std::vector<lang::ast_node_tracer> stack_traces;
 
 		private:
 			static void format_reason(std::string& target, const std::string_view r) { std_format::format_to(std::back_inserter(target), "Error: '{}' ", r); }
@@ -365,12 +365,12 @@ namespace gal::lang
 
 			static void format_types(
 					std::string& target,
-					const foundation::proxy_function& function,
+					const foundation::immutable_proxy_function& function,
 					bool has_dot_notation,
 					const foundation::dispatcher_detail::dispatcher& dispatcher);
 
 			static std::string format_detail(
-					const foundation::proxy_functions_view_type functions,
+					const foundation::immutable_proxy_functions_view_type functions,
 					const bool has_dot_notation,
 					const foundation::dispatcher_detail::dispatcher& dispatcher)
 			{
@@ -406,7 +406,7 @@ namespace gal::lang
 					const std::string_view filename,
 					const lang::file_point begin_position,
 					const foundation::parameters_view_type params,
-					const foundation::proxy_functions_view_type functions,
+					const foundation::immutable_proxy_functions_view_type functions,
 					const bool has_dot_notation,
 					const foundation::dispatcher_detail::dispatcher& dispatcher)
 				: std::runtime_error{format(reason, filename, begin_position, params, has_dot_notation, dispatcher)},
@@ -418,7 +418,7 @@ namespace gal::lang
 			eval_error(
 					const std::string_view reason,
 					const foundation::parameters_view_type params,
-					const foundation::proxy_functions_view_type functions,
+					const foundation::immutable_proxy_functions_view_type functions,
 					const bool has_dot_notation,
 					const foundation::dispatcher_detail::dispatcher& dispatcher)
 				: std::runtime_error{format(reason, params, has_dot_notation, dispatcher)},
@@ -428,23 +428,23 @@ namespace gal::lang
 			eval_error(
 					const std::string_view reason,
 					const foundation::parameters_type& params,
-					const foundation::proxy_functions_type& functions,
+					const foundation::immutable_proxy_functions_type& functions,
 					const bool has_dot_notation,
 					const foundation::dispatcher_detail::dispatcher& dispatcher)
-				: eval_error{reason, foundation::parameters_view_type{params}, foundation::proxy_functions_view_type{functions}, has_dot_notation, dispatcher} {}
+				: eval_error{reason, foundation::parameters_view_type{params}, foundation::immutable_proxy_functions_view_type{functions}, has_dot_notation, dispatcher} {}
 
 			eval_error(
 					const std::string_view reason,
 					const foundation::parameters_view_type params,
-					const foundation::proxy_functions_type& functions,
+					const foundation::immutable_proxy_functions_type& functions,
 					const bool has_dot_notation,
 					const foundation::dispatcher_detail::dispatcher& dispatcher)
-				: eval_error{reason, params, foundation::proxy_functions_view_type{functions}, has_dot_notation, dispatcher} {}
+				: eval_error{reason, params, foundation::immutable_proxy_functions_view_type{functions}, has_dot_notation, dispatcher} {}
 
 			eval_error(
 					const std::string_view reason,
 					const foundation::parameters_type& params,
-					const foundation::proxy_functions_view_type functions,
+					const foundation::immutable_proxy_functions_view_type functions,
 					const bool has_dot_notation,
 					const foundation::dispatcher_detail::dispatcher& dispatcher)
 				: eval_error{reason, foundation::parameters_view_type{params}, functions, has_dot_notation, dispatcher} {}
@@ -471,6 +471,30 @@ namespace gal::lang
 
 	namespace lang
 	{
+		class ast_visitor
+		{
+		public:
+			constexpr ast_visitor() = default;
+			constexpr virtual ~ast_visitor() noexcept = default;
+			constexpr ast_visitor(const ast_visitor&) = default;
+			constexpr ast_visitor& operator=(const ast_visitor&) = default;
+			constexpr ast_visitor(ast_visitor&&) = default;
+			constexpr ast_visitor& operator=(ast_visitor&&) = default;
+
+			virtual void visit(const ast_node& node)
+			{
+				(void)node;
+				throw std::runtime_error{"visitor is not implemented"};
+			}
+		};
+
+		struct ast_node;
+		using ast_node_ptr = std::unique_ptr<ast_node>;
+
+		template<typename NodeType, typename... Args>
+			requires std::derived_from<NodeType, ast_node>
+		[[nodiscard]] ast_node_ptr make_node(Args&&... args) { return std::make_unique<NodeType>(std::forward<Args>(args)...); }
+
 		namespace common_detail
 		{
 			using ast_rtti_index_type = int;
@@ -509,18 +533,18 @@ namespace gal::lang
 				template<typename>
 				friend struct ast_node_common_base;
 
-			protected:
-				ast_rtti_index_type class_index_;
+				// for ast_node::remake_node
+				friend struct lang::ast_node;
 
-			public:
-				parse_location location;
-
-				using text_type = std::string;
-				// do not modify text.
 				// todo: do we really need to keep the text?
-				text_type text;
+				using text_type = foundation::string_type;
+				using identifier_type = foundation::string_view_type;
 
 			private:
+				ast_rtti_index_type class_index_{};
+				parse_location location_;
+				text_type text_;
+
 				template<typename Function>
 				void format_children_to(text_type& target, Function&& function) const
 				{
@@ -532,11 +556,11 @@ namespace gal::lang
 							});
 				}
 
+				// for cast ctor below 
 				template<typename U>
 				explicit operator const ast_node_common_base<U>&() const { return reinterpret_cast<const ast_node_common_base<U>&>(*this); }
 
 			public:
-				// todo: the following four interfaces have a fatal problem, they are not compatible with nodes with different tracers but the same type.
 				template<has_rtti_index TargetNode>
 				[[nodiscard]] constexpr bool is() const noexcept { return class_index_ == TargetNode::get_rtti_index(); }
 
@@ -549,24 +573,53 @@ namespace gal::lang
 				template<has_rtti_index TargetNode>
 				[[nodiscard]] constexpr const TargetNode* as() const noexcept { return class_index_ == TargetNode::get_rtti_index() ? static_cast<const TargetNode*>(this) : nullptr; }
 
+				template<has_rtti_index TargetNode>
+				[[nodiscard]] constexpr TargetNode* as_no_check() noexcept
+				{
+					gal_assert(class_index_ == TargetNode::get_rtti_index());
+					return static_cast<TargetNode*>(this);
+				}
+
+				template<has_rtti_index TargetNode>
+				[[nodiscard]] constexpr const TargetNode* as_no_check() const noexcept
+				{
+					gal_assert(class_index_ == TargetNode::get_rtti_index());
+					return static_cast<const TargetNode*>(this);
+				}
+
+				[[nodiscard]] constexpr identifier_type identifier() const noexcept { return text_; }
+
 				explicit ast_node_common_base(
 						const ast_rtti_index_type index,
 						text_type&& text,
 						parse_location&& location)
 					: class_index_{index},
-					  location{std::move(location)},
-					  text{std::move(text)} {}
+					  location_{std::move(location)},
+					  text_{std::move(text)} {}
 
+				// for ast_node -> ast_node_tracer
 				template<typename U>
 					requires(not std::is_same_v<U, T>)
 				explicit ast_node_common_base(const ast_node_common_base<U>& other)
 					: ast_node_common_base{static_cast<const ast_node_common_base<T>&>(other)} {}
 
-				[[nodiscard]] const parse_location::filename_type& filename() const noexcept { return *location.filename; }
+				explicit ast_node_common_base(
+						const ast_rtti_index_type index,
+						T&& node)
+					: ast_node_common_base{index, std::move(node.text_), std::move(node.location_)} {}
 
-				[[nodiscard]] file_point location_begin() const noexcept { return location.location.begin; }
+				explicit ast_node_common_base(
+						const ast_rtti_index_type index,
+						const T& node)
+					: class_index_{index},
+					  location_{node.location_},
+					  text_{node.text_} {}
 
-				[[nodiscard]] file_point location_end() const noexcept { return location.location.end; }
+				[[nodiscard]] const parse_location::filename_type& filename() const noexcept { return *location_.filename; }
+
+				[[nodiscard]] file_point location_begin() const noexcept { return location_.location.begin; }
+
+				[[nodiscard]] file_point location_end() const noexcept { return location_.location.end; }
 
 				void pretty_format_position_to(text_type& target) const
 				{
@@ -586,7 +639,7 @@ namespace gal::lang
 
 				void pretty_format_to(text_type& target) const
 				{
-					target.append(text);
+					target.append(text_);
 					format_children_to(target, [](const auto& child, text_type& t) { child.pretty_format_to(t); });
 				}
 
@@ -604,7 +657,7 @@ namespace gal::lang
 							"{}(class index: {}) {} : ",
 							prepend,
 							class_index_,
-							text);
+							text_);
 					pretty_format_position_to(target);
 					target.push_back('\n');
 
@@ -623,32 +676,42 @@ namespace gal::lang
 			};
 		}// namespace common_detail
 
-		template<typename>
-		struct ast_node;
-		template<typename T>
-		using ast_node_ptr = std::unique_ptr<ast_node<T>>;
-
-		template<typename NodeType, typename... Args>
-			requires std::derived_from<NodeType, ast_node<typename NodeType::tracer_type>>
-		[[nodiscard]] ast_node_ptr<typename NodeType::tracer_type> make_node(Args&&... args) { return std::make_unique<NodeType>(std::forward<Args>(args)...); }
-
-		struct ast_node_base : common_detail::ast_node_common_base<ast_node_base>
+		struct ast_node : common_detail::ast_node_common_base<ast_node>
 		{
-			friend struct ast_node_common_base<ast_node_base>;
+			// for access children
+			friend struct ast_node_tracer;
+			friend struct compiled_ast_node;
+
+			using children_type = std::vector<ast_node_ptr>;
 
 		protected:
-			using ast_node_common_base<ast_node_base>::ast_node_common_base;
+			ast_node(
+					const common_detail::ast_rtti_index_type index,
+					const foundation::string_view_type text,
+					parse_location&& location,
+					children_type&& children = {})
+				: ast_node_common_base{index, text_type{text}, std::move(location)},
+				  children_{std::move(children)} {}
+
+			explicit ast_node(
+					ast_node_common_base&& base,
+					children_type&& children = {})
+				: ast_node_common_base{std::move(base)},
+				  children_{std::move(children)} {}
+
+			[[nodiscard]] virtual foundation::boxed_value do_eval([[maybe_unused]] const foundation::dispatcher_detail::dispatcher_state& state, [[maybe_unused]] ast_visitor& visitor) const { throw std::runtime_error{"un-dispatched ast_node (internal error)"}; }
 
 		private:
-			// todo: return type
-			[[nodiscard]] virtual std::vector<std::reference_wrapper<ast_node_base>> get_children() const noexcept = 0;
-			// compromise :(
-			static const ast_node_base& unwrap_child(const std::reference_wrapper<ast_node_base>& child) noexcept { return child.get(); }
+			children_type children_;
+
+			[[nodiscard]] auto get_unwrapped_children() { return children_ | std::views::transform([](auto& ptr) -> ast_node& { return *ptr; }); }
+
+			[[nodiscard]] auto get_unwrapped_children() const { return children_ | std::views::transform([](const auto& ptr) -> const ast_node& { return *ptr; }); }
 
 		public:
 			[[nodiscard]] foundation::parameters_type get_boxed_children() const
 			{
-				const auto& children = get_children();
+				const auto children = get_unwrapped_children() | std::views::transform([](const auto& child) { return std::ref(child); });
 
 				foundation::parameters_type ret{};
 				ret.reserve(children.size());
@@ -656,24 +719,27 @@ namespace gal::lang
 				std::ranges::transform(
 						children,
 						std::back_inserter(ret),
-						// see virtual function get_children
-						var<const std::vector<std::reference_wrapper<ast_node_base>>::value_type&>);
+						var<const std::reference_wrapper<const ast_node>&>);
 
 				return ret;
 			}
 
-			virtual ~ast_node_base() noexcept = default;
-			ast_node_base(const ast_node_base&) = default;
-			ast_node_base& operator=(const ast_node_base&) = default;
-			ast_node_base(ast_node_base&&) = default;
-			ast_node_base& operator=(ast_node_base&&) = default;
+			virtual ~ast_node() noexcept = default;
+			// due to unique_ptr
+			ast_node(const ast_node&) = delete;
+			ast_node& operator=(const ast_node&) = delete;
+			ast_node(ast_node&&) = default;
+			ast_node& operator=(ast_node&&) = default;
+
+			template<typename NodeType, typename... Args>
+				requires std::is_base_of_v<ast_node, NodeType>
+			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) && { return lang::make_node<NodeType>(std::move(text_), std::move(location_), std::move(children_), std::forward<Args>(extra_args)...); }
 
 			template<typename Function>
 			void apply(Function&& function) const
 			{
-				const auto& children = get_children();
 				std::ranges::for_each(
-						children | std::views::transform(unwrap_child),
+						get_unwrapped_children(),
 						std::forward<Function>(function));
 			}
 
@@ -686,16 +752,63 @@ namespace gal::lang
 				catch (const exception::bad_boxed_cast&) { throw exception::eval_error{"Condition not boolean"}; }
 			}
 
-			[[nodiscard]] virtual foundation::boxed_value eval(const foundation::dispatcher_detail::dispatcher_state& state) const = 0;
+			/**
+			 * @throw eval_error
+			 */
+			static bool get_scoped_bool_condition(const ast_node& node, const foundation::dispatcher_detail::dispatcher_state& state, ast_visitor& visitor)
+			{
+				foundation::dispatcher_detail::scoped_stack_scope scoped_stack{state};
+				return get_bool_condition(node.eval(state, visitor), state);
+			}
+
+			foundation::boxed_value eval(const foundation::dispatcher_detail::dispatcher_state& state, ast_visitor& visitor) const;
+
+			void swap(children_type& children) noexcept
+			{
+				using std::swap;
+				swap(children_, children);
+			}
+
+			[[nodiscard]] children_type::size_type size() const noexcept { return children_.size(); }
+
+			[[nodiscard]] bool empty() const noexcept { return children_.empty(); }
+
+			[[nodiscard]] ast_node_ptr& get_child_ptr(const children_type::size_type index) noexcept { return children_[index]; }
+
+			[[nodiscard]] const ast_node_ptr& get_child_ptr(const children_type::size_type index) const noexcept { return const_cast<ast_node&>(*this).get_child_ptr(index); }
+
+			[[nodiscard]] ast_node& get_child(const children_type::difference_type index) noexcept { return get_unwrapped_children().operator[](index); }
+
+			[[nodiscard]] const ast_node& get_child(const children_type::difference_type index) const noexcept { return const_cast<ast_node&>(*this).get_child(index); }
+
+			[[nodiscard]] ast_node& front() noexcept { return get_unwrapped_children().front(); }
+
+			[[nodiscard]] const ast_node& front() const noexcept { return const_cast<ast_node&>(*this).front(); }
+
+			[[nodiscard]] ast_node& back() noexcept { return get_unwrapped_children().back(); }
+
+			[[nodiscard]] const ast_node& back() const noexcept { return const_cast<ast_node&>(*this).back(); }
+
+			[[nodiscard]] auto begin() noexcept { return get_unwrapped_children().begin(); }
+
+			[[nodiscard]] auto begin() const noexcept { return get_unwrapped_children().begin(); }
+
+			[[nodiscard]] auto end() noexcept { return get_unwrapped_children().end(); }
+
+			[[nodiscard]] auto end() const noexcept { return get_unwrapped_children().end(); }
 		};
 
-		struct ast_node_trace : common_detail::ast_node_common_base<ast_node_trace>
+		struct ast_node_tracer : common_detail::ast_node_common_base<ast_node_tracer>
 		{
-			using children_type = std::vector<ast_node_trace>;
+			GAL_AST_SET_RTTI(ast_node_tracer)
+
+			using children_type = std::vector<ast_node_tracer>;
 
 			children_type children;
 
-			explicit ast_node_trace(const ast_node_base& node);
+			explicit ast_node_tracer(const ast_node& node)
+				: ast_node_common_base{node},
+				  children{node.get_unwrapped_children().begin(), node.get_unwrapped_children().end()} { }
 
 			template<typename Function>
 			void apply(Function&& function)
@@ -716,177 +829,23 @@ namespace gal::lang
 			[[nodiscard]] constexpr auto end() const noexcept { return children.end(); }
 		};
 
-		template<typename Tracer>
-		struct ast_node : ast_node_base
+		inline foundation::boxed_value ast_node::eval(const foundation::dispatcher_detail::dispatcher_state& state, ast_visitor& visitor) const
 		{
-			using tracer_type = Tracer;
-			// although we would like to use concept in the template parameter list,
-			// unfortunately we can't use it in concept without knowing the type of ast_node_impl,
-			// so we can only use this unfriendly way.
-			static_assert(
-				requires(const foundation::dispatcher_detail::dispatcher_state& s, const ast_node<tracer_type>* n)
-				{
-					tracer_type::trace(s, n);
-				},
-				"invalid tracer");
-
-			using node_ptr_type = ast_node_ptr<tracer_type>;
-			using children_type = std::vector<node_ptr_type>;
-
-		private:
-			template<typename>
-			friend struct compiled_ast_node;
-			children_type children_;
-
-			[[nodiscard]] std::vector<std::reference_wrapper<ast_node_base>> get_children() const noexcept override
+			visitor.visit(*this);
+			try { return do_eval(state, visitor); }
+			catch (exception::eval_error& e)
 			{
-				// return children_ | std::views::transform([](const auto& child_ptr) -> ast_node_base& { return *child_ptr; });
-				std::vector<std::reference_wrapper<ast_node_base>> ret{};
-				std::ranges::for_each(
-						children_,
-						[&ret](const auto& ptr) { ret.emplace_back(*ptr); });
-				return ret;
+				e.stack_traces.emplace_back(*this);
+				throw;
 			}
-
-		public:
-			ast_node(
-					const common_detail::ast_rtti_index_type index,
-					std::string&& text,
-					parse_location&& location,
-					children_type&& children = {})
-				: ast_node_base{index, std::move(text), std::move(location)},
-				  children_{std::move(children)} {}
-
-			template<typename NodeType, typename... Args>
-				requires std::is_base_of_v<ast_node<typename NodeType::tracer_type>, NodeType>
-			[[nodiscard]] ast_node_ptr<typename NodeType::tracer_type> remake_node(Args&&... extra_args) && { return make_node<NodeType>(NodeType::get_rtti_index(), std::move(text), std::move(location), std::move(children_), std::forward<Args>(extra_args)...); }
-
-		protected:
-			[[nodiscard]] virtual foundation::boxed_value do_eval(const foundation::dispatcher_detail::dispatcher_state& state) const { throw std::runtime_error{"un-dispatched ast_node (internal error)"}; }
-
-		public:
-			/**
-			 * @throw eval_error
-			 */
-			static bool get_scoped_bool_condition(const node_ptr_type& node, const foundation::dispatcher_detail::dispatcher_state& state)
-			{
-				foundation::dispatcher_detail::scoped_stack_scope scoped_stack{state};
-				return get_bool_condition(node->eval(state), state);
-			}
-
-			[[nodiscard]] foundation::boxed_value eval(const foundation::dispatcher_detail::dispatcher_state& state) const final
-			{
-				try
-				{
-					tracer_type::trace(state, this);
-					return do_eval(state);
-				}
-				catch (exception::eval_error& e)
-				{
-					e.stack_traces.push_back(*this);
-					throw;
-				}
-			}
-
-			void swap(children_type& children) noexcept
-			{
-				using std::swap;
-				swap(children_, children);
-			}
-
-			[[nodiscard]] typename children_type::size_type size() const noexcept { return children_.size(); }
-
-			[[nodiscard]] bool empty() const noexcept { return children_.empty(); }
-
-			[[nodiscard]] ast_node<tracer_type>& get_child(typename children_type::size_type index) noexcept { return *children_[index]; }
-
-			[[nodiscard]] const ast_node<tracer_type>& get_child(typename children_type::size_type index) const noexcept { return const_cast<ast_node<tracer_type>&>(*this).get_child(index); }
-
-			[[nodiscard]] ast_node<tracer_type>& front() noexcept { return *children_.front(); }
-
-			[[nodiscard]] const ast_node<tracer_type>& front() const noexcept { return const_cast<ast_node<tracer_type>&>(*this).front(); }
-
-			[[nodiscard]] ast_node<tracer_type>& back() noexcept { return *children_.back(); }
-
-			[[nodiscard]] const ast_node<tracer_type>& back() const noexcept { return const_cast<ast_node<tracer_type>&>(*this).back(); }
-
-			struct child_iterator
-			{
-				using iterator_concept = typename children_type::iterator::iterator_concept;
-				using iterator_category = typename children_type::iterator::iterator_category;
-				using value_type = typename children_type::iterator::value_type;
-				using difference_type = typename children_type::iterator::difference_type;
-				using pointer = typename children_type::iterator::pointer;
-				using reference = typename children_type::iterator::reference;
-
-				typename children_type::iterator iterator{};
-
-				[[nodiscard]] typename children_type::iterator& base() noexcept { return iterator; }
-
-				[[nodiscard]] const typename children_type::iterator& base() const noexcept { return iterator; }
-
-				[[nodiscard]] decltype(auto) operator*() const noexcept { return **iterator; }
-
-				[[nodiscard]] decltype(auto) operator->() const noexcept { return &**iterator; }
-
-				decltype(auto) operator++() noexcept
-				{
-					iterator.operator++();
-					return *this;
-				}
-
-				decltype(auto) operator++(int) noexcept
-				{
-					auto tmp = *this;
-					iterator.operator++(int{});
-					return tmp;
-				}
-
-				decltype(auto) operator+(difference_type offset) noexcept
-				{
-					auto tmp = *this;
-					tmp.iterator += offset;
-					return tmp;
-				}
-
-				decltype(auto) operator--() const noexcept
-				{
-					iterator.operator--();
-					return *this;
-				}
-
-				decltype(auto) operator--(int) const noexcept
-				{
-					auto tmp = *this;
-					iterator.operator--(int{});
-					return tmp;
-				}
-
-				decltype(auto) operator-(difference_type offset) noexcept
-				{
-					auto tmp = *this;
-					tmp.iterator -= offset;
-					return tmp;
-				}
-
-				decltype(auto) operator[](difference_type offset) const noexcept { return *iterator[offset]; }
-			};
-
-			[[nodiscard]] auto begin() noexcept { child_iterator{children_.begin()}; }
-
-			[[nodiscard]] auto begin() const noexcept { return child_iterator{children_.begin()}; }
-
-			[[nodiscard]] auto end() noexcept { child_iterator{children_.end()}; }
-
-			[[nodiscard]] auto end() const noexcept { return child_iterator{children_.end()}; }
-		};
+		}
 	}// namespace lang
 
 	namespace exception
 	{
 		inline void eval_error::format_types(
 				std::string& target,
-				const foundation::proxy_function& function,
+				const foundation::immutable_proxy_function& function,
 				const bool has_dot_notation,
 				const foundation::dispatcher_detail::dispatcher& dispatcher
 				)
@@ -971,8 +930,8 @@ namespace gal::lang
 			return *static_cast<T*>(get_tracer_ptr());
 		}
 
-		[[nodiscard]] virtual std::unique_ptr<lang::ast_node_base> parse(std::string_view input, std::string_view filename) = 0;
-		virtual void debug_print(const lang::ast_node_base& node, std::string_view prepend = "") const = 0;
+		[[nodiscard]] virtual std::unique_ptr<lang::ast_node> parse(std::string_view input, std::string_view filename) = 0;
+		virtual void debug_print(const lang::ast_node& node, std::string_view prepend = "") const = 0;
 
 	private:
 		[[nodiscard]] virtual void* get_tracer_ptr() = 0;
