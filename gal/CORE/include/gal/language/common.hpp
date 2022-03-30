@@ -514,10 +514,10 @@ namespace gal::lang
 			const ast_rtti_index_type ast_rtti<T>::value = ++ast_rtti_index_counter::index;
 
 			#define GAL_AST_SET_RTTI(class_name)                    \
-		constexpr static auto get_rtti_index() noexcept \
-		{                                               \
-			return common_detail::ast_rtti<class_name>::value;         \
-		}
+			constexpr static auto get_rtti_index() noexcept \
+			{                                               \
+				return common_detail::ast_rtti<class_name>::value;         \
+			}
 
 			template<typename T>
 			concept has_rtti_index = requires(T t)
@@ -576,14 +576,14 @@ namespace gal::lang
 				template<has_rtti_index TargetNode>
 				[[nodiscard]] constexpr TargetNode* as_no_check() noexcept
 				{
-					gal_assert(class_index_ == TargetNode::get_rtti_index());
+					gal_assert(is<TargetNode>());
 					return static_cast<TargetNode*>(this);
 				}
 
 				template<has_rtti_index TargetNode>
 				[[nodiscard]] constexpr const TargetNode* as_no_check() const noexcept
 				{
-					gal_assert(class_index_ == TargetNode::get_rtti_index());
+					gal_assert(is<TargetNode>());
 					return static_cast<const TargetNode*>(this);
 				}
 
