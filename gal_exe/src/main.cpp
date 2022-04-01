@@ -15,6 +15,7 @@
 #include <gal/language/optimizer.hpp>
 #include <gal/foundation/bootstrap.hpp>
 #include <gal/language/visitor.hpp>
+#include <gal/language/parser.hpp>
 
 int main()
 {

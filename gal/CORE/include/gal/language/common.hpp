@@ -736,6 +736,7 @@ namespace gal::lang
 			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) && { return lang::make_node<NodeType>(std::move(text_), std::move(location_), std::move(children_), std::forward<Args>(extra_args)...); }
 
 			template<typename Function>
+				requires (std::is_invocable_v<Function, ast_node&> or std::is_invocable_v<Function, const ast_node&>)
 			void apply(Function&& function) const
 			{
 				std::ranges::for_each(
@@ -908,34 +909,38 @@ namespace gal::lang
 		}
 	}
 
-	class parser_base
+	namespace parser_detail
 	{
-	public:
-		parser_base() = default;
-		virtual ~parser_base() noexcept = default;
-
-		parser_base(parser_base&&) = default;
-
-		parser_base& operator=(const parser_base&) = delete;
-		parser_base& operator=(parser_base&&) = delete;
-
-	protected:
-		parser_base(const parser_base&) = default;
-
-	public:
-		template<typename T>
-		[[nodiscard]] T& get_tracer() noexcept
+		class parser_base
 		{
-			gal_assert(get_tracer_ptr());
-			return *static_cast<T*>(get_tracer_ptr());
-		}
+		public:
+			parser_base() = default;
+			virtual ~parser_base() noexcept = default;
 
-		[[nodiscard]] virtual std::unique_ptr<lang::ast_node> parse(std::string_view input, std::string_view filename) = 0;
-		virtual void debug_print(const lang::ast_node& node, std::string_view prepend = "") const = 0;
+			parser_base(parser_base&&) = default;
 
-	private:
-		[[nodiscard]] virtual void* get_tracer_ptr() = 0;
-	};
+			parser_base& operator=(const parser_base&) = delete;
+			parser_base& operator=(parser_base&&) = delete;
+
+		protected:
+			parser_base(const parser_base&) = default;
+
+		public:
+			template<typename T>
+			[[nodiscard]] T& get_visitor() noexcept
+			{
+				gal_assert(get_visitor_ptr());
+				return *static_cast<T*>(get_visitor_ptr());
+			}
+
+			[[nodiscard]] virtual lang::ast_node_ptr parse(std::string_view input, std::string_view filename) = 0;
+			[[nodiscard]] virtual std::string debug_print(const lang::ast_node& node, std::string_view prepend) const = 0;
+			virtual void debug_print_to(std::string& dest, const lang::ast_node& node, std::string_view prepend) const = 0;
+
+		private:
+			[[nodiscard]] virtual void* get_visitor_ptr() = 0;
+		};
+	}
 
 	// todo: better way
 	namespace interrupt_type

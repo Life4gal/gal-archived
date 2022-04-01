@@ -203,6 +203,12 @@ namespace gal::lang::lang
 	using operator_unary_bitwise_complement_name = GAL_UTILS_TEMPLATE_STRING_TYPE("~");
 
 	//*********************************************
+	// logical operators
+	//*********************************************
+	using operator_logical_and_name = GAL_UTILS_TEMPLATE_STRING_TYPE("and");
+	using operator_logical_or_name = GAL_UTILS_TEMPLATE_STRING_TYPE("or");
+
+	//*********************************************
 	// container interface
 	//*********************************************
 	using container_subscript_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("[]");

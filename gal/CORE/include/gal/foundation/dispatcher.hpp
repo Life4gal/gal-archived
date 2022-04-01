@@ -107,10 +107,14 @@ namespace gal::lang
 		};
 	}// namespace exception
 
+	namespace parser_detail
+	{
+		// see gal/language/common.hpp
+		class parser_base;
+	}
+
 	namespace foundation
 	{
-		class parser_base;
-
 		/**
 		 * @brief Holds a collection of settings which can be applied to the runtime.
 		 * @note Used to implement loadable module support.
@@ -712,7 +716,7 @@ namespace gal::lang
 			private:
 				state_type state_;
 				type_conversion_manager manager_;
-				std::reference_wrapper<parser_base> parser_;
+				std::reference_wrapper<parser_detail::parser_base> parser_;
 
 				utils::thread_storage<engine_stack> stack_;
 				mutable utils::threading::shared_mutex mutex_;
@@ -800,7 +804,7 @@ namespace gal::lang
 				}
 
 			public:
-				explicit dispatcher(parser_base& p)
+				explicit dispatcher(parser_detail::parser_base& p)
 					: parser_{p} {}
 
 				/**
