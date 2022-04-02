@@ -167,7 +167,7 @@ namespace gal::utils
 		         (std::is_enum_v<Enums> && ...) &&
 		         std::is_scalar_v<std::underlying_type_t<Enum>> &&
 		         (std::is_convertible_v<std::underlying_type_t<Enums>, std::underlying_type_t<Enum>> && ...)
-	constexpr void set_enum_flag_set(Enum& e, std::convertible_to<std::underlying_type_t<Enum>> auto ... enums) noexcept { set_enum_flag_set(static_cast<std::underlying_type_t<Enum>&>(e), enums...); }
+	constexpr void set_enum_flag_set(Enum& e, Enums ... enums) noexcept { set_enum_flag_set(reinterpret_cast<std::underlying_type_t<Enum>&>(e), enums...); }
 
 	/**
 	 * @code
@@ -261,7 +261,7 @@ namespace gal::utils
 		         (std::is_enum_v<Enums> && ...) &&
 		         std::is_scalar_v<std::underlying_type_t<Enum>> &&
 		         (std::is_convertible_v<std::underlying_type_t<Enums>, std::underlying_type_t<Enum>> && ...)
-	constexpr void unset_enum_flag_set(Enum& e, Enums ... enums) noexcept { unset_enum_flag_set(static_cast<std::underlying_type_t<Enum>&>(e), enums...); }
+	constexpr void unset_enum_flag_set(Enum& e, Enums ... enums) noexcept { unset_enum_flag_set(reinterpret_cast<std::underlying_type_t<Enum>&>(e), enums...); }
 
 	/**
 	 * @code

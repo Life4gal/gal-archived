@@ -471,10 +471,13 @@ namespace gal::lang
 
 	namespace lang
 	{
+		struct ast_node;
+		using ast_node_ptr = std::unique_ptr<ast_node>;
+
 		class ast_visitor
 		{
 		public:
-			constexpr ast_visitor() = default;
+			constexpr ast_visitor() noexcept = default;
 			constexpr virtual ~ast_visitor() noexcept = default;
 			constexpr ast_visitor(const ast_visitor&) = default;
 			constexpr ast_visitor& operator=(const ast_visitor&) = default;
@@ -488,8 +491,23 @@ namespace gal::lang
 			}
 		};
 
-		struct ast_node;
-		using ast_node_ptr = std::unique_ptr<ast_node>;
+		class ast_optimizer
+		{
+		public:
+			constexpr ast_optimizer() = default;
+			constexpr virtual ~ast_optimizer() noexcept = default;
+			constexpr ast_optimizer(const ast_optimizer&) = default;
+			constexpr ast_optimizer& operator=(const ast_optimizer&) = default;
+			constexpr ast_optimizer(ast_optimizer&&) = default;
+			constexpr ast_optimizer& operator=(ast_optimizer&&) = default;
+
+			// ReSharper disable once CppParameterMayBeConst
+			[[nodiscard]] virtual ast_node_ptr optimize(ast_node_ptr node)
+			{
+				(void)node;
+				throw std::runtime_error{"optimizer is not implemented"};
+			}
+		};
 
 		template<typename NodeType, typename... Args>
 			requires std::derived_from<NodeType, ast_node>

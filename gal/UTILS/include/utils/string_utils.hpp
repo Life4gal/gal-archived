@@ -8,7 +8,8 @@
 #include <range/v3/view.hpp>
 #include <range/v3/algorithm.hpp>
 
-#include<utils/concept.hpp>
+#include <utils/concept.hpp>
+#include <utils/function.hpp>
 
 namespace gal::utils
 {
@@ -146,7 +147,7 @@ namespace gal::utils
 		}
 	}
 
-	constexpr std::size_t to_utf8(char* data, std::uint32_t codepoint)
+	constexpr std::size_t to_utf8(char* data, const std::uint32_t codepoint)
 	{
 		// U+0000..U+007F
 		if (codepoint < 0x80)
@@ -179,6 +180,31 @@ namespace gal::utils
 			return 4;
 		}
 		return 0;
+	}
+
+	template<typename T, typename Container>
+		requires std::is_arithmetic_v<T>
+	constexpr void to_string_to(const T number, Container& container) noexcept
+	{
+		constexpr auto log10_ceil = y_combinator{
+				[]<std::integral U>(auto&& self, const U num) constexpr noexcept -> int { return num < 10 ? 1 : 1 + self(num / 10); }};
+
+		constexpr auto length =
+				5 +
+				std::numeric_limits<T>::max_digits10 +
+				std::ranges::max(2, log10_ceil(std::numeric_limits<T>::max_exponent10));
+
+		container.resize(container.size() + length);
+		std::to_chars(container.data(), container.data() + container.size(), number, std::chars_format::scientific);
+	}
+
+	template<typename T>
+		requires std::is_arithmetic_v<T>
+	constexpr std::string to_string(const T number) noexcept
+	{
+		std::string ret{};
+		to_string_to(number, ret);
+		return ret;
 	}
 }
 

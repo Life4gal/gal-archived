@@ -248,6 +248,17 @@ namespace gal::lang::lang
 	using ast_node_filename_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("filename");
 	using ast_node_to_string_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("to_string");
 	using ast_node_children_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("children");
+
+	//*********************************************
+	// MISC
+	//*********************************************
+	using comment_multi_line_name = GAL_UTILS_BILATERAL_TEMPLATE_STRING_TYPE("'''", "'''");
+	using comment_single_line_name = GAL_UTILS_TEMPLATE_STRING_TYPE("#");
+
+	using comment_annotation_name = GAL_UTILS_TEMPLATE_STRING_TYPE("@");
+
+	// note: optional format, not necessary
+	using end_of_line_name = GAL_UTILS_TEMPLATE_STRING_TYPE(";");
 }
 
 #endif // GAL_LANG_LANGUAGE_NAME_HPP

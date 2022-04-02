@@ -371,8 +371,8 @@ namespace gal::lang
 
 		public:
 			/**
-		 * @throw std::bad_any_cast not boolean type or arithmetic type
-		 */
+			 * @throw std::bad_any_cast not boolean type or arithmetic type
+			 */
 			static void check_boxed_number(const boxed_value& value)
 			{
 				if (const auto& ti = value.type_info();
@@ -380,8 +380,8 @@ namespace gal::lang
 			}
 
 			/**
-		 * @throw std::bad_any_cast not the same sign or not all floating point type or the the opposite
-		 */
+			 * @throw std::bad_any_cast not the same sign or not all floating point type or the the opposite
+			 */
 			template<typename Source, typename Target>
 			consteval static void check_type()
 			{
@@ -529,13 +529,24 @@ namespace gal::lang
 			explicit boxed_number(boxed_value&& value)
 				: value{std::move(value)} { check_boxed_number(this->value); }
 
+			explicit boxed_number(const boxed_value& value)
+				: value{value} { check_boxed_number(this->value); }
+
+			// template<typename T>
+			// explicit boxed_number(T t)
+			// 	: value{t} { check_boxed_number(value); }
+
 			template<typename T>
+				requires(std::is_same_v<T, bool> || std::is_arithmetic_v<T>)
 			explicit boxed_number(T t)
-				: value{t} { check_boxed_number(value); }
+				: value{t}
+			{
+				// check_boxed_number(value);
+			}
 
 			/**
-		 * @throw std::bad_any_cast not supported numeric type
-		 */
+			 * @throw std::bad_any_cast not supported numeric type
+			 */
 			template<typename Target>
 			[[nodiscard]] Target as() const
 			{
@@ -559,8 +570,8 @@ namespace gal::lang
 			}
 
 			/**
-		 * @throw std::bad_any_cast not supported numeric type
-		 */
+			 * @throw std::bad_any_cast not supported numeric type
+			 */
 			template<typename Target>
 			[[nodiscard]] Target as_checked() const
 			{
@@ -628,8 +639,8 @@ namespace gal::lang
 			}
 
 			/**
-		 * @throw std::bad_any_cast not supported numeric type
-		 */
+			 * @throw std::bad_any_cast not supported numeric type
+			 */
 			[[nodiscard]] boxed_number as(const gal_type_info& ti) const
 			{
 				if (ti.bare_equal(make_type_info<std::int8_t>())) { return boxed_number{as<std::int8_t>()}; }
@@ -663,8 +674,8 @@ namespace gal::lang
 			}
 
 			/**
-		 * @throw std::bad_any_cast not supported numeric type
-		 */
+			 * @throw std::bad_any_cast not supported numeric type
+			 */
 			[[nodiscard]] std::string to_string() const
 			{
 				switch (get_type(value))

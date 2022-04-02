@@ -1411,7 +1411,7 @@ namespace gal::lang
 
 				[[nodiscard]] const type_conversion_manager& get_conversion_manager() const noexcept { return manager_; }
 
-				[[nodiscard]] parser_base& get_parser() const noexcept { return parser_.get(); }
+				[[nodiscard]] parser_detail::parser_base& get_parser() const noexcept { return parser_.get(); }
 			};
 
 			inline dispatcher_state::dispatcher_state(dispatcher& d)

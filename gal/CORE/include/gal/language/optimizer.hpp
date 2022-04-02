@@ -10,17 +10,17 @@ namespace gal::lang::lang
 	namespace optimizer_detail
 	{
 		template<typename... Optimizers>
-		struct optimizer : Optimizers...
+		class default_optimizer final : public ast_optimizer, private Optimizers...
 		{
-			optimizer() requires(std::is_default_constructible_v<Optimizers> && ...) = default;
+			constexpr default_optimizer() noexcept((std::is_nothrow_default_constructible_v<Optimizers> && ...)) requires(std::is_default_constructible_v<Optimizers> && ...) = default;
 
-			explicit optimizer(Optimizers ... optimizers)
-				: Optimizers{std::move(optimizers)}... {}
+			constexpr explicit default_optimizer(Optimizers&&... optimizers)
+				: Optimizers{std::forward<Optimizers>(optimizers)}... {}
 
-			auto optimize(ast_node_ptr p)
+			[[nodiscard]] ast_node_ptr optimize(ast_node_ptr node) override
 			{
-				((p = static_cast<Optimizers&>(*this)(std::move(p))), ...);
-				return p;
+				((node = static_cast<Optimizers&>(*this)(std::move(node))), ...);
+				return node;
 			}
 		};
 
@@ -36,17 +36,17 @@ namespace gal::lang::lang
 			return node.size();
 		}
 
-		[[nodiscard]] inline ast_node& node_child(ast_node& node, const ast_node::children_type::size_type offset) noexcept
+		[[nodiscard]] inline ast_node& node_child(ast_node& node, const ast_node::children_type::difference_type offset) noexcept
 		{
-			gal_assert(offset < node_size(node));
+			gal_assert(offset < static_cast<ast_node::children_type::difference_type>(node_size(node)));
 			if (auto& child = node.get_child(offset);
 				child.is<compiled_ast_node>()) { return *dynamic_cast<compiled_ast_node&>(child).original_node; }
 			else { return child; }
 		}
 
-		[[nodiscard]] inline const ast_node& node_child(const ast_node& node, const ast_node::children_type::size_type offset) noexcept
+		[[nodiscard]] inline const ast_node& node_child(const ast_node& node, const ast_node::children_type::difference_type offset) noexcept
 		{
-			gal_assert(offset < node_size(node));
+			gal_assert(offset < static_cast<ast_node::children_type::difference_type>(node_size(node)));
 			if (auto& child = node.get_child(offset);
 				child.is<compiled_ast_node>()) { return *dynamic_cast<const compiled_ast_node&>(child).original_node; }
 			else { return child; }
@@ -125,12 +125,12 @@ namespace gal::lang::lang
 		};
 
 		// todo: more optimizer
-	}
-
-	using default_optimizer = optimizer_detail::optimizer<
+	}// namespace optimizer_detail
+	using default_optimizer = optimizer_detail::default_optimizer<
 		optimizer_detail::return_optimizer,
 		optimizer_detail::block_optimizer,
-		optimizer_detail::dead_code_optimizer>;
-}
+		optimizer_detail::dead_code_optimizer
+	>;
+};
 
 #endif // GAL_LANG_LANGUAGE_OPTIMIZER_HPP
