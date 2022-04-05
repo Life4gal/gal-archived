@@ -18,32 +18,32 @@ namespace gal::lang
 		{
 			using name_type = foundation::string_view_type;
 
+			[[nodiscard]] constexpr static auto name_hasher(const name_type name) noexcept { return utils::hash_fnv1a<false>(name); }
+
 			[[nodiscard]] static bool is_reserved_name(const name_type name) noexcept
 			{
-				constexpr auto hash = [](const name_type s) constexpr noexcept { return utils::hash_fnv1a<false>(s); };
-
 				const static std::unordered_set names{
-						hash(keyword_define_name::value),
-						hash(keyword_function_name::value),
-						hash(keyword_variable_name::value),
-						hash(keyword_true_name::value),
-						hash(keyword_false_name::value),
-						hash(keyword_class_name::value),
-						hash(keyword_attribute_name::value),
-						hash(keyword_global_name::value),
-						hash(keyword_placeholder_name::value),
-						hash(keyword_comma_name::value),
-						hash(keyword_while_name::value),
-						hash(keyword_for_name::value),
-						hash(keyword_break_name::value),
-						hash(keyword_if_name::value),
-						hash(keyword_else_name::value),
-						hash(keyword_logical_and_name::value),
-						hash(keyword_logical_or_name::value),
-						hash(keyword_return_name::value),
+						name_hasher(keyword_define_name::value),
+						name_hasher(keyword_function_name::value),
+						name_hasher(keyword_variable_name::value),
+						name_hasher(keyword_true_name::value),
+						name_hasher(keyword_false_name::value),
+						name_hasher(keyword_class_name::value),
+						name_hasher(keyword_member_decl_name::value),
+						name_hasher(keyword_global_name::value),
+						name_hasher(keyword_placeholder_name::value),
+						name_hasher(keyword_comma_name::value),
+						name_hasher(keyword_while_name::value),
+						name_hasher(keyword_for_name::value),
+						name_hasher(keyword_break_name::value),
+						name_hasher(keyword_if_name::value),
+						name_hasher(keyword_else_name::value),
+						name_hasher(keyword_logical_and_name::value),
+						name_hasher(keyword_logical_or_name::value),
+						name_hasher(keyword_return_name::value),
 				};
 
-				return names.contains(hash(name));
+				return names.contains(name_hasher(name));
 			}
 
 			[[nodiscard]] static bool is_valid_object_name(const name_type name) noexcept { return not name.contains(keyword_class_scope_name::value) && not is_reserved_name(name); }
@@ -122,7 +122,6 @@ namespace gal::lang
 
 		enum class operator_precedence
 		{
-			ternary_cond,
 			logical_or,
 			logical_and,
 			bitwise_or,

@@ -361,42 +361,56 @@ namespace gal::lang
 			using operator_name_type = std::string_view;
 			using group_id_type = std::size_t;
 
-			constexpr static group_id_type group_ids[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+			constexpr static group_id_type group_ids[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10};
 
-			constexpr static operator_name_type m1[]{
-					{lang::operator_logical_and_name::value}};
-			constexpr static operator_name_type m2[]{
-					{lang::operator_logical_or_name::value}};
-			constexpr static operator_name_type m3[]{
-					{lang::operator_bitwise_or_name::value}};
-			constexpr static operator_name_type m4[]{
-					{lang::operator_bitwise_xor_name::value}};
-			constexpr static operator_name_type m5[]{
-					{lang::operator_bitwise_and_name::value}};
-			constexpr static operator_name_type m6[]{
-					{lang::operator_equal_name::value},
-					{lang::operator_not_equal_name::value}};
-			constexpr static operator_name_type m7[]{
-					{lang::operator_less_than_name::value},
-					{lang::operator_less_equal_name::value},
-					{lang::operator_greater_than_name::value},
-					{lang::operator_greater_equal_name::value}};
-			constexpr static operator_name_type m8[]{
-					{lang::operator_bitwise_shift_left_name::value},
-					{lang::operator_bitwise_shift_right_name::value}};
+			constexpr static std::array m0{
+					operator_name_type{lang::operator_logical_and_name::value}};
+			constexpr static std::array m1{
+					operator_name_type{lang::operator_logical_or_name::value}};
+			constexpr static std::array m2{
+					operator_name_type{lang::operator_bitwise_or_name::value}};
+			constexpr static std::array m3{
+					operator_name_type{lang::operator_bitwise_xor_name::value}};
+			constexpr static std::array m4{
+					operator_name_type{lang::operator_bitwise_and_name::value}};
+			constexpr static std::array m5{
+					operator_name_type{lang::operator_equal_name::value},
+					operator_name_type{lang::operator_not_equal_name::value}};
+			constexpr static std::array m6{
+					operator_name_type{lang::operator_less_than_name::value},
+					operator_name_type{lang::operator_less_equal_name::value},
+					operator_name_type{lang::operator_greater_than_name::value},
+					operator_name_type{lang::operator_greater_equal_name::value}};
+			constexpr static std::array m7{
+					operator_name_type{lang::operator_bitwise_shift_left_name::value},
+					operator_name_type{lang::operator_bitwise_shift_right_name::value}};
 			// We share precedence here but then separate them later
-			constexpr static operator_name_type m9[]{
-					{lang::operator_plus_name::value},
-					{lang::operator_minus_name::value}};
-			constexpr static operator_name_type m10[]{
-					{lang::operator_multiply_name::value},
-					{lang::operator_divide_name::value},
-					{lang::operator_remainder_name::value}};
-			constexpr static operator_name_type m11[]{
-					{lang::operator_unary_not_name::value},
-					{lang::operator_unary_plus_name::value},
-					{lang::operator_unary_minus_name::value},
-					{lang::operator_unary_bitwise_complement_name::value}};
+			constexpr static std::array m8{
+					operator_name_type{lang::operator_plus_name::value},
+					operator_name_type{lang::operator_minus_name::value}};
+			constexpr static std::array m9{
+					operator_name_type{lang::operator_multiply_name::value},
+					operator_name_type{lang::operator_divide_name::value},
+					operator_name_type{lang::operator_remainder_name::value}};
+			constexpr static std::array m10{
+					operator_name_type{lang::operator_unary_not_name::value},
+					operator_name_type{lang::operator_unary_plus_name::value},
+					operator_name_type{lang::operator_unary_minus_name::value},
+					operator_name_type{lang::operator_unary_bitwise_complement_name::value}};
+
+			constexpr static std::array operators{
+					lang::operator_precedence::logical_or,
+					lang::operator_precedence::logical_and,
+					lang::operator_precedence::bitwise_or,
+					lang::operator_precedence::bitwise_xor,
+					lang::operator_precedence::bitwise_and,
+					lang::operator_precedence::equality,
+					lang::operator_precedence::comparison,
+					lang::operator_precedence::bitwise_shift,
+					lang::operator_precedence::plus,
+					lang::operator_precedence::multiply,
+					lang::operator_precedence::unary,
+			};
 
 			template<typename Predicate>
 			[[nodiscard]] constexpr static bool any_of(const group_id_type group_id, Predicate&& predicate) noexcept
@@ -406,16 +420,17 @@ namespace gal::lang
 				// todo: better way
 				switch (group_id)
 				{
+					case 0: { return matcher(m0); }
 					case 1: { return matcher(m1); }
 					case 2: { return matcher(m2); }
 					case 3: { return matcher(m3); }
 					case 4: { return matcher(m4); }
 					case 5: { return matcher(m5); }
+					case 6: { return matcher(m6); }
 					case 7: { return matcher(m7); }
 					case 8: { return matcher(m8); }
 					case 9: { return matcher(m9); }
 					case 10: { return matcher(m10); }
-					case 11: { return matcher(m11); }
 					default:
 					{
 						gal_assert(false, "unknown group id");
@@ -583,6 +598,7 @@ namespace gal::lang
 				return ret;
 			}
 
+		private:
 			template<typename NodeType, typename... Args>
 			[[nodiscard]] auto make_node(const foundation::string_view_type text, const file_point prev_point, Args&&... args) const { return lang::make_node<NodeType>(text, parse_location{filename_, {prev_point, point_}}, std::forward<Args>(args)...); }
 
@@ -590,7 +606,7 @@ namespace gal::lang
 			 * @brief Helper function that collects ast_nodes from a starting position to the top of the stack into a new AST node
 			 */
 			template<typename NodeType>
-			void build_match(ast_node::children_type::difference_type match_begin, const foundation::string_view_type text)
+			void build_match(ast_node::children_type::size_type match_begin, const foundation::string_view_type text = "")
 			{
 				bool is_deep = false;
 
@@ -611,7 +627,7 @@ namespace gal::lang
 
 				if (is_deep)
 				{
-					const auto begin_pos = match_stack_.begin() + match_begin;
+					const auto begin_pos = match_stack_.begin() + static_cast<ast_node::children_type::difference_type>(match_begin);
 
 					children.assign(
 							std::make_move_iterator(begin_pos),
@@ -725,7 +741,7 @@ namespace gal::lang
 			 *
 			 * @throw eval_error Illegal character read
 			 */
-			[[nodiscard]] bool skip_whitespace(const bool skip_cr_lf = false)
+			bool skip_whitespace(const bool skip_cr_lf = false)
 			{
 				while (not point_.finish())
 				{
@@ -877,58 +893,6 @@ namespace gal::lang
 			void read_integer_suffix() noexcept { while (not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::integer_suffix)) { ++point_; } }
 
 			/**
-			 * @brief Reads a number from the input, detecting if it's an integer or floating point
-			 */
-			[[nodiscard]] bool read_number() noexcept
-			{
-				(void)skip_whitespace();
-
-				const auto begin = point_;
-				if (not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::floating_point))
-				{
-					if (read_hex())
-					{
-						const auto match = begin.str(point_);
-						match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, parser_detail::integral_packer(match, 16)));
-						return true;
-					}
-
-					if (read_binary())
-					{
-						const auto match = begin.str(point_);
-						match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, parser_detail::integral_packer(match, 2)));
-						return true;
-					}
-
-					if (read_floating_point())
-					{
-						const auto match = begin.str(point_);
-						match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, parser_detail::floating_point_packer(match)));
-						return true;
-					}
-
-					read_integer_suffix();
-
-					if (const auto match = begin.str(point_);
-						match.empty()) { return false; }
-					else if (match[0] == '0')
-					{
-						// Octal
-						match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, parser_detail::integral_packer(match, 8)));
-					}
-					else
-					{
-						// Decimal
-						match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, parser_detail::integral_packer(match, 10)));
-					}
-
-					return true;
-				}
-
-				return false;
-			}
-
-			/**
 			 * @brief Reads an identifier from input which conforms to identifier naming conventions, without skipping initial whitespace
 			 *
 			 * @throw eval_error Carriage return in identifier literal
@@ -982,6 +946,1136 @@ namespace gal::lang
 				}
 				return false;
 			}
+
+			template<typename StringType>
+			struct char_parser
+			{
+				using string_type = StringType;
+				using value_type = typename string_type::value_type;
+				using size_type = typename string_type::size_type;
+
+				string_type& match;
+				const bool interpolation_allowed;
+
+				bool is_escaped = false;
+				bool is_interpolated = false;
+				bool saw_interpolation_marker = false;
+				bool is_octal = false;
+				bool is_hex = false;
+				size_type unicode_size = 0;
+				string_type octal_matches;
+				string_type hex_matches;
+
+				void process_hex() noexcept
+				{
+					if (not hex_matches.empty())
+					{
+						value_type value;
+						std::from_chars(hex_matches.data(), hex_matches.data() + hex_matches.size(), value, 16);
+						match.push_back(value);
+					}
+
+					hex_matches.clear();
+					is_escaped = false;
+					is_hex = false;
+				}
+
+				void process_octal()
+				{
+					if (not octal_matches.empty())
+					{
+						value_type value;
+						std::from_chars(hex_matches.data(), hex_matches.data() + hex_matches.size(), value, 8);
+						match.push_back(value);
+					}
+
+					octal_matches.clear();
+					is_escaped = false;
+					is_octal = false;
+				}
+
+				void process_unicode()
+				{
+					std::uint32_t codepoint;
+					std::from_chars(hex_matches.data(), hex_matches.data() + hex_matches.size(), codepoint, 16);
+					const auto match_size = hex_matches.size();
+					hex_matches.clear();
+					is_escaped = false;
+
+					const auto u_size = std::exchange(unicode_size, 0);
+					if (u_size != match_size) { throw exception::eval_error{"Incomplete unicode escape sequence"}; }
+					if (u_size == 4 && codepoint > 0xD800 && codepoint <= 0xDFFF) { throw exception::eval_error{"Invalid 16 bit universal character"}; }
+
+					char buff[4];
+					if (const auto size = utils::to_utf8(buff, codepoint);
+						size == 0)
+					{
+						// this must be an invalid escape sequence?
+						throw exception::eval_error{"Invalid 32 bit universal character"};
+					}
+					else { match.append(buff, size); }
+				}
+
+				char_parser(string_type& m, const bool i)
+					: match{m},
+					  interpolation_allowed{i} {}
+
+				char_parser(const char_parser&) = delete;
+				char_parser& operator=(const char_parser&) = delete;
+				char_parser(char_parser&&) = delete;
+				char_parser& operator=(char_parser&&) = delete;
+
+				~char_parser() noexcept
+				{
+					try
+					{
+						if (is_octal) { process_octal(); }
+						if (is_hex) { process_hex(); }
+						if (unicode_size > 0) { process_unicode(); }
+					}
+					catch (const exception::eval_error&)
+					{
+						// Something happened with parsing, we'll catch it later?
+					}
+				}
+
+
+				void parse(const value_type c, const file_point point, const parse_location::filename_type& filename)
+				{
+					const auto is_octal_char = utils::is_oct_digit(c);
+					const auto is_hex_char = utils::is_hex_digit(c);
+
+					if (is_octal)
+					{
+						if (is_octal_char)
+						{
+							octal_matches.push_back(c);
+							if (octal_matches.size() == 3) { process_octal(); }
+							return;
+						}
+						process_octal();
+					}
+					else if (is_hex)
+					{
+						if (is_hex_char)
+						{
+							hex_matches.push_back(c);
+							if (hex_matches.size() == 2 * sizeof(value_type)) { process_hex(); }
+							return;
+						}
+						process_hex();
+					}
+					else if (unicode_size > 0)
+					{
+						if (is_hex_char)
+						{
+							hex_matches.push_back(c);
+							if (hex_matches.size() == unicode_size)
+							{
+								// Format is specified to be /uABC on collecting from A to C do parsing
+								process_unicode();
+							}
+							return;
+						}
+						// Not a unicode anymore, try parsing any way
+						// May be someone used \uAA only
+						process_unicode();
+					}
+
+					if (c == '\\')
+					{
+						if (is_escaped)
+						{
+							match.push_back(c);
+							is_escaped = false;
+						}
+						else { is_escaped = true; }
+					}
+					else
+					{
+						if (is_escaped)
+						{
+							if (is_octal_char)
+							{
+								is_octal = true;
+								octal_matches.push_back(c);
+							}
+							else if (c == 'x') { is_hex = true; }
+							else if (c == 'u') { unicode_size = 4; }
+							else if (c == 'U') { unicode_size = 8; }
+							else
+							{
+								switch (c)
+								{
+									case '\'':
+									case '\"':
+									case '?':
+									case '$':
+									{
+										match.push_back(c);
+										break;
+									}
+									case 'a':
+									case 'b':
+									case 'f':
+									case 'n':
+									case 'r':
+									case 't':
+									case 'v':
+									{
+										match.push_back(utils::take_escape(c));
+										break;
+									}
+									default:
+									{
+										throw exception::eval_error{
+												"Unknown escaped sequence in string",
+												filename,
+												point};
+									}
+								}
+
+								is_escaped = false;
+							}
+						}
+						else if (interpolation_allowed && c == '$') { saw_interpolation_marker = true; }
+						else { match.push_back(c); }
+					}
+				}
+			};
+
+			/**
+			 * @brief Reads a quoted string from input, without skipping initial whitespace
+			 *
+			 * @throw eval_error Unclosed quoted string
+			 */
+			[[nodiscard]] bool read_quoted_string()
+			{
+				// todo: format character?
+
+				if (point_.finish() || point_.peek() != '\"') { return false; }
+
+				auto prev_char = '\"';
+				++point_;
+
+				int in_interpolation = 0;
+				bool in_quote = false;
+				while (not point_.finish() && (point_.peek() != '\"' || in_interpolation > 0 || prev_char == '\\'))
+				{
+					if (not read_eol())
+					{
+						const auto current_char = point_.peek();
+						if (prev_char == '$' && current_char == '{') { ++in_interpolation; }
+						else if (prev_char != '\\' && current_char == '\"') { in_quote = !in_quote; }
+						else if (current_char == '}' && not in_quote) { --in_interpolation; }
+
+						if (prev_char == '\\') { prev_char = '\0'; }
+						else { prev_char = current_char; }
+						++point_;
+					}
+				}
+
+				if (point_.finish())
+				{
+					throw exception::eval_error{
+							"Unclosed quoted string",
+							*filename_,
+							point_};
+				}
+				++point_;
+				return true;
+			}
+
+			/**
+			 * @brief Reads a character group from input, without skipping initial whitespace
+			 *
+			 * @throw eval_error Unclosed single-quoted string
+			 */
+			[[nodiscard]] bool read_single_quoted_string()
+			{
+				if (point_.finish() || point_.peek() != '\'') { return false; }
+
+				auto prev_char = '\'';
+				++point_;
+
+				while (not point_.finish() && (point_.peek() != '\'' || prev_char == '\\'))
+				{
+					if (not read_eol())
+					{
+						if (prev_char == '\\') { prev_char = '\0'; }
+						else { prev_char = point_.peek(); }
+						++point_;
+					}
+				}
+
+				if (point_.finish()) { throw exception::eval_error{"Unclosed single-quoted string", *filename_, point_}; }
+				++point_;
+				return true;
+			}
+
+			[[nodiscard]] bool read_operator(const parser_detail::operator_matcher::group_id_type group_id, parser_detail::operator_matcher::operator_name_type& name) noexcept
+			{
+				return parser_detail::operator_matcher::any_of(
+						group_id,
+						[&name, this](const parser_detail::operator_matcher::operator_name_type& element)
+						{
+							if (build_symbol(element))
+							{
+								name = element;
+								return true;
+							}
+							return false;
+						});
+			}
+
+			/**
+			 * @brief Reads a char or a symbol from input depend on Name
+			 *
+			 * @throw eval_error throw from read_char(' ') || read_symbol(" ")
+			 */
+			template<typename Name>
+			[[nodiscard]] bool build_any()
+			{
+				if constexpr (Name::size_no_0 == 1) { return this->build_char(Name::value[0]); }
+				else { return this->build_symbol(Name::value); }
+			}
+
+		public:
+			/**
+			 * @brief Reads (and potentially captures) a char from input if it matches the parameter
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 */
+			[[nodiscard]] bool build_char(const char c) noexcept
+			{
+				scoped_parser p{*this};
+				skip_whitespace();
+				return read_char(c);
+			}
+
+			/**
+			 * @brief Reads until the end of the current statement
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 */
+			[[nodiscard]] bool build_eos()
+			{
+				scoped_parser p{*this};
+				skip_whitespace();
+
+				return read_eol(true);
+			}
+
+			/**
+			 * @brief Reads (and potentially captures) an end-of-line group from input
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 */
+			[[nodiscard]] bool build_eol()
+			{
+				scoped_parser p{*this};
+				skip_whitespace();
+
+				return read_eol(false);
+			}
+
+			/**
+			 * @brief Reads a number from the input, detecting if it's an integer or floating point
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 */
+			[[nodiscard]] bool build_number()
+			{
+				skip_whitespace();
+
+				const auto begin = point_;
+				if (not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::floating_point))
+				{
+					if (read_hex())
+					{
+						const auto match = begin.str(point_);
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, parser_detail::integral_packer(match, 16)));
+						return true;
+					}
+
+					if (read_binary())
+					{
+						const auto match = begin.str(point_);
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, parser_detail::integral_packer(match, 2)));
+						return true;
+					}
+
+					if (read_floating_point())
+					{
+						const auto match = begin.str(point_);
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, parser_detail::floating_point_packer(match)));
+						return true;
+					}
+
+					read_integer_suffix();
+
+					if (const auto match = begin.str(point_);
+						match.empty()) { return false; }
+					else if (match[0] == '0')
+					{
+						// Octal
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, parser_detail::integral_packer(match, 8)));
+					}
+					else
+					{
+						// Decimal
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, parser_detail::integral_packer(match, 10)));
+					}
+
+					return true;
+				}
+
+				return false;
+			}
+
+			/**
+			 * @brief Reads (and potentially captures) an identifier from input
+			 *
+			 * @throw eval_error throw from read_identifier()
+			 * @throw eval_error throw from check_object_name(name)
+			 */
+			[[nodiscard]] bool build_identifier(const bool need_validate_name)
+			{
+				skip_whitespace();
+
+				const auto begin = point_;
+
+				if (not read_identifier()) { return false; }
+
+				auto text = begin.str(point_);
+
+				if (need_validate_name) { check_object_name(text); }
+
+				switch (
+					const auto text_hash = name_validator::name_hasher(text);
+					text_hash)
+				{
+					case name_validator::name_hasher(keyword_true_name::value):
+					{
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(true)));
+						break;
+					}
+					case name_validator::name_hasher(keyword_false_name::value):
+					{
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(false)));
+						break;
+					}
+					case name_validator::name_hasher(keyword_number_infinity::value):
+					{
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(std::numeric_limits<double>::infinity())));
+						break;
+					}
+					case name_validator::name_hasher(keyword_number_nan::value):
+					{
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(std::numeric_limits<double>::quiet_NaN())));
+						break;
+					}
+					case name_validator::name_hasher(keyword_placeholder_name::value):
+					{
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(std::make_shared<foundation::function_argument_placeholder>())));
+						break;
+					}
+					// todo: other internal magic name?
+					default:
+					{
+						if (begin.peek() == '`')
+						{
+							// 'escaped' literal, like an operator name
+							text = (begin + 1).str(point_ - 1);
+						}
+						match_stack_.emplace_back(this->make_node<id_ast_node>(text, begin));
+						break;
+					}
+				}
+
+				return true;
+			}
+
+			/**
+			 * @brief Reads an argument from input
+			 *
+			 * @throw eval_error throw from read_identifier(true)
+			 */
+			[[nodiscard]] bool build_argument(const bool allow_set_type = true)
+			{
+				const auto prev_size = match_stack_.size();
+				skip_whitespace();
+
+				if (not build_identifier(true)) { return false; }
+
+				skip_whitespace();
+
+				if (allow_set_type) { (void)build_identifier(true); }
+
+				build_match<arg_ast_node>(prev_size);
+
+				return true;
+			}
+
+		private:
+			template<typename Function>
+			[[nodiscard]] bool do_build_argument_list(Function&& function)
+			{
+				scoped_parser p{*this};
+				skip_whitespace(true);
+
+				const auto prev_size = match_stack_.size();
+				const auto result = [this, f = std::forward<Function>(function)]
+				{
+					if (f())
+					{
+						while (build_eol()) {}
+
+						while (build_any<keyword_comma_name>())
+						{
+							while (build_eol()) {}
+							if (not f())
+							{
+								throw exception::eval_error{
+										"Unexpected value in parameter list",
+										*filename_,
+										point_};
+							}
+						}
+						return true;
+					}
+					return false;
+				}();
+
+				build_match<arg_list_ast_node>(prev_size);
+				skip_whitespace(true);
+				return result;
+			}
+
+		public:
+			/**
+			 * @brief Reads a comma-separated list of values from input. Id's only, no types allowed
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 * @throw eval_error Unexpected value in parameter list
+			 */
+			[[nodiscard]] bool build_identifier_argument_list()
+			{
+				return do_build_argument_list(
+						[this] { return this->build_argument(false); });
+			}
+
+			/**
+			 * @brief Reads a comma-separated list of values from input, for function declarations
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 * @throw eval_error Unexpected value in parameter list
+			 */
+			[[nodiscard]] bool build_decl_argument_list()
+			{
+				return do_build_argument_list(
+						[this] { return this->build_argument(true); });
+			}
+
+			/**
+			 * @brief Reads a comma-separated list of values from input
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 * @throw eval_error Unexpected value in parameter list
+			 */
+			[[nodiscard]] bool build_argument_list()
+			{
+				return do_build_argument_list(
+						[this] { return this->build_equation(); });
+			}
+
+			/**
+			 * @brief Reads a lambda (anonymous function) from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_identifier_argument_list()
+			 * @throw eval_error Incomplete anonymous function bind
+			 * @throw eval_error Incomplete anonymous function
+			 */
+			[[nodiscard]] bool build_lambda()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (not build_keyword(keyword_function_name::value)) { return false; }
+
+				if (build_any<keyword_lambda_capture_list_name::left_type>())
+				{
+					(void)build_identifier_argument_list();
+					if (not build_any<keyword_lambda_capture_list_name::right_type>())
+					{
+						throw exception::eval_error{
+								"Incomplete anonymous function bind",
+								*filename_,
+								point_};
+					}
+				}
+				else
+				{
+					// make sure we always have the same number of nodes
+					build_match<arg_list_ast_node>(prev_size);
+				}
+
+				if (build_any<keyword_function_parameter_bracket_name::left_type>())
+				{
+					(void)build_decl_argument_list();
+					if (not build_any<keyword_function_parameter_bracket_name::right_type>())
+					{
+						throw exception::eval_error{
+								"Incomplete anonymous function",
+								*filename_,
+								point_};
+					}
+				}
+				else
+				{
+					// todo: lambda argument list is really necessary?
+					throw exception::eval_error{
+							"Incomplete anonymous function",
+							*filename_,
+							point_};
+				}
+
+				while (build_eol()) {}
+
+				if (not build_block())
+				{
+					throw exception::eval_error{
+							"Incomplete anonymous function",
+							*filename_,
+							point_};
+				}
+
+				build_match<lambda_ast_node>(prev_size);
+				return true;
+			}
+
+			/**
+			 * @brief Reads (and potentially captures) a quoted string from input.
+			 * Translates escaped sequences.
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 * @throw eval_error Unclosed in-string eval
+			 */
+			[[nodiscard]] bool build_quoted_string()
+			{
+				scoped_parser sp{*this};
+				skip_whitespace();
+
+				const auto begin = point_;
+				if (read_quoted_string())
+				{
+					std::string match{};
+					const auto prev_size = match_stack_.size();
+					const auto is_interpolated = [&match, &begin, prev_size, this]
+					{
+						char_parser p{match, true};
+
+						for (auto b = begin + 1, e = point_ - 1; b != e;)
+						{
+							if (p.saw_interpolation_marker)
+							{
+								if (b.peek() == '{')
+								{
+									// We've found an interpolation point
+									match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, const_var(match)));
+									if (p.is_interpolated)
+									{
+										// If we've seen previous interpolation, add on instead of making a new one
+										build_match<binary_operator_ast_node>(prev_size, operator_plus_name::value);
+									}
+
+									// We've finished with the part of the string up to this point, so clear it
+									match.clear();
+
+									std::string eval_match{};
+
+									++b;
+									while (b != e && b.peek() != '}')
+									{
+										eval_match.push_back(b.peek());
+										++b;
+									}
+
+									if (b.peek() == '}')
+									{
+										p.is_interpolated = true;
+										++b;
+
+										const auto to_string_size = match_stack_.size();
+										match_stack_.emplace_back(this->make_node<id_ast_node>(operator_to_string_name::value, begin));
+
+										const auto eval_size = match_stack_.size();
+										try
+										{
+											// todo
+										}
+										catch (const exception::eval_error& e)
+										{
+											throw exception::eval_error{
+													e.what(),
+													*filename_,
+													begin};
+										}
+
+										build_match<arg_list_ast_node>(eval_size);
+										build_match<fun_call_ast_node>(to_string_size);
+										build_match<binary_operator_ast_node>(prev_size, operator_plus_name::value);
+									}
+									else
+									{
+										throw exception::eval_error{
+												"Unclosed in-string eval",
+												*filename_,
+												begin};
+									}
+								}
+								else { match.push_back('$'); }
+								p.saw_interpolation_marker = false;
+							}
+							else
+							{
+								p.parse(b.peek(), begin, *filename_);
+								++b;
+							}
+						}
+
+						if (p.saw_interpolation_marker) { match.push_back('$'); }
+
+						return p.is_interpolated;
+					}();
+
+					match_stack_.push_back(this->make_node<constant_ast_node>(match, begin, const_var(match)));
+					if (is_interpolated) { build_match<binary_operator_ast_node>(prev_size, operator_plus_name::value); }
+
+					return true;
+				}
+				return false;
+			}
+
+			/**
+			 * @brief Reads (and potentially captures) a char group from input.
+			 * Translates escaped sequences.
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 * @throw eval_error Single-quoted strings must be 1 character long
+			 */
+			[[nodiscard]] bool build_single_quoted_string()
+			{
+				scoped_parser sp{*this};
+				skip_whitespace();
+
+				const auto begin = point_;
+				if (read_single_quoted_string())
+				{
+					std::string match{};
+					{
+						// scope for char_parser destructor
+						char_parser p{match, false};
+
+						for (auto b = begin + 1, e = point_ - 1; b != e; ++b) { p.parse(b.peek(), begin, *filename_); }
+					}
+
+					if (match.size() != 1)
+					{
+						throw exception::eval_error{
+								"Single-quoted strings must be 1 character long",
+								*filename_,
+								point_};
+					}
+
+					match_stack_.emplace_back(this->make_node<constant_ast_node>(match, begin, const_var(match[0])));
+					return true;
+				}
+				return false;
+			}
+
+			/**
+			 * @brief Reads (and potentially captures) a string from input if it matches the parameter
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 */
+			[[nodiscard]] bool build_keyword(const foundation::string_view_type symbol)
+			{
+				scoped_parser p{*this};
+				skip_whitespace();
+
+				const auto begin = point_;
+				const auto result = read_symbol(symbol);
+				// ignore substring matches
+				if (result && not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::keyword))
+				{
+					point_ = begin;
+					return false;
+				}
+				return result;
+			}
+
+			/**
+			 * @brief Reads (and potentially captures) a symbol group from input if it matches the parameter
+			 *
+			 * @throw eval_error throw from skip_whitespace()
+			 */
+			[[nodiscard]] bool build_symbol(const foundation::string_view_type symbol, const bool disallow_prevention = false)
+			{
+				scoped_parser p{*this};
+				skip_whitespace();
+
+				const auto begin = point_;
+				const auto result = read_symbol(symbol);
+				// ignore substring matches
+				if (result && not point_.finish() && not disallow_prevention && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::symbol))
+				{
+					if (point_.peek() != operator_assign_name::value[0] && parser_detail::operator_matcher::match(begin.str(point_)) && not parser_detail::operator_matcher::match(begin.str(point_ + 1)))
+					{
+						// don't throw this away, it's a good match and the next is not
+					}
+					else
+					{
+						point_ = begin;
+						return false;
+					}
+				}
+				return result;
+			}
+
+			/**
+			 * @brief Parses a variable specified with a & aka reference
+			 *
+			 * @throw eval_error throw from build_symbol("&")
+			 * @throw eval_error throw from build_identifier(true)
+			 * @throw eval_error Incomplete '&'(aka reference) expression
+			 */
+			[[nodiscard]] bool build_reference()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (build_symbol("&"))
+				{
+					if (not build_identifier(true)) { throw exception::eval_error{"Incomplete '&'(aka reference) expression", *filename_, point_}; }
+
+					build_match<reference_ast_node>(prev_size);
+					return true;
+				}
+				return false;
+			}
+
+			/**
+			 * @brief Reads an expression surrounded by parentheses from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_operator()
+			 * @throw eval_error Incomplete expression
+			 * @throw eval_error Missing closing parenthesis
+			 */
+			[[nodiscard]] bool build_paren_expression()
+			{
+				scoped_parser p{*this};
+				if (build_any<keyword_function_parameter_bracket_name::left_type>())
+				{
+					if (not build_operator()) { throw exception::eval_error{"Incomplete expression", *filename_, point_}; }
+					if (not build_any<keyword_function_parameter_bracket_name::right_type>()) { throw exception::eval_error{"Missing closing parenthesis", *filename_, point_}; }
+
+					return true;
+				}
+				return false;
+			}
+
+			/**
+			 * @brief Reads a unary prefixed expression from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_operator(group_id)
+			 * @throw Incomplete unary prefix expression
+			 */
+			[[nodiscard]] bool build_unary_expression()
+			{
+				scoped_parser p{*this};
+
+				constexpr auto unary_operators = parser_detail::operator_matcher::m10;
+				return std::ranges::any_of(
+						unary_operators,
+						[this, prev_size = match_stack_.size()](const auto& element)
+						{
+							const auto is_char = element.size() == 1;
+							if ((is_char && build_char(element[0])) || (not is_char && build_symbol(element)))
+							{
+								if (not build_operator(parser_detail::operator_matcher::operators.size() - 1))
+								{
+									throw exception::eval_error{
+											std_format::format("Incomplete unary prefix '{}' expression", element),
+											*filename_,
+											point_};
+								}
+
+								build_match<unary_operator_ast_node>(prev_size, element);
+								return true;
+							}
+							return false;
+						});
+			}
+
+			/**
+			 * @brief Reads a variable declaration from input
+			 *
+			 * @throw eval_error throw from build_keyword("decl") || build_keyword("var") || build_keyword("global")
+			 * @throw eval_error throw from build_identifier(true)
+			 * @throw eval_error throw from build_reference()
+			 * @throw eval_error Incomplete member declaration
+			 * @throw eval_error Incomplete variable declaration
+			 * @throw eval_error Incomplete global declaration
+			 */
+			[[nodiscard]] bool build_var_decl(const bool class_context = false, const foundation::string_view_type class_name = "")
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (class_context && (build_keyword(keyword_member_decl_name::value) || build_keyword(keyword_variable_name::value)))
+				{
+					match_stack_.emplace_back(this->make_node<id_ast_node>(class_name, point_));
+					if (not build_identifier(true))
+					{
+						throw exception::eval_error{
+								"Incomplete member declaration",
+								*filename_,
+								point_};
+					}
+					build_match<member_decl_ast_node>(prev_size);
+					return true;
+				}
+
+				if (build_keyword(keyword_variable_name::value))
+				{
+					if (build_reference())
+					{
+						// we built a reference node - continue
+					}
+					else if (build_identifier(true)) { build_match<var_decl_ast_node>(prev_size); }
+					else { throw exception::eval_error{"Incomplete variable declaration", *filename_, point_}; }
+					return true;
+				}
+
+				if (build_keyword(keyword_global_name::value))
+				{
+					if (not(build_reference() || build_identifier(true))) { throw exception::eval_error{"Incomplete global declaration", *filename_, point_}; }
+
+					build_match<global_decl_ast_node>(prev_size);
+					return true;
+				}
+
+				if (build_keyword(keyword_member_decl_name::value))
+				{
+					if (not build_identifier(true)) { throw exception::eval_error{"Incomplete member declaration", *filename_, point_}; }
+
+					if (not build_any<keyword_class_scope_name>()) { throw exception::eval_error{"Incomplete member declaration", *filename_, point_}; }
+
+					if (not build_identifier(true)) { throw exception::eval_error{"Missing member name in definition", *filename_, point_}; }
+
+					build_match<member_decl_ast_node>(prev_size);
+					return true;
+				}
+				return false;
+			}
+
+			/**
+			 * @brief Parses any of a group of 'value' style ast_node groups from input
+			 */
+			[[nodiscard]] bool build_value()
+			{
+				scoped_parser p{*this};
+				// todo: function call	
+				return build_unary_expression() || build_var_decl();
+			}
+
+			/**
+			 * @throw eval_error throw from build_eol()
+			 * @throw eval_error Incomplete expression
+			 */
+			[[nodiscard]] bool build_operator(const parser_detail::operator_matcher::group_id_type group_id = parser_detail::operator_matcher::group_ids[0])
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (parser_detail::operator_matcher::operators[group_id] == operator_precedence::unary) { return build_value(); }
+
+				if (not build_operator(group_id + 1)) { return false; }
+
+				parser_detail::operator_matcher::operator_name_type op;
+				while (read_operator(group_id, op))
+				{
+					while (build_eol()) {}
+
+					if (not build_operator(group_id + 1))
+					{
+						throw exception::eval_error{
+								std_format::format("Incomplete '{}' expression", op),
+								*filename_,
+								point_};
+					}
+
+					switch (parser_detail::operator_matcher::operators[group_id])
+					{
+							using enum operator_precedence;
+						case logical_or:
+						{
+							build_match<logical_or_ast_node>(prev_size, op);
+							break;
+						}
+						case logical_and:
+						{
+							build_match<logical_and_ast_node>(prev_size, op);
+							break;
+						}
+						case bitwise_or:
+						case bitwise_xor:
+						case bitwise_and:
+						case equality:
+						case comparison:
+						case bitwise_shift:
+						case plus:
+						case multiply:
+						{
+							build_match<binary_operator_ast_node>(prev_size, op);
+							break;
+						}
+						case unary:
+						{
+							// cannot reach here because of if() statement at the top
+							UNREACHABLE();
+						}
+					}
+				}
+				return true;
+			}
+
+			/**
+			 * @brief Parses a string of binary equation operators
+			 *
+			 * @throw eval_error throw from build_operator()
+			 * @throw eval_error throw from build_symbol(" ")
+			 * @throw eval_error throw from skip_whitespace(true)
+			 * @throw eval_error Incomplete equation
+			 */
+			[[nodiscard]] bool build_equation()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (build_operator())
+				{
+					using operator_name_type = parser_detail::operator_matcher::operator_name_type;
+
+					for (constexpr std::array operators{
+							     operator_name_type{operator_assign_name::value},
+							     operator_name_type{operator_assign_if_type_match_name::value},
+							     operator_name_type{operator_plus_assign_name::value},
+							     operator_name_type{operator_minus_assign_name::value},
+							     operator_name_type{operator_multiply_assign_name::value},
+							     operator_name_type{operator_divide_assign_name::value},
+							     operator_name_type{operator_remainder_assign_name::value},
+							     operator_name_type{operator_bitwise_shift_left_assign_name::value},
+							     operator_name_type{operator_bitwise_shift_right_assign_name::value},
+							     operator_name_type{operator_bitwise_and_assign_name::value},
+							     operator_name_type{operator_bitwise_or_assign_name::value},
+							     operator_name_type{operator_bitwise_xor_assign_name::value}};
+					     const auto& op: operators)
+					{
+						if (build_symbol(op, true))
+						{
+							skip_whitespace(true);
+							if (not build_equation()) { throw exception::eval_error{"Incomplete equation", *filename_, point_}; }
+
+							build_match<equation_ast_node>(prev_size, op);
+							return true;
+						}
+					}
+					return true;
+				}
+
+				return false;
+			}
+
+			/**
+			 * @brief Top level parser, starts parsing of all known parses
+			 */
+			[[nodiscard]] bool build_statements(const bool class_allowed = false)
+			{
+				// todo
+				(void)class_allowed;
+				return false;
+			}
+
+			/**
+			 * @brief Reads a block from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_statements();
+			 */
+			[[nodiscard]] bool build_block()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (build_any<keyword_block_begin_name>())
+				{
+					(void)build_statements();
+					// todo: do we need keyword_block_end_name ?
+
+					if (match_stack_.size() == prev_size) { match_stack_.emplace_back(lang::make_node<noop_ast_node>()); }
+
+					build_match<block_ast_node>(prev_size);
+					return true;
+				}
+				return false;
+			}
+
+		private:
+			template<typename NodeType, typename Keyword>
+			[[nodiscard]] bool do_build_keyword_statement()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (this->build_keyword(Keyword::value))
+				{
+					(void)build_operator();
+					this->build_match<NodeType>(prev_size);
+					return true;
+				}
+				return false;
+			}
+
+		public:
+			/**
+			 * @brief Reads a break statement from input
+			 *
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_operator()
+			 */
+			[[nodiscard]] bool build_break() { return do_build_keyword_statement<break_ast_node, keyword_break_name>(); }
+
+			/**
+			 * @brief Reads a continue statement from input
+			 *
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_operator()
+			 */
+			[[nodiscard]] bool build_continue() { return do_build_keyword_statement<continue_ast_node, keyword_continue_name>(); }
+
+			/**
+			 * @brief Reads a return statement from input
+			 *
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_operator()
+			 */
+			[[nodiscard]] bool build_return() { return do_build_keyword_statement<return_ast_node, keyword_return_name>(); }
 		};
 	}
 }

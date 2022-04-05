@@ -130,6 +130,8 @@ namespace gal::utils
 
 	constexpr bool is_digit(const char c) noexcept { return to_digit(c) < 10; }
 
+	constexpr bool is_oct_digit(const char c) noexcept { return to_digit(c) < 8; }
+
 	constexpr bool is_hex_digit(const char c) noexcept { return to_digit(c) < 10 || to_alpha(c) < 16; }
 
 	constexpr char take_escape(const char c)

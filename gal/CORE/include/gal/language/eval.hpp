@@ -767,8 +767,8 @@ namespace gal::lang
 
 		/**
 		 * @brief member definition ::=
-		 *		keyword_member_name::value class_name keyword_class_scope_name::value member_name (or 'decl' class_name '::' member_name)
-		 *		keyword_member_name::value member_name (or 'decl' member_name)(must in class)
+		 *		keyword_member_decl_name::value class_name keyword_class_scope_name::value member_name (or 'decl' class_name '::' member_name)
+		 *		keyword_member_decl_name::value member_name (or 'decl' member_name)(must in class)
 		 *
 		 * @code
 		 *
@@ -1600,8 +1600,8 @@ namespace gal::lang
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_detail::dispatcher_state& state, ast_visitor& visitor) const override
 			{
 				return const_var(
-						this->get_bool_condition(this->get_child(0).eval(state, visitor), state) &&
-						this->get_bool_condition(this->get_child(1).eval(state, visitor), state));
+						get_bool_condition(this->get_child(0).eval(state, visitor), state) &&
+						get_bool_condition(this->get_child(1).eval(state, visitor), state));
 			}
 
 		public:
@@ -1620,8 +1620,8 @@ namespace gal::lang
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_detail::dispatcher_state& state, ast_visitor& visitor) const override
 			{
 				return const_var(
-						this->get_bool_condition(this->get_child(0).eval(state, visitor), state) ||
-						this->get_bool_condition(this->get_child(1).eval(state, visitor), state));
+						get_bool_condition(this->get_child(0).eval(state, visitor), state) ||
+						get_bool_condition(this->get_child(1).eval(state, visitor), state));
 			}
 
 		public:
