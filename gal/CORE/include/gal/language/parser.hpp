@@ -540,8 +540,8 @@ namespace gal::lang
 
 			parser_detail::parse_point point_;
 
-			std::unique_ptr<ast_visitor> visitor_;
-			std::unique_ptr<ast_optimizer> optimizer_;
+			std::reference_wrapper<ast_visitor> visitor_;
+			std::reference_wrapper<ast_optimizer> optimizer_;
 
 			const std::size_t max_parse_depth_;
 
@@ -567,16 +567,14 @@ namespace gal::lang
 			[[nodiscard]] void* get_visitor_ptr() override { return &visitor_; }
 
 		public:
-			[[nodiscard]] ast_visitor& get_visitor() const noexcept { return *visitor_; }
+			[[nodiscard]] ast_visitor& get_visitor() const noexcept { return visitor_; }
 
-			[[nodiscard]] ast_optimizer& get_optimizer() const noexcept { return *optimizer_; }
-
-			[[nodiscard]] ast_node_ptr parse(std::string_view input, std::string_view filename) override;
+			[[nodiscard]] ast_optimizer& get_optimizer() const noexcept { return optimizer_; }
 
 			/**
 			 * @brief Prints the parsed ast_nodes as a tree
 			 */
-			void debug_print_to(std::string& dest, const ast_node& node, const std::string_view prepend) const override
+			void debug_print_to(foundation::string_type& dest, const ast_node& node, const foundation::string_view_type prepend) const override
 			{
 				std_format::format_to(
 						std::back_inserter(dest),
@@ -591,7 +589,7 @@ namespace gal::lang
 			/**
 			 * @brief Prints the parsed ast_nodes as a tree
 			 */
-			[[nodiscard]] std::string debug_print(const ast_node& node, const std::string_view prepend) const override
+			[[nodiscard]] std::string debug_print(const ast_node& node, const foundation::string_view_type prepend) const override
 			{
 				std::string ret{};
 				debug_print_to(ret, node, prepend);
@@ -635,7 +633,7 @@ namespace gal::lang
 					match_stack_.erase(begin_pos, match_stack_.end());
 				}
 
-				match_stack_.push_back(optimizer_->optimize(lang::make_node<NodeType>(text, std::move(location), std::move(children))));
+				match_stack_.push_back(optimizer_.get().optimize(lang::make_node<NodeType>(text, std::move(location), std::move(children))));
 			}
 
 			/////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1490,11 +1488,81 @@ namespace gal::lang
 			}
 
 			/**
+			 * @brief Reads possible special container values, including ranges and map_pairs
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ") || skip_whitespace(true) || build_eol()
+			 * @throw eval_error throw from build_value_range() || build_map_pair() || build_operator()
+			 * @throw eval_error Unexpected comma(,) or value in container
+			 */
+			[[nodiscard]] bool build_container_argument_list()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				skip_whitespace(true);
+
+				if (build_value_range())
+				{
+					build_match<arg_list_ast_node>(prev_size);
+					skip_whitespace(true);
+					return true;
+				}
+
+				if (build_map_pair())
+				{
+					while (build_eol()) {}
+
+					while (build_any<keyword_comma_name>())
+					{
+						while (build_eol()) {}
+
+						if (not build_map_pair())
+						{
+							throw exception::eval_error{
+									"Unexpected comma(,) or value in container",
+									*filename_,
+									point_};
+						}
+					}
+
+					build_match<arg_list_ast_node>(prev_size);
+					skip_whitespace(true);
+					return true;
+				}
+
+				if (build_operator())
+				{
+					while (build_eol()) {}
+
+					while (build_any<keyword_comma_name>())
+					{
+						while (build_eol()) {}
+
+						if (not build_operator())
+						{
+							throw exception::eval_error{
+									"Unexpected comma(,) or value in container",
+									*filename_,
+									point_};
+						}
+					}
+
+					build_match<arg_list_ast_node>(prev_size);
+					skip_whitespace(true);
+					return true;
+				}
+
+				skip_whitespace(true);
+				return false;
+			}
+
+			/**
 			 * @brief Reads a lambda (anonymous function) from input
 			 *
 			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
 			 * @throw eval_error throw from build_keyword(" ")
 			 * @throw eval_error throw from build_identifier_argument_list()
+			 * @throw eval_error throw from build_block()
 			 * @throw eval_error Incomplete anonymous function bind
 			 * @throw eval_error Incomplete anonymous function
 			 */
@@ -1557,6 +1625,650 @@ namespace gal::lang
 			}
 
 			/**
+			 * @brief Reads a function definition from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_eos() || build_eol()
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_identifier(true)
+			 * @throw eval_error throw from build_decl_argument_list()
+			 * @throw eval_error throw from build_block()
+			 * @throw eval_error Missing function name in definition
+			 * @throw eval_error Missing method name in definition
+			 * @throw eval_error Incomplete function definition
+			 * @throw eval_error Missing guard expression for function
+			 */
+			[[nodiscard]] bool build_def(const bool class_context = false, const foundation::string_view_type class_name = "")
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (not build_keyword(keyword_define_name::value)) { return false; }
+
+				if (class_context) { match_stack_.emplace_back(this->make_node<id_ast_node>(class_name, point_)); }
+
+				if (not build_identifier(true))
+				{
+					throw exception::eval_error{
+							"Missing function name in definition",
+							*filename_,
+							point_};
+				}
+
+				const auto is_member_method = [this]
+				{
+					if (build_any<keyword_class_accessor_name>())
+					{
+						// We're now a method
+						if (not build_identifier(true))
+						{
+							throw exception::eval_error{
+									"Missing method name in definition",
+									*filename_,
+									point_};
+						}
+						return true;
+					}
+					return false;
+				}();
+
+				if (build_any<keyword_function_parameter_bracket_name::left_type>())
+				{
+					(void)build_decl_argument_list();
+					if (not build_any<keyword_function_parameter_bracket_name::right_type>())
+					{
+						throw exception::eval_error{
+								"Incomplete function definition",
+								*filename_,
+								point_};
+					}
+				}
+
+				while (build_eos()) {}
+
+				if (build_any<keyword_set_guard_name>())
+				{
+					if (not build_operator())
+					{
+						throw exception::eval_error{
+								"Missing guard expression for function",
+								*filename_,
+								point_};
+					}
+				}
+
+				while (build_eol()) {}
+
+				if (not build_block())
+				{
+					throw exception::eval_error{
+							"Incomplete function definition",
+							*filename_,
+							point_};
+				}
+
+				if (is_member_method || class_context) { build_match<method_ast_node>(prev_size); }
+				else { build_match<def_ast_node>(prev_size); }
+
+				return true;
+			}
+
+			/**
+			 * @brief Reads an if/else if/else block from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_eol()
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_equation()
+			 * @throw eval_error throw from build_block()
+			 * @throw eval_error Incomplete 'if' expression
+			 * @throw eval_error Incomplete 'if' expression, missing ':'
+			 * @throw eval_error Incomplete 'if' expression, missing block
+			 * Incomplete 'else' expression, missing block
+			 */
+			[[nodiscard]] bool build_if()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (not build_keyword(keyword_if_name::value)) { return false; }
+
+				// todo: really no bracket '('?
+				if (not build_equation())
+				{
+					throw exception::eval_error{
+							"Incomplete 'if' expression",
+							*filename_,
+							point_};
+				}
+
+				const auto is_init_if = build_eol() && build_equation();
+
+				// todo: really no bracket ')'?
+				if (not build_any<keyword_block_begin_name>())
+				{
+					throw exception::eval_error{
+							"Incomplete 'if' expression, missing ':'",
+							*filename_,
+							point_};
+				}
+
+				while (build_eol()) {}
+
+				if (not build_block())
+				{
+					throw exception::eval_error{
+							"Incomplete 'if' expression, missing block",
+							*filename_,
+							point_};
+				}
+
+				while (true)
+				{
+					while (build_eol()) {}
+
+					// no more else
+					if (not build_keyword(keyword_else_name::value)) { break; }
+
+					// else if
+					if (build_if()) { continue; }
+
+					while (build_eol()) {}
+
+					// just else
+					if (not build_block())
+					{
+						throw exception::eval_error{
+								"Incomplete 'else' expression, missing block",
+								*filename_,
+								point_};
+					}
+				}
+
+				if (const auto children_size = match_stack_.size() - prev_size;
+					(is_init_if && children_size == 3) || (not is_init_if && children_size == 2)) { match_stack_.emplace_back(lang::make_node<noop_ast_node>()); }
+
+				if (not is_init_if) { build_match<if_ast_node>(prev_size); }
+				else
+				{
+					build_match<if_ast_node>(prev_size + 1);
+					build_match<block_ast_node>(prev_size);
+				}
+
+				return true;
+			}
+
+			/**
+			 * @brief Reads a while block from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_eol()
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_equation()
+			 * @throw eval_error throw from build_block()
+			 * @throw eval_error Incomplete 'while' expression
+			 * @throw eval_error Incomplete 'if' expression, missing ':'
+			 * @throw eval_error Incomplete 'if' expression, missing block
+			 */
+			[[nodiscard]] bool build_while()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (not build_keyword(keyword_while_name::value)) { return false; }
+
+				// todo: really no bracket '('?
+				if (not build_equation())
+				{
+					throw exception::eval_error{
+							"Incomplete 'while' expression",
+							*filename_,
+							point_};
+				}
+
+				// todo: really no bracket ')'?
+				if (not build_any<keyword_block_begin_name>())
+				{
+					throw exception::eval_error{
+							"Incomplete 'while' expression, missing ':'",
+							*filename_,
+							point_};
+				}
+
+				while (build_eol()) {}
+
+				if (not build_block())
+				{
+					throw exception::eval_error{
+							"Incomplete 'while' expression, missing block",
+							*filename_,
+							point_};
+				}
+
+				build_match<while_ast_node>(prev_size);
+				return true;
+			}
+
+			/**
+			 * @brief Reads a for block from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_eol()
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_equation()
+			 * @throw eval_error throw from build_block()
+			 * @throw eval_error Incomplete 'for' expression
+			 * @throw eval_error Incomplete 'ranged-for' expression
+			 * @throw eval_error Incomplete 'for' expression, missing block
+			 */
+			[[nodiscard]] bool build_for()
+			{
+				/**
+				 * @brief Reads the ranged `for` conditions from input
+				 */
+				auto range_expression = [this]
+				{
+					scoped_parser re_p{*this};
+					// the first element will have already been captured by the for_guards() call that proceeds it
+					return build_any<keyword_ranged_for_split_name>() && build_equation();
+				};
+				/**
+				 * @brief Reads the `for` conditions from input
+				 */
+				auto for_guards = [this]
+				{
+					scoped_parser fg_p{*this};
+
+					if (not(build_equation() && build_eol()))
+					{
+						if (not build_eol()) { return false; }
+						match_stack_.emplace_back(lang::make_node<noop_ast_node>());
+					}
+
+					if (not(build_equation() && build_eol()))
+					{
+						if (not build_eol()) { return false; }
+						match_stack_.emplace_back(lang::make_node<constant_ast_node>(const_var(true)));
+					}
+
+					if (not build_equation()) { match_stack_.emplace_back(lang::make_node<noop_ast_node>()); }
+
+					return true;
+				};
+
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (not build_keyword(keyword_for_name::value)) { return false; }
+
+				// todo: really no bracket '('?
+				// todo: really no bracket ')'?
+				const auto is_classic_for = for_guards();
+				if (not is_classic_for && not range_expression())
+				{
+					throw exception::eval_error{
+							"Incomplete 'ranged-for' expression",
+							*filename_,
+							point_};
+				}
+
+				while (build_eol()) {}
+
+				if (not build_block())
+				{
+					throw exception::eval_error{
+							"Incomplete 'for' expression, missing block",
+							*filename_,
+							point_};
+				}
+
+				const auto children_size = match_stack_.size() - prev_size;
+				if (is_classic_for)
+				{
+					if (children_size != 4)
+					{
+						throw exception::eval_error{
+								"Incomplete 'for' expression",
+								*filename_,
+								point_};
+					}
+					build_match<for_ast_node>(prev_size);
+				}
+				else
+				{
+					if (children_size != 3)
+					{
+						throw exception::eval_error{
+								"Incomplete 'ranged-for' expression",
+								*filename_,
+								point_};
+					}
+					build_match<ranged_for_ast_node>(prev_size);
+				}
+				return true;
+			}
+
+			/**
+			 * @brief Reads a switch statement from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_eol()
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_equation()
+			 * @throw eval_error throw from build_block()
+			 * @throw eval_error Incomplete 'switch' expression
+			 * @throw eval_error Incomplete 'switch' expression, missing ':'
+			 * @throw eval_error Incomplete 'switch-case' expression
+			 * @throw eval_error Incomplete 'switch-case' expression, missing ':'
+			 * @throw eval_error Incomplete 'switch-case' expression, missing block
+			 * @throw eval_error Incomplete 'switch-default' expression, missing ':'
+			 * @throw eval_error Incomplete 'switch-default' expression, missing block
+			 */
+			[[nodiscard]] bool build_switch()
+			{
+				/**
+				 * @brief Reads a case block from input
+				 */
+				auto build_case = [this]
+				{
+					scoped_parser c_p{*this};
+					const auto c_prev_size = match_stack_.size();
+
+					if (build_keyword(keyword_switch_case_name::value))
+					{
+						if (not build_operator())
+						{
+							throw exception::eval_error{
+									"Incomplete 'switch-case' expression",
+									*filename_,
+									point_};
+						}
+
+						if (not build_any<keyword_block_begin_name>())
+						{
+							throw exception::eval_error{
+									"Incomplete 'switch-case' expression, missing ':'",
+									*filename_,
+									point_};
+						}
+
+						while (build_eol()) {}
+
+						if (not build_block())
+						{
+							throw exception::eval_error{
+									"Incomplete 'switch-case' expression, missing block",
+									*filename_,
+									point_};
+						}
+
+						build_match<case_ast_node>(c_prev_size);
+						return true;
+					}
+
+					if (build_keyword(keyword_switch_default_name::value))
+					{
+						if (not build_any<keyword_block_begin_name>())
+						{
+							throw exception::eval_error{
+									"Incomplete 'switch-default' expression, missing ':'",
+									*filename_,
+									point_};
+						}
+
+						while (build_eol()) {}
+
+						if (not build_block())
+						{
+							throw exception::eval_error{
+									"Incomplete 'switch-default' expression, missing block",
+									*filename_,
+									point_};
+						}
+
+						build_match<default_ast_node>(c_prev_size);
+						return true;
+					}
+
+					return false;
+				};
+
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (not build_keyword(keyword_switch_name::value)) { return false; }
+
+				// todo: really no bracket '('?
+				if (not build_operator())
+				{
+					throw exception::eval_error{
+							"Incomplete 'switch' expression",
+							*filename_,
+							point_};
+				}
+				// todo: really no bracket ')'?
+
+				if (not build_any<keyword_block_begin_name>())
+				{
+					throw exception::eval_error{
+							"Incomplete 'switch' expression, missing ':'",
+							*filename_,
+							point_};
+				}
+
+				while (build_eol()) {}
+
+				while (build_case())
+				{
+					// just eat it
+					while (build_eol()) {}
+				}
+
+				build_match<switch_ast_node>(prev_size);
+				return true;
+			}
+
+		private:
+			template<typename NodeType, typename Keyword>
+			[[nodiscard]] bool do_build_keyword_statement()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (this->build_keyword(Keyword::value))
+				{
+					(void)build_operator();
+					this->build_match<NodeType>(prev_size);
+					return true;
+				}
+				return false;
+			}
+
+		public:
+			/**
+			 * @brief Reads a break statement from input
+			 *
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_operator()
+			 */
+			[[nodiscard]] bool build_break() { return do_build_keyword_statement<break_ast_node, keyword_break_name>(); }
+
+			/**
+			 * @brief Reads a continue statement from input
+			 *
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_operator()
+			 */
+			[[nodiscard]] bool build_continue() { return do_build_keyword_statement<continue_ast_node, keyword_continue_name>(); }
+
+			/**
+			 * @brief Reads a return statement from input
+			 *
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_operator()
+			 */
+			[[nodiscard]] bool build_return() { return do_build_keyword_statement<return_ast_node, keyword_return_name>(); }
+
+			/**
+			 * @brief Reads a function definition from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_eol()
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_block()
+			 * @throw eval_error Incomplete 'try' block, missing ':'
+			 * @throw eval_error Incomplete 'try' block, missing block
+			 * @throw eval_error Incomplete 'try-catch' expression
+			 * @throw eval_error Incomplete 'try-catch' expression, missing ':'
+			 * @throw eval_error Incomplete 'try-catch' expression, missing block
+			 * @throw eval_error Incomplete 'try-finally' expression, missing ':'
+			 * @throw eval_error Incomplete 'try-finally' expression, missing block
+			 */
+			[[nodiscard]] bool build_try()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (not build_keyword(keyword_try_name::value)) { return false; }
+
+				while (build_eol()) {}
+
+				if (not build_any<keyword_block_begin_name>())
+				{
+					throw exception::eval_error{
+							"Incomplete 'try' block, missing ':'",
+							*filename_,
+							point_};
+				}
+
+				if (not build_block())
+				{
+					throw exception::eval_error{
+							"Incomplete 'try' block, missing block",
+							*filename_,
+							point_};
+				}
+
+				while (true)
+				{
+					while (build_eol()) {}
+
+					if (not build_keyword(keyword_try_catch_name::value)) { break; }
+
+					const auto catch_prev_size = match_stack_.size();
+
+					// todo: really no bracket '('?
+					if (not build_argument())
+					{
+						throw exception::eval_error{
+								"Incomplete 'try-catch' expression",
+								*filename_,
+								point_};
+					}
+					// todo: really no bracket ')'?
+					if (not build_any<keyword_block_begin_name>())
+					{
+						throw exception::eval_error{
+								"Incomplete 'try-catch' expression, missing ':'",
+								*filename_,
+								point_};
+					}
+
+					while (build_eol()) {}
+
+					if (not build_block())
+					{
+						throw exception::eval_error{
+								"Incomplete 'try-catch' expression, missing block",
+								*filename_,
+								point_};
+					}
+
+					build_match<catch_ast_node>(catch_prev_size);
+				}
+
+				while (build_eol()) {}
+
+				if (build_keyword(keyword_try_finally_name::value))
+				{
+					const auto finally_prev_size = match_stack_.size();
+
+					if (not build_any<keyword_block_begin_name>())
+					{
+						throw exception::eval_error{
+								"Incomplete 'try-finally' expression, missing ':'",
+								*filename_,
+								point_};
+					}
+
+					while (build_eol()) {}
+
+					if (not build_block())
+					{
+						throw exception::eval_error{
+								"Incomplete 'try-finally' expression, missing block",
+								*filename_,
+								point_};
+					}
+
+					build_match<finally_ast_node>(finally_prev_size);
+				}
+
+				build_match<try_ast_node>(prev_size);
+				return true;
+			}
+
+			/**
+			 * @brief Reads a class block from input
+			 *
+			 * @throw eval_error throw from build_keyword(" ")
+			 * @throw eval_error throw from build_identifier(true)
+			 * @throw eval_error throw from build_eol()
+			 * @throw eval_error throw from build_class_block(" ")
+			 * @throw eval_error Class definitions only allowed at top scope
+			 * @throw eval_error Missing class name in definition
+			 * @throw eval_error Incomplete 'class' block
+			 */
+			[[nodiscard]] bool build_class(const bool class_allowed)
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (not build_keyword(keyword_class_name::value)) { return false; }
+
+				if (not class_allowed)
+				{
+					throw exception::eval_error{
+							"Class definitions only allowed at top scope",
+							*filename_,
+							point_};
+				}
+
+				if (not build_identifier(true))
+				{
+					throw exception::eval_error{
+							"Missing class name in definition",
+							*filename_,
+							point_};
+				}
+
+				const auto& class_name = match_stack_.back()->identifier();
+
+				while (build_eol()) {}
+
+				if (not build_class_block(class_name))
+				{
+					throw exception::eval_error{
+							"Incomplete 'class' block",
+							*filename_,
+							point_};
+				}
+
+				build_match<class_decl_ast_node>(prev_size);
+				return true;
+			}
+
+			/**
 			 * @brief Reads (and potentially captures) a quoted string from input.
 			 * Translates escaped sequences.
 			 *
@@ -1594,6 +2306,8 @@ namespace gal::lang
 									// We've finished with the part of the string up to this point, so clear it
 									match.clear();
 
+									// todo: optimize it
+									// todo: the input content should exist in string_pool, so that we can safely use its content without using dynamic memory allocate
 									std::string eval_match{};
 
 									++b;
@@ -1612,14 +2326,11 @@ namespace gal::lang
 										match_stack_.emplace_back(this->make_node<id_ast_node>(operator_to_string_name::value, begin));
 
 										const auto eval_size = match_stack_.size();
-										try
-										{
-											// todo
-										}
-										catch (const exception::eval_error& e)
+										try { match_stack_.emplace_back(parse_instruct_eval(eval_match)); }
+										catch (const exception::eval_error& ex)
 										{
 											throw exception::eval_error{
-													e.what(),
+													ex.what(),
 													*filename_,
 													begin};
 										}
@@ -1789,6 +2500,90 @@ namespace gal::lang
 			}
 
 			/**
+			 * @brief Reads, and identifies, a short-form container initialization from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_container_argument_list()
+			 * @throw eval_error Incomplete inline container initializer, missing closing bracket
+			 */
+			[[nodiscard]] bool build_inline_container()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (not build_any<keyword_inline_container_name::left_type>()) { return false; }
+
+				(void)build_container_argument_list();
+
+				if (not build_any<keyword_inline_container_name::right_type>())
+				{
+					throw exception::eval_error{
+							"Incomplete inline container initializer, missing closing bracket",
+							*filename_,
+							point_};
+				}
+
+				if (prev_size != match_stack_.size() && not match_stack_.back()->empty())
+				{
+					if (const auto& front = match_stack_.back()->front();
+						front.is<value_range_ast_node>()) { build_match<inline_range_ast_node>(prev_size); }
+					else if (front.is<map_pair_ast_node>()) { build_match<inline_map_ast_node>(prev_size); }
+					else { build_match<inline_array_ast_node>(prev_size); }
+				}
+				else { build_match<inline_array_ast_node>(prev_size); }
+
+				return true;
+			}
+
+		private:
+			template<typename NodeType, typename Keyword>
+			[[nodiscard]] bool do_build_pair()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				const auto begin = point_;
+				if (not build_operator()) { return false; }
+
+				if (not build_any<Keyword>())
+				{
+					point_ = begin;
+					while (prev_size != match_stack_.size()) { match_stack_.pop_back(); }
+					return false;
+				}
+
+				if (not build_operator())
+				{
+					throw exception::eval_error{
+							"Incomplete pair, missing the second",
+							*filename_,
+							point_};
+				}
+
+				build_match<NodeType>(prev_size);
+				return true;
+			}
+
+		public:
+			/**
+			 * @brief Reads a pair of values used to create a map initialization from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_operator()
+			 * @throw eval_error Incomplete map pair, missing the second
+			 */
+			[[nodiscard]] bool build_map_pair() { return do_build_pair<map_pair_ast_node, keyword_map_pair_split_name>(); }
+
+			/**
+			 * @brief Reads a pair of values used to create a range initialization from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_operator()
+			 * @throw eval_error Incomplete value_range pair, missing the second
+			 */
+			[[nodiscard]] bool build_value_range() { return do_build_pair<value_range_ast_node, keyword_value_range_split_name>(); }
+
+			/**
 			 * @brief Reads a unary prefixed expression from input
 			 *
 			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
@@ -1820,6 +2615,142 @@ namespace gal::lang
 							}
 							return false;
 						});
+			}
+
+			/**
+			 * @brief Reads a dot expression(member access), then proceeds to check if it's a function or array call
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_identifier(true) || build_lambda() || build_number() || build_quoted_string() || build_single_quoted_string() || build_paren_expression() || build_inline_container()
+			 * @throw eval_error throw from build_argument_list()
+			 * @throw eval_error throw from build_operator()
+			 * @throw eval_error throw from build_eol()
+			 * @throw eval_error Incomplete function call
+			 * @throw eval_error Incomplete array access
+			 */
+			[[nodiscard]] bool build_dot_fun_call()
+			{
+				scoped_parser p{*this};
+				const auto prev_size = match_stack_.size();
+
+				if (not(build_identifier(true) || build_lambda() || build_number() || build_quoted_string() || build_single_quoted_string() || build_paren_expression() || build_inline_container())) { return false; }
+
+				while (true)
+				{
+					if (build_any<keyword_function_parameter_bracket_name::left_type>())
+					{
+						(void)build_argument_list();
+						if (not build_any<keyword_function_parameter_bracket_name::right_type>())
+						{
+							throw exception::eval_error{
+									"Incomplete function call",
+									*filename_,
+									point_};
+						}
+
+						build_match<fun_call_ast_node>(prev_size);
+						// todo: Workaround for method calls until we have a better solution
+						if (match_stack_.empty())
+						{
+							throw exception::eval_error{
+									"Incomplete dot access fun call",
+									*filename_,
+									point_};
+						}
+
+						if (auto& back = match_stack_.back();
+							back->empty())
+						{
+							throw exception::eval_error{
+									"Incomplete dot access fun call",
+									*filename_,
+									point_};
+						}
+						else if (back->front().is<dot_access_ast_node>())
+						{
+							if (back->front().empty())
+							{
+								throw exception::eval_error{
+										"Incomplete dot access fun call",
+										*filename_,
+										point_};
+							}
+
+							auto dot_access = std::move(back->front_ptr());
+							auto fun_call = std::move(back);
+							match_stack_.pop_back();
+
+							ast_node::children_type dot_access_children{};
+							ast_node::children_type fun_call_children{};
+							dot_access->swap(dot_access_children);
+							fun_call->swap(fun_call_children);
+
+							fun_call_children.front().swap(dot_access_children.back());
+							dot_access_children.pop_back();
+
+							fun_call->swap(fun_call_children);
+							dot_access_children.push_back(std::move(fun_call));
+							dot_access->swap(dot_access_children);
+
+							if (dot_access->size() != 2)
+							{
+								throw exception::eval_error{
+										"Incomplete dot access fun call",
+										*filename_,
+										point_};
+							}
+							match_stack_.emplace_back(std::move(dot_access));
+						}
+					}
+					else if (build_any<keyword_array_call_name::left_type>())
+					{
+						if (not(build_operator() && build_any<keyword_array_call_name::right_type>()))
+						{
+							throw exception::eval_error{
+									"Incomplete array access",
+									*filename_,
+									point_};
+						}
+
+						build_match<array_call_ast_node>(prev_size);
+					}
+					else if (build_symbol("."))
+					{
+						if (not build_identifier(true))
+						{
+							throw exception::eval_error{
+									"Incomplete dot access fun call",
+									*filename_,
+									point_};
+						}
+
+						if (match_stack_.size() - prev_size != 2)
+						{
+							throw exception::eval_error{
+									"Incomplete dot access fun call",
+									*filename_,
+									point_};
+						}
+
+						build_match<dot_access_ast_node>(prev_size);
+					}
+					else if (build_eol())
+					{
+						const auto begin = --point_;
+
+						while (build_eol()) {}
+
+						if (build_symbol(".")) { --point_; }
+						else
+						{
+							point_ = begin;
+							break;
+						}
+					}
+					else { break; }
+				}
+
+				return true;
 			}
 
 			/**
@@ -1874,7 +2805,7 @@ namespace gal::lang
 				{
 					if (not build_identifier(true)) { throw exception::eval_error{"Incomplete member declaration", *filename_, point_}; }
 
-					if (not build_any<keyword_class_scope_name>()) { throw exception::eval_error{"Incomplete member declaration", *filename_, point_}; }
+					if (not build_any<keyword_class_accessor_name>()) { throw exception::eval_error{"Incomplete member declaration", *filename_, point_}; }
 
 					if (not build_identifier(true)) { throw exception::eval_error{"Missing member name in definition", *filename_, point_}; }
 
@@ -1886,12 +2817,13 @@ namespace gal::lang
 
 			/**
 			 * @brief Parses any of a group of 'value' style ast_node groups from input
+			 *
+			 * @throw eval_error throw from build_unary_expression() || build_dot_fun_call() || build_var_decl()
 			 */
 			[[nodiscard]] bool build_value()
 			{
 				scoped_parser p{*this};
-				// todo: function call	
-				return build_unary_expression() || build_var_decl();
+				return build_unary_expression() || build_dot_fun_call() || build_var_decl();
 			}
 
 			/**
@@ -2004,19 +2936,102 @@ namespace gal::lang
 
 			/**
 			 * @brief Top level parser, starts parsing of all known parses
+			 *
+			 * @throw eval_error throw from build_def() || build_if() || build_while() || build_for() || build_switch() || build_class(class_allowed) || build_try()
+			 * @throw eval_error throw from build_equation() || build_return() || build_break() || build_continue()
+			 * @throw eval_error throw from build_block() || build_eol()
 			 */
 			[[nodiscard]] bool build_statements(const bool class_allowed = false)
 			{
-				// todo
-				(void)class_allowed;
-				return false;
+				scoped_parser p{*this};
+
+				auto result = false;
+				for (auto has_more = true, saw_eol = true; has_more;)
+				{
+					const auto begin = point_;
+					if (build_def() || build_if() || build_while() || build_for() || build_switch() || build_class(class_allowed) || build_try())
+					{
+						if (not saw_eol)
+						{
+							throw exception::eval_error{
+									"Two function definitions missing line separator",
+									*filename_,
+									begin};
+						}
+						has_more = true;
+						result = true;
+						saw_eol = true;
+					}
+					else if (build_equation() || build_return() || build_break() || build_continue())
+					{
+						if (not saw_eol)
+						{
+							throw exception::eval_error{
+									"Two function definitions missing line separator",
+									*filename_,
+									begin};
+						}
+						has_more = true;
+						result = true;
+						saw_eol = false;
+					}
+					else if (build_block() || build_eol())
+					{
+						has_more = true;
+						result = true;
+						saw_eol = true;
+					}
+					else { has_more = false; }
+				}
+
+				return result;
+			}
+
+			/**
+			 * @brief Parses statements allowed inside of a class block
+			 *
+			 * @throw eval_error throw from build_def(true, " ") || build_var_decl(true, " ")
+			 * @throw eval_error throw from build_eol()
+			 * @throw eval_error Two function definitions missing line separator
+			 */
+			[[nodiscard]] bool build_class_statements(const foundation::string_view_type class_name)
+			{
+				scoped_parser p{*this};
+
+				auto result = false;
+				for (auto has_more = true, saw_eol = true; has_more;)
+				{
+					const auto begin = point_;
+					if (build_def(true, class_name) || build_var_decl(true, class_name))
+					{
+						if (not saw_eol)
+						{
+							throw exception::eval_error{
+									"Two function definitions missing line separator",
+									*filename_,
+									begin};
+						}
+						has_more = true;
+						result = true;
+						saw_eol = true;
+					}
+					else if (build_eol())
+					{
+						has_more = true;
+						result = true;
+						saw_eol = true;
+					}
+					else { has_more = false; }
+				}
+
+				return result;
 			}
 
 			/**
 			 * @brief Reads a block from input
 			 *
 			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_statements();
+			 * @throw eval_error throw from build_statements()
 			 */
 			[[nodiscard]] bool build_block()
 			{
@@ -2036,46 +3051,95 @@ namespace gal::lang
 				return false;
 			}
 
-		private:
-			template<typename NodeType, typename Keyword>
-			[[nodiscard]] bool do_build_keyword_statement()
+			/**
+			 * @brief Reads a curly-brace class block from input
+			 *
+			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw eval_error throw from build_class_statements(" ")
+			 * @throw eval_error Incomplete class block
+			 */
+			[[nodiscard]] bool build_class_block(const foundation::string_view_type class_name)
 			{
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
-				if (this->build_keyword(Keyword::value))
+				if (not build_any<keyword_class_scope_name::left_type>()) { return false; }
+
+				(void)build_class_statements(class_name);
+				if (not build_any<keyword_class_scope_name::right_type>())
 				{
-					(void)build_operator();
-					this->build_match<NodeType>(prev_size);
-					return true;
+					throw exception::eval_error{
+							"Incomplete class block",
+							*filename_,
+							point_};
 				}
-				return false;
+
+				if (match_stack_.size() == prev_size) { match_stack_.emplace_back(lang::make_node<noop_ast_node>()); }
+
+				build_match<block_ast_node>(prev_size);
+				return true;
+			}
+
+		private:
+			/**
+			 * @brief Parses the given input string, tagging parsed ast_nodes with the given filename.
+			 *
+			 * @throw eval_error throw from build_statements(true)
+			 */
+			[[nodiscard]] ast_node_ptr parse_internal(const foundation::string_view_type input, parse_location::filename_type filename)
+			{
+				const auto begin = input.empty() ? nullptr : input.data();
+				const auto end = begin ? begin + input.size() : nullptr;
+
+				point_ = parser_detail::parse_point{begin, end};
+				filename_ = std::make_shared<parse_location::filename_type>(std::move(filename));
+
+				if (build_statements(true))
+				{
+					if (not point_.finish())
+					{
+						throw exception::eval_error{
+								"Unparsed input remained",
+								*filename_,
+								point_};
+					}
+					build_match<file_ast_node>(0);
+				}
+				else { match_stack_.emplace_back(lang::make_node<noop_ast_node>()); }
+
+				return std::move(std::exchange(match_stack_, ast_node::children_type{}).front());
+			}
+
+			/**
+			 * @throw eval_error throw from parse_internal(" ")
+			 */
+			[[nodiscard]] ast_node_ptr parse_instruct_eval(const foundation::string_view_type input)
+			{
+				const auto last_point = point_;
+				auto last_filename = filename_;
+				auto last_match_stack = std::exchange(match_stack_, ast_node::children_type{});
+
+				auto result = parse_internal(input, "instruction_eval");
+
+				point_ = last_point;
+				filename_ = std::move(last_filename);
+				match_stack_ = std::move(last_match_stack);
+
+				return result;
 			}
 
 		public:
-			/**
-			 * @brief Reads a break statement from input
-			 *
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_operator()
-			 */
-			[[nodiscard]] bool build_break() { return do_build_keyword_statement<break_ast_node, keyword_break_name>(); }
+			explicit parser(std::reference_wrapper<ast_visitor> visitor, std::reference_wrapper<ast_optimizer> optimizer, const std::size_t max_parse_depth = 512)
+				: visitor_{visitor},
+				  optimizer_{optimizer},
+				  max_parse_depth_{max_parse_depth},
+				  current_parse_depth_{0} { match_stack_.reserve(2); }
 
-			/**
-			 * @brief Reads a continue statement from input
-			 *
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_operator()
-			 */
-			[[nodiscard]] bool build_continue() { return do_build_keyword_statement<continue_ast_node, keyword_continue_name>(); }
-
-			/**
-			 * @brief Reads a return statement from input
-			 *
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_operator()
-			 */
-			[[nodiscard]] bool build_return() { return do_build_keyword_statement<return_ast_node, keyword_return_name>(); }
+			[[nodiscard]] ast_node_ptr parse(const foundation::string_view_type input, parse_location::filename_type filename) override
+			{
+				parser p{visitor_, optimizer_};
+				return p.parse_internal(input, std::move(filename));
+			}
 		};
 	}
 }

@@ -46,13 +46,13 @@ namespace gal::lang
 				return names.contains(name_hasher(name));
 			}
 
-			[[nodiscard]] static bool is_valid_object_name(const name_type name) noexcept { return not name.contains(keyword_class_scope_name::value) && not is_reserved_name(name); }
+			[[nodiscard]] static bool is_valid_object_name(const name_type name) noexcept { return not name.contains(keyword_class_accessor_name::value) && not is_reserved_name(name); }
 
 			static void validate_object_name(const name_type name)
 			{
 				if (is_reserved_name(name)) { throw exception::reserved_word_error{name}; }
 
-				if (name.contains(keyword_class_scope_name::value)) { throw exception::illegal_name_error{name}; }
+				if (name.contains(keyword_class_accessor_name::value)) { throw exception::illegal_name_error{name}; }
 			}
 		};
 
@@ -795,6 +795,14 @@ namespace gal::lang
 
 			[[nodiscard]] const ast_node_ptr& get_child_ptr(const children_type::size_type index) const noexcept { return const_cast<ast_node&>(*this).get_child_ptr(index); }
 
+			[[nodiscard]] ast_node_ptr& front_ptr() noexcept { return children_.front(); }
+
+			[[nodiscard]] const ast_node_ptr& front_ptr() const noexcept { return children_.front(); }
+
+			[[nodiscard]] ast_node_ptr& back_ptr() noexcept { return children_.back(); }
+
+			[[nodiscard]] const ast_node_ptr& back_ptr() const noexcept { return children_.back(); }
+
 			[[nodiscard]] ast_node& get_child(const children_type::difference_type index) noexcept { return get_unwrapped_children().operator[](index); }
 
 			[[nodiscard]] const ast_node& get_child(const children_type::difference_type index) const noexcept { return const_cast<ast_node&>(*this).get_child(index); }
@@ -950,9 +958,9 @@ namespace gal::lang
 				return *static_cast<T*>(get_visitor_ptr());
 			}
 
-			[[nodiscard]] virtual lang::ast_node_ptr parse(std::string_view input, std::string_view filename) = 0;
-			[[nodiscard]] virtual std::string debug_print(const lang::ast_node& node, std::string_view prepend) const = 0;
-			virtual void debug_print_to(std::string& dest, const lang::ast_node& node, std::string_view prepend) const = 0;
+			[[nodiscard]] virtual lang::ast_node_ptr parse(foundation::string_view_type input, lang::parse_location::filename_type filename) = 0;
+			[[nodiscard]] virtual std::string debug_print(const lang::ast_node& node, foundation::string_view_type prepend) const = 0;
+			virtual void debug_print_to(foundation::string_type& dest, const lang::ast_node& node, foundation::string_view_type prepend) const = 0;
 
 		private:
 			[[nodiscard]] virtual void* get_visitor_ptr() = 0;

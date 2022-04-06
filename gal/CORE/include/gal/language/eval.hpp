@@ -822,7 +822,7 @@ namespace gal::lang
 		 *	(or 'def' identifier '(' [type] arg... ')' ['expect' guard] ':' block)
 		 *
 		 *	method definition ::=
-		 * keyword_define_name::value class_name keyword_class_scope_name::value method_name keyword_function_parameter_bracket_name::left_type::value [[type] arg...] keyword_function_parameter_bracket_name::right_type::value [keyword_set_guard_name::value guard] keyword_block_begin_name::value block
+		 * keyword_define_name::value class_name keyword_class_accessor_name::value method_name keyword_function_parameter_bracket_name::left_type::value [[type] arg...] keyword_function_parameter_bracket_name::right_type::value [keyword_set_guard_name::value guard] keyword_block_begin_name::value block
 		 * (or 'def' class_name '::' method_name '(' [type] arg... ')' ['expect' guard] ':' block)
 		 * keyword_define_name::value method_name keyword_function_parameter_bracket_name::left_type::value [[type] arg...] keyword_function_parameter_bracket_name::right_type::value [keyword_set_guard_name::value guard] keyword_block_begin_name::value block
 		 * (or 'def' method_name '(' [type] arg... ')' ['expect' guard] keyword_block_begin_name::value block)(must in class)
@@ -1555,7 +1555,7 @@ namespace gal::lang
 				{
 					try
 					{
-						if (auto& current = this->get_child(current_case);
+						if (auto& current = this->get_child(static_cast<children_type::difference_type>(current_case));
 							current.is<case_ast_node>())
 						{
 							// This is a little odd, but because want to see both the switch and the case simultaneously, I do a downcast here.

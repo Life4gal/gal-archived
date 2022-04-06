@@ -22,6 +22,10 @@ namespace gal::lang::lang
 	using keyword_comma_name = GAL_UTILS_TEMPLATE_STRING_TYPE(",");
 	using keyword_while_name = GAL_UTILS_TEMPLATE_STRING_TYPE("while");
 	using keyword_for_name = GAL_UTILS_TEMPLATE_STRING_TYPE("for");
+	using keyword_ranged_for_split_name = GAL_UTILS_TEMPLATE_STRING_TYPE(":");
+	using keyword_switch_name = GAL_UTILS_TEMPLATE_STRING_TYPE("switch");
+	using keyword_switch_case_name = GAL_UTILS_TEMPLATE_STRING_TYPE("case");
+	using keyword_switch_default_name = GAL_UTILS_TEMPLATE_STRING_TYPE("default");
 	using keyword_break_name = GAL_UTILS_TEMPLATE_STRING_TYPE("break");
 	using keyword_continue_name = GAL_UTILS_TEMPLATE_STRING_TYPE("continue");
 	using keyword_if_name = GAL_UTILS_TEMPLATE_STRING_TYPE("if");
@@ -29,9 +33,13 @@ namespace gal::lang::lang
 	using keyword_logical_and_name = GAL_UTILS_TEMPLATE_STRING_TYPE("and");
 	using keyword_logical_or_name = GAL_UTILS_TEMPLATE_STRING_TYPE("or");
 	using keyword_return_name = GAL_UTILS_TEMPLATE_STRING_TYPE("return");
+	using keyword_try_name = GAL_UTILS_TEMPLATE_STRING_TYPE("try");
+	using keyword_try_catch_name = GAL_UTILS_TEMPLATE_STRING_TYPE("catch");
+	using keyword_try_finally_name = GAL_UTILS_TEMPLATE_STRING_TYPE("finally");
 
 	// Not actually keywords below :)
-	using keyword_class_scope_name = GAL_UTILS_TEMPLATE_STRING_TYPE("::");
+	using keyword_class_accessor_name = GAL_UTILS_TEMPLATE_STRING_TYPE("::");
+	using keyword_class_scope_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("{}");
 	using keyword_set_guard_name = GAL_UTILS_TEMPLATE_STRING_TYPE("expect");
 	using keyword_block_begin_name = GAL_UTILS_TEMPLATE_STRING_TYPE(":");
 	using keyword_lambda_capture_list_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("[]");
@@ -39,6 +47,11 @@ namespace gal::lang::lang
 	using keyword_for_loop_variable_delimiter_name = GAL_UTILS_TEMPLATE_STRING_TYPE(";");
 	using keyword_number_infinity = GAL_UTILS_TEMPLATE_STRING_TYPE("Inf");
 	using keyword_number_nan = GAL_UTILS_TEMPLATE_STRING_TYPE("Nan");
+	using keyword_inline_container_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("[]");
+	using keyword_map_pair_split_name = GAL_UTILS_TEMPLATE_STRING_TYPE(":");
+	using keyword_value_range_split_name = GAL_UTILS_TEMPLATE_STRING_TYPE("..");
+	// see container_subscript_interface_name below
+	using keyword_array_call_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("[]");
 
 	//*********************************************
 	// void type
