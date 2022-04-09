@@ -204,22 +204,16 @@ namespace gal::lang
 
 		struct parse_location
 		{
-			using filename_type = std::string;
-			using shared_filename_type = std::shared_ptr<filename_type>;
+			using filename_type = foundation::string_view_type;
 
 			file_location location;
-			shared_filename_type filename;
-
-			explicit parse_location(
-					shared_filename_type filename,
-					file_location location = {})
-				: location{location},
-				  filename{std::move(filename)} {}
+			filename_type filename;
 
 			explicit parse_location(
 					filename_type filename = "",
-					const file_location location = {})
-				: parse_location{std::make_shared<filename_type>(std::move(filename)), location} {}
+					file_location location = {})
+				: location{location},
+				  filename{std::move(filename)} {}
 		};
 	}
 
@@ -248,6 +242,23 @@ namespace gal::lang
 
 			load_module_error(const std::string_view name, const errors_type& errors)
 				: std::runtime_error{format_errors(name, errors)} {}
+		};
+
+		/**
+		 * @brie Errors generated when loading a file
+		 */
+		class file_not_found_error final : public std::runtime_error
+		{
+		public:
+			std::string filename;
+
+			explicit file_not_found_error(std::string filename)
+				: std::runtime_error{std_format::format("File '{}' not found", filename)},
+				  filename{std::move(filename)} { }
+
+			explicit file_not_found_error(std::string_view filename)
+				: std::runtime_error{std_format::format("File '{}' not found", filename)},
+				  filename{filename} {}
 		};
 
 		/**
@@ -309,8 +320,7 @@ namespace gal::lang
 
 			static void format_filename(std::string& target, const std::string_view f)
 			{
-				// todo: default eval filename
-				if (f != "__EVAL__") { std_format::format_to(std::back_inserter(target), "in '{}' ", f); }
+				if (f != lang::inline_eval_filename_name::value) { std_format::format_to(std::back_inserter(target), "in '{}' ", f); }
 				else { std_format::format_to(std::back_inserter(target), "during evaluation "); }
 			}
 
@@ -560,7 +570,7 @@ namespace gal::lang
 			private:
 				ast_rtti_index_type class_index_{};
 				parse_location location_;
-				text_type text_;
+				identifier_type identifier_;
 
 				template<typename Function>
 				void format_children_to(text_type& target, Function&& function) const
@@ -604,15 +614,15 @@ namespace gal::lang
 					return static_cast<const TargetNode*>(this);
 				}
 
-				[[nodiscard]] constexpr identifier_type identifier() const noexcept { return text_; }
+				[[nodiscard]] constexpr identifier_type identifier() const noexcept { return identifier_; }
 
 				explicit ast_node_common_base(
 						const ast_rtti_index_type index,
-						text_type&& text,
+						const identifier_type text,
 						parse_location&& location)
 					: class_index_{index},
 					  location_{std::move(location)},
-					  text_{std::move(text)} {}
+					  identifier_{text} {}
 
 				// for ast_node -> ast_node_tracer
 				template<typename U>
@@ -623,16 +633,16 @@ namespace gal::lang
 				explicit ast_node_common_base(
 						const ast_rtti_index_type index,
 						T&& node)
-					: ast_node_common_base{index, std::move(node.text_), std::move(node.location_)} {}
+					: ast_node_common_base{index, node.identifier_, std::move(node.location_)} {}
 
 				explicit ast_node_common_base(
 						const ast_rtti_index_type index,
 						const T& node)
 					: class_index_{index},
 					  location_{node.location_},
-					  text_{node.text_} {}
+					  identifier_{node.identifier_} {}
 
-				[[nodiscard]] const parse_location::filename_type& filename() const noexcept { return *location_.filename; }
+				[[nodiscard]] parse_location::filename_type filename() const noexcept { return location_.filename; }
 
 				[[nodiscard]] file_point location_begin() const noexcept { return location_.location.begin; }
 
@@ -656,7 +666,7 @@ namespace gal::lang
 
 				void pretty_format_to(text_type& target) const
 				{
-					target.append(text_);
+					target.append(identifier_);
 					format_children_to(target, [](const auto& child, text_type& t) { child.pretty_format_to(t); });
 				}
 
@@ -674,7 +684,7 @@ namespace gal::lang
 							"{}(class index: {}) {} : ",
 							prepend,
 							class_index_,
-							text_);
+							identifier_);
 					pretty_format_position_to(target);
 					target.push_back('\n');
 
@@ -704,10 +714,10 @@ namespace gal::lang
 		protected:
 			ast_node(
 					const common_detail::ast_rtti_index_type index,
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children = {})
-				: ast_node_common_base{index, text_type{text}, std::move(location)},
+				: ast_node_common_base{index, identifier, std::move(location)},
 				  children_{std::move(children)} {}
 
 			explicit ast_node(
@@ -750,7 +760,7 @@ namespace gal::lang
 
 			template<typename NodeType, typename... Args>
 				requires std::is_base_of_v<ast_node, NodeType>
-			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) && { return lang::make_node<NodeType>(std::move(text_), std::move(location_), std::move(children_), std::forward<Args>(extra_args)...); }
+			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) && { return lang::make_node<NodeType>(identifier_, std::move(location_), std::move(children_), std::forward<Args>(extra_args)...); }
 
 			template<typename Function>
 				requires (std::is_invocable_v<Function, ast_node&> or std::is_invocable_v<Function, const ast_node&>)
@@ -951,19 +961,10 @@ namespace gal::lang
 			parser_base(const parser_base&) = default;
 
 		public:
-			template<typename T>
-			[[nodiscard]] T& get_visitor() noexcept
-			{
-				gal_assert(get_visitor_ptr());
-				return *static_cast<T*>(get_visitor_ptr());
-			}
-
-			[[nodiscard]] virtual lang::ast_node_ptr parse(foundation::string_view_type input, lang::parse_location::filename_type filename) = 0;
+			[[nodiscard]] virtual lang::ast_visitor& get_visitor() = 0;
+			[[nodiscard]] virtual lang::ast_node_ptr parse(foundation::string_view_type input, foundation::string_view_type filename) = 0;
 			[[nodiscard]] virtual std::string debug_print(const lang::ast_node& node, foundation::string_view_type prepend) const = 0;
 			virtual void debug_print_to(foundation::string_type& dest, const lang::ast_node& node, foundation::string_view_type prepend) const = 0;
-
-		private:
-			[[nodiscard]] virtual void* get_visitor_ptr() = 0;
 		};
 	}
 

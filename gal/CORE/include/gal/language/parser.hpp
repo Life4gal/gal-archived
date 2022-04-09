@@ -3,7 +3,6 @@
 #ifndef GAL_LANG_LANGUAGE_PARSER_HPP
 #define GAL_LANG_LANGUAGE_PARSER_HPP
 
-#include <string_view>
 #include <gal/language/common.hpp>
 #include <utils/string_utils.hpp>
 
@@ -528,7 +527,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								std_format::format("Maximum parse depth '{}' exceeded", p_.get().max_parse_depth_),
-								*p_.get().filename_,
+								p_.get().filename_,
 								p_.get().point_
 						};
 					}
@@ -547,7 +546,7 @@ namespace gal::lang
 
 			std::size_t current_parse_depth_;
 
-			parse_location::shared_filename_type filename_;
+			foundation::string_view_type filename_;
 			ast_node::children_type match_stack_;
 
 			/**
@@ -559,15 +558,13 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							std_format::format("Object name '{}' is an invalid name!", name),
-							*filename_,
+							filename_,
 							point_};
 				}
 			}
 
-			[[nodiscard]] void* get_visitor_ptr() override { return &visitor_; }
-
 		public:
-			[[nodiscard]] ast_visitor& get_visitor() const noexcept { return visitor_; }
+			[[nodiscard]] ast_visitor& get_visitor() noexcept override { return visitor_; }
 
 			[[nodiscard]] ast_optimizer& get_optimizer() const noexcept { return optimizer_; }
 
@@ -598,7 +595,7 @@ namespace gal::lang
 
 		private:
 			template<typename NodeType, typename... Args>
-			[[nodiscard]] auto make_node(const foundation::string_view_type text, const file_point prev_point, Args&&... args) const { return lang::make_node<NodeType>(text, parse_location{filename_, {prev_point, point_}}, std::forward<Args>(args)...); }
+			[[nodiscard]] auto make_node(const foundation::string_view_type identifier, const file_point prev_point, Args&&... args) const { return lang::make_node<NodeType>(identifier, parse_location{filename_, {prev_point, point_}}, std::forward<Args>(args)...); }
 
 			/**
 			 * @brief Helper function that collects ast_nodes from a starting position to the top of the stack into a new AST node
@@ -744,7 +741,7 @@ namespace gal::lang
 				while (not point_.finish())
 				{
 					if (const auto c = point_[0];
-						c > 0x7e) { throw exception::eval_error{std_format::format("Illegal character '{}'", c), *filename_, point_}; }
+						c > 0x7e) { throw exception::eval_error{std_format::format("Illegal character '{}'", c), filename_, point_}; }
 					else
 					{
 						if (const auto is_eol = (c != parser_detail::parse_point::invalid_char) && (c == '\n' || (c == '\r' && point_[1] == '\n'));
@@ -919,7 +916,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Carriage return in identifier literal",
-									*filename_,
+									filename_,
 									point_};
 						}
 						++point_;
@@ -929,14 +926,14 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Missing contents of identifier literal",
-								*filename_,
+								filename_,
 								point_};
 					}
 					if (point_.finish())
 					{
 						throw exception::eval_error{
 								"Incomplete identifier literal",
-								*filename_,
+								filename_,
 								point_};
 					}
 					++point_;
@@ -1177,7 +1174,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Unclosed quoted string",
-							*filename_,
+							filename_,
 							point_};
 				}
 				++point_;
@@ -1206,7 +1203,7 @@ namespace gal::lang
 					}
 				}
 
-				if (point_.finish()) { throw exception::eval_error{"Unclosed single-quoted string", *filename_, point_}; }
+				if (point_.finish()) { throw exception::eval_error{"Unclosed single-quoted string", filename_, point_}; }
 				++point_;
 				return true;
 			}
@@ -1378,6 +1375,56 @@ namespace gal::lang
 						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(std::make_shared<foundation::function_argument_placeholder>())));
 						break;
 					}
+					case name_validator::name_hasher(keyword_magic_line_name::value):
+					{
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(begin.point.line)));
+						break;
+					}
+					case name_validator::name_hasher(keyword_magic_file_name::value):
+					{
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(filename_)));
+						break;
+					}
+					case name_validator::name_hasher(keyword_magic_function_name::value):
+					{
+						for (bool find_arg = false; const auto& node: match_stack_ | std::views::reverse)
+						{
+							if (node->is<arg_list_ast_node>() && not find_arg) { find_arg = true; }
+							else if (node->is<id_ast_node>() && find_arg)
+							{
+								match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(node->identifier())));
+								return true;
+							}
+							else { find_arg = false; }
+						}
+
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(decltype(std::declval<ast_node::children_type::value_type>()->identifier()){function_not_found_name::value})));
+						break;
+					}
+					case name_validator::name_hasher(keyword_magic_class_name::value):
+					{
+						for (bool find_arg = false, find_id = false; const auto& node: match_stack_ | std::views::reverse)
+						{
+							if (node->is<arg_list_ast_node>() && not find_arg) { find_arg = true; }
+							else if (node->is<id_ast_node>() && find_arg)
+							{
+								if (find_id)
+								{
+									match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(node->identifier())));
+									return true;
+								}
+								find_id = true;
+							}
+							else
+							{
+								find_arg = false;
+								find_id = false;
+							}
+						}
+
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(decltype(std::declval<ast_node::children_type::value_type>()->identifier()){class_not_found_name::value})));
+						break;
+					}
 					// todo: other internal magic name?
 					default:
 					{
@@ -1436,7 +1483,7 @@ namespace gal::lang
 							{
 								throw exception::eval_error{
 										"Unexpected value in parameter list",
-										*filename_,
+										filename_,
 										point_};
 							}
 						}
@@ -1520,7 +1567,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Unexpected comma(,) or value in container",
-									*filename_,
+									filename_,
 									point_};
 						}
 					}
@@ -1542,7 +1589,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Unexpected comma(,) or value in container",
-									*filename_,
+									filename_,
 									point_};
 						}
 					}
@@ -1580,7 +1627,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete anonymous function bind",
-								*filename_,
+								filename_,
 								point_};
 					}
 				}
@@ -1597,7 +1644,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete anonymous function",
-								*filename_,
+								filename_,
 								point_};
 					}
 				}
@@ -1606,7 +1653,7 @@ namespace gal::lang
 					// todo: lambda argument list is really necessary?
 					throw exception::eval_error{
 							"Incomplete anonymous function",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1616,7 +1663,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete anonymous function",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1651,7 +1698,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Missing function name in definition",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1664,7 +1711,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Missing method name in definition",
-									*filename_,
+									filename_,
 									point_};
 						}
 						return true;
@@ -1679,7 +1726,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete function definition",
-								*filename_,
+								filename_,
 								point_};
 					}
 				}
@@ -1692,7 +1739,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Missing guard expression for function",
-								*filename_,
+								filename_,
 								point_};
 					}
 				}
@@ -1703,7 +1750,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete function definition",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1738,7 +1785,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'if' expression",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1749,7 +1796,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'if' expression, missing ':'",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1759,7 +1806,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'if' expression, missing block",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1780,7 +1827,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete 'else' expression, missing block",
-								*filename_,
+								filename_,
 								point_};
 					}
 				}
@@ -1822,7 +1869,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'while' expression",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1831,7 +1878,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'while' expression, missing ':'",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1841,7 +1888,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'while' expression, missing block",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1908,7 +1955,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'ranged-for' expression",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1918,7 +1965,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'for' expression, missing block",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -1929,7 +1976,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete 'for' expression",
-								*filename_,
+								filename_,
 								point_};
 					}
 					build_match<for_ast_node>(prev_size);
@@ -1940,7 +1987,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete 'ranged-for' expression",
-								*filename_,
+								filename_,
 								point_};
 					}
 					build_match<ranged_for_ast_node>(prev_size);
@@ -1980,7 +2027,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete 'switch-case' expression",
-									*filename_,
+									filename_,
 									point_};
 						}
 
@@ -1988,7 +2035,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete 'switch-case' expression, missing ':'",
-									*filename_,
+									filename_,
 									point_};
 						}
 
@@ -1998,7 +2045,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete 'switch-case' expression, missing block",
-									*filename_,
+									filename_,
 									point_};
 						}
 
@@ -2012,7 +2059,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete 'switch-default' expression, missing ':'",
-									*filename_,
+									filename_,
 									point_};
 						}
 
@@ -2022,7 +2069,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete 'switch-default' expression, missing block",
-									*filename_,
+									filename_,
 									point_};
 						}
 
@@ -2043,7 +2090,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'switch' expression",
-							*filename_,
+							filename_,
 							point_};
 				}
 				// todo: really no bracket ')'?
@@ -2052,7 +2099,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'switch' expression, missing ':'",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -2137,7 +2184,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'try' block, missing ':'",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -2145,7 +2192,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'try' block, missing block",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -2162,7 +2209,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete 'try-catch' expression",
-								*filename_,
+								filename_,
 								point_};
 					}
 					// todo: really no bracket ')'?
@@ -2170,7 +2217,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete 'try-catch' expression, missing ':'",
-								*filename_,
+								filename_,
 								point_};
 					}
 
@@ -2180,7 +2227,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete 'try-catch' expression, missing block",
-								*filename_,
+								filename_,
 								point_};
 					}
 
@@ -2197,7 +2244,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete 'try-finally' expression, missing ':'",
-								*filename_,
+								filename_,
 								point_};
 					}
 
@@ -2207,7 +2254,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete 'try-finally' expression, missing block",
-								*filename_,
+								filename_,
 								point_};
 					}
 
@@ -2240,7 +2287,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Class definitions only allowed at top scope",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -2248,7 +2295,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Missing class name in definition",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -2260,7 +2307,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete 'class' block",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -2331,7 +2378,7 @@ namespace gal::lang
 										{
 											throw exception::eval_error{
 													ex.what(),
-													*filename_,
+													filename_,
 													begin};
 										}
 
@@ -2343,7 +2390,7 @@ namespace gal::lang
 									{
 										throw exception::eval_error{
 												"Unclosed in-string eval",
-												*filename_,
+												filename_,
 												begin};
 									}
 								}
@@ -2352,7 +2399,7 @@ namespace gal::lang
 							}
 							else
 							{
-								p.parse(b.peek(), begin, *filename_);
+								p.parse(b.peek(), begin, filename_);
 								++b;
 							}
 						}
@@ -2390,14 +2437,14 @@ namespace gal::lang
 						// scope for char_parser destructor
 						char_parser p{match, false};
 
-						for (auto b = begin + 1, e = point_ - 1; b != e; ++b) { p.parse(b.peek(), begin, *filename_); }
+						for (auto b = begin + 1, e = point_ - 1; b != e; ++b) { p.parse(b.peek(), begin, filename_); }
 					}
 
 					if (match.size() != 1)
 					{
 						throw exception::eval_error{
 								"Single-quoted strings must be 1 character long",
-								*filename_,
+								filename_,
 								point_};
 					}
 
@@ -2470,7 +2517,7 @@ namespace gal::lang
 
 				if (build_symbol("&"))
 				{
-					if (not build_identifier(true)) { throw exception::eval_error{"Incomplete '&'(aka reference) expression", *filename_, point_}; }
+					if (not build_identifier(true)) { throw exception::eval_error{"Incomplete '&'(aka reference) expression", filename_, point_}; }
 
 					build_match<reference_ast_node>(prev_size);
 					return true;
@@ -2491,8 +2538,8 @@ namespace gal::lang
 				scoped_parser p{*this};
 				if (build_any<keyword_function_parameter_bracket_name::left_type>())
 				{
-					if (not build_operator()) { throw exception::eval_error{"Incomplete expression", *filename_, point_}; }
-					if (not build_any<keyword_function_parameter_bracket_name::right_type>()) { throw exception::eval_error{"Missing closing parenthesis", *filename_, point_}; }
+					if (not build_operator()) { throw exception::eval_error{"Incomplete expression", filename_, point_}; }
+					if (not build_any<keyword_function_parameter_bracket_name::right_type>()) { throw exception::eval_error{"Missing closing parenthesis", filename_, point_}; }
 
 					return true;
 				}
@@ -2519,7 +2566,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete inline container initializer, missing closing bracket",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -2556,7 +2603,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete pair, missing the second",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -2606,7 +2653,7 @@ namespace gal::lang
 								{
 									throw exception::eval_error{
 											std_format::format("Incomplete unary prefix '{}' expression", element),
-											*filename_,
+											filename_,
 											point_};
 								}
 
@@ -2644,7 +2691,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete function call",
-									*filename_,
+									filename_,
 									point_};
 						}
 
@@ -2654,7 +2701,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete dot access fun call",
-									*filename_,
+									filename_,
 									point_};
 						}
 
@@ -2663,7 +2710,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete dot access fun call",
-									*filename_,
+									filename_,
 									point_};
 						}
 						else if (back->front().is<dot_access_ast_node>())
@@ -2672,7 +2719,7 @@ namespace gal::lang
 							{
 								throw exception::eval_error{
 										"Incomplete dot access fun call",
-										*filename_,
+										filename_,
 										point_};
 							}
 
@@ -2696,7 +2743,7 @@ namespace gal::lang
 							{
 								throw exception::eval_error{
 										"Incomplete dot access fun call",
-										*filename_,
+										filename_,
 										point_};
 							}
 							match_stack_.emplace_back(std::move(dot_access));
@@ -2708,7 +2755,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete array access",
-									*filename_,
+									filename_,
 									point_};
 						}
 
@@ -2720,7 +2767,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete dot access fun call",
-									*filename_,
+									filename_,
 									point_};
 						}
 
@@ -2728,7 +2775,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Incomplete dot access fun call",
-									*filename_,
+									filename_,
 									point_};
 						}
 
@@ -2775,7 +2822,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Incomplete member declaration",
-								*filename_,
+								filename_,
 								point_};
 					}
 					build_match<member_decl_ast_node>(prev_size);
@@ -2789,13 +2836,13 @@ namespace gal::lang
 						// we built a reference node - continue
 					}
 					else if (build_identifier(true)) { build_match<var_decl_ast_node>(prev_size); }
-					else { throw exception::eval_error{"Incomplete variable declaration", *filename_, point_}; }
+					else { throw exception::eval_error{"Incomplete variable declaration", filename_, point_}; }
 					return true;
 				}
 
 				if (build_keyword(keyword_global_name::value))
 				{
-					if (not(build_reference() || build_identifier(true))) { throw exception::eval_error{"Incomplete global declaration", *filename_, point_}; }
+					if (not(build_reference() || build_identifier(true))) { throw exception::eval_error{"Incomplete global declaration", filename_, point_}; }
 
 					build_match<global_decl_ast_node>(prev_size);
 					return true;
@@ -2803,11 +2850,11 @@ namespace gal::lang
 
 				if (build_keyword(keyword_member_decl_name::value))
 				{
-					if (not build_identifier(true)) { throw exception::eval_error{"Incomplete member declaration", *filename_, point_}; }
+					if (not build_identifier(true)) { throw exception::eval_error{"Incomplete member declaration", filename_, point_}; }
 
-					if (not build_any<keyword_class_accessor_name>()) { throw exception::eval_error{"Incomplete member declaration", *filename_, point_}; }
+					if (not build_any<keyword_class_accessor_name>()) { throw exception::eval_error{"Incomplete member declaration", filename_, point_}; }
 
-					if (not build_identifier(true)) { throw exception::eval_error{"Missing member name in definition", *filename_, point_}; }
+					if (not build_identifier(true)) { throw exception::eval_error{"Missing member name in definition", filename_, point_}; }
 
 					build_match<member_decl_ast_node>(prev_size);
 					return true;
@@ -2848,7 +2895,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								std_format::format("Incomplete '{}' expression", op),
-								*filename_,
+								filename_,
 								point_};
 					}
 
@@ -2922,7 +2969,7 @@ namespace gal::lang
 						if (build_symbol(op, true))
 						{
 							skip_whitespace(true);
-							if (not build_equation()) { throw exception::eval_error{"Incomplete equation", *filename_, point_}; }
+							if (not build_equation()) { throw exception::eval_error{"Incomplete equation", filename_, point_}; }
 
 							build_match<equation_ast_node>(prev_size, op);
 							return true;
@@ -2955,7 +3002,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Two function definitions missing line separator",
-									*filename_,
+									filename_,
 									begin};
 						}
 						has_more = true;
@@ -2968,7 +3015,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Two function definitions missing line separator",
-									*filename_,
+									filename_,
 									begin};
 						}
 						has_more = true;
@@ -3008,7 +3055,7 @@ namespace gal::lang
 						{
 							throw exception::eval_error{
 									"Two function definitions missing line separator",
-									*filename_,
+									filename_,
 									begin};
 						}
 						has_more = true;
@@ -3070,7 +3117,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							"Incomplete class block",
-							*filename_,
+							filename_,
 							point_};
 				}
 
@@ -3086,13 +3133,13 @@ namespace gal::lang
 			 *
 			 * @throw eval_error throw from build_statements(true)
 			 */
-			[[nodiscard]] ast_node_ptr parse_internal(const foundation::string_view_type input, parse_location::filename_type filename)
+			[[nodiscard]] ast_node_ptr parse_internal(const foundation::string_view_type input, const foundation::string_view_type filename)
 			{
 				const auto begin = input.empty() ? nullptr : input.data();
 				const auto end = begin ? begin + input.size() : nullptr;
 
 				point_ = parser_detail::parse_point{begin, end};
-				filename_ = std::make_shared<parse_location::filename_type>(std::move(filename));
+				filename_ = filename;
 
 				if (build_statements(true))
 				{
@@ -3100,7 +3147,7 @@ namespace gal::lang
 					{
 						throw exception::eval_error{
 								"Unparsed input remained",
-								*filename_,
+								filename_,
 								point_};
 					}
 					build_match<file_ast_node>(0);
@@ -3116,13 +3163,13 @@ namespace gal::lang
 			[[nodiscard]] ast_node_ptr parse_instruct_eval(const foundation::string_view_type input)
 			{
 				const auto last_point = point_;
-				auto last_filename = filename_;
+				const auto last_filename = filename_;
 				auto last_match_stack = std::exchange(match_stack_, ast_node::children_type{});
 
 				auto result = parse_internal(input, "instruction_eval");
 
 				point_ = last_point;
-				filename_ = std::move(last_filename);
+				filename_ = last_filename;
 				match_stack_ = std::move(last_match_stack);
 
 				return result;
@@ -3135,10 +3182,10 @@ namespace gal::lang
 				  max_parse_depth_{max_parse_depth},
 				  current_parse_depth_{0} { match_stack_.reserve(2); }
 
-			[[nodiscard]] ast_node_ptr parse(const foundation::string_view_type input, parse_location::filename_type filename) override
+			[[nodiscard]] ast_node_ptr parse(const foundation::string_view_type input, const foundation::string_view_type filename) override
 			{
 				parser p{visitor_, optimizer_};
-				return p.parse_internal(input, std::move(filename));
+				return p.parse_internal(input, filename);
 			}
 		};
 	}

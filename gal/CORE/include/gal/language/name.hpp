@@ -52,6 +52,17 @@ namespace gal::lang::lang
 	using keyword_value_range_split_name = GAL_UTILS_TEMPLATE_STRING_TYPE("..");
 	// see container_subscript_interface_name below
 	using keyword_array_call_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("[]");
+	using keyword_magic_line_name = GAL_UTILS_TEMPLATE_STRING_TYPE("__LINE__");
+	using keyword_magic_file_name = GAL_UTILS_TEMPLATE_STRING_TYPE("__FILE__");
+	using keyword_magic_function_name = GAL_UTILS_TEMPLATE_STRING_TYPE("__FUNC__");
+	using keyword_magic_class_name = GAL_UTILS_TEMPLATE_STRING_TYPE("__CLASS__");
+
+	// default result name of keyword_magic_function_name if no function found
+	using function_not_found_name = GAL_UTILS_TEMPLATE_STRING_TYPE("NOT_A_VALID_FUNCTION");
+	// default result name of keyword_magic_class_name if no class found
+	using class_not_found_name = GAL_UTILS_TEMPLATE_STRING_TYPE("NOT_A_VALID_CLASS");
+	// default result filename of an evaluation
+	using inline_eval_filename_name = GAL_UTILS_TEMPLATE_STRING_TYPE("__EVAL__");
 
 	//*********************************************
 	// void type

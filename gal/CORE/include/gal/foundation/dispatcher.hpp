@@ -151,7 +151,7 @@ namespace gal::lang
 						[&engine](const auto& type)
 						{
 							try { engine.add_type_info(type.first, type.second); }
-							catch (const gal::lang::exception::name_conflict_error&)
+							catch (const exception::name_conflict_error&)
 							{
 								// todo: Should we throw an error if there's a name conflict while applying a module?
 							}
@@ -166,7 +166,7 @@ namespace gal::lang
 						[&engine](const auto& function)
 						{
 							try { engine.add_function(function.first, function.second); }
-							catch (const gal::lang::exception::name_conflict_error&)
+							catch (const exception::name_conflict_error&)
 							{
 								// todo: Should we throw an error if there's a name conflict while applying a module?
 							}
@@ -186,7 +186,7 @@ namespace gal::lang
 			{
 				std::ranges::for_each(
 						evaluations_,
-						[&eval](const auto& evaluation) { eval.add_evaluation(evaluation); });
+						[&eval](const auto& evaluation) { (void)eval.eval(evaluation); });
 			}
 
 			template<typename Engine>
@@ -212,7 +212,7 @@ namespace gal::lang
 
 			engine_core& add_variable(name_type name, variable_type variable)
 			{
-				if (not variable.is_const()) { throw gal::lang::exception::global_mutable_error{name}; }
+				if (not variable.is_const()) { throw exception::global_mutable_error{name}; }
 
 				gal_assert(variables_.emplace(std::move(name), std::move(variable)).second);
 				return *this;
@@ -230,14 +230,23 @@ namespace gal::lang
 				return *this;
 			}
 
+			// todo: optimize it (reduce copy)
 			template<typename Eval, typename Engine>
 			void apply(Eval& eval, Engine& engine)
+				requires requires
+				{
+					engine.add_type_info(std::declval<const name_type&>(), std::declval<const gal_type_info&>());
+					engine.add_function(std::declval<const name_type&>(), std::declval<const function_type&>());
+					engine.add_global(std::declval<const name_type&>(), std::declval<const variable_type&>());
+					eval.eval(std::declval<const evaluation_type&>());
+					engine.add_type_conversion(std::declval<const type_conversion_type&>());
+				}
 			{
-				apply_type_info(engine);
-				apply_function(engine);
-				apply_variable(engine);
-				apply_evaluation(eval);
-				apply_type_conversion(engine);
+				this->apply_type_info(engine);
+				this->apply_function(engine);
+				this->apply_variable(engine);
+				this->apply_evaluation(eval);
+				this->apply_type_conversion(engine);
 			}
 
 			[[nodiscard]] bool has_function(const string_view_type name, const function_type& function) const noexcept
@@ -619,8 +628,8 @@ namespace gal::lang
 			{
 				std::reference_wrapper<const dispatcher_state> state;
 
-				explicit scoped_scope(const dispatcher_state& state)
-					: state{state} {}
+				explicit scoped_scope(const dispatcher_state& s)
+					: state{s} {}
 
 			private:
 				friend struct scoped_object<scoped_scope>;
@@ -631,9 +640,9 @@ namespace gal::lang
 
 			struct scoped_object_scope : scoped_scope
 			{
-				scoped_object_scope(const dispatcher_state& state, engine_core::variable_type&& object);
+				scoped_object_scope(const dispatcher_state& s, engine_core::variable_type&& object);
 
-				scoped_object_scope(const dispatcher_state& state, const engine_core::variable_type& object);
+				scoped_object_scope(const dispatcher_state& s, const engine_core::variable_type& object);
 			};
 
 			struct scoped_stack_scope : utils::scoped_object<scoped_stack_scope>
@@ -834,7 +843,7 @@ namespace gal::lang
 				 * @brief Add a new named proxy_function to the system.
 				 * @throw name_conflict_error if there's a function matching the given one being added.
 				 */
-				void add_function(const name_view_type name, state_type::function_type&& function)
+				void add_function(const name_view_type name, state_type::function_type function)
 				{
 					utils::threading::unique_lock lock{mutex_};
 
@@ -881,16 +890,18 @@ namespace gal::lang
 
 				/**
 				 * @brief Adds a new global (const) shared object, between all the threads.
+				 *
+				 * @throw global_mutable_error variable is not const
 				 */
-				variable_type& add_global(const name_view_type name, variable_type&& variable)
+				variable_type& add_global(const name_view_type name, variable_type variable)
 				{
-					if (not variable.is_const()) { throw gal::lang::exception::global_mutable_error{name}; }
+					if (not variable.is_const()) { throw exception::global_mutable_error{name}; }
 
 					utils::threading::unique_lock lock{mutex_};
 
 					if (auto [it, inserted] = state_.variables.try_emplace(name_type{name}, std::move(variable));
 						inserted) { return it->second; }
-					throw gal::lang::exception::name_conflict_error{name};
+					throw exception::name_conflict_error{name};
 				}
 
 				/**
@@ -902,44 +913,44 @@ namespace gal::lang
 				/**
 				 * @brief Adds a new global (non-const) shared object, between all the threads.
 				 */
-				variable_type& add_global_mutable(const name_view_type name, variable_type&& object)
+				variable_type& add_global_mutable(const name_view_type name, variable_type variable)
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					if (const auto [it, inserted] = state_.variables.try_emplace(name_type{name}, std::move(object));
+					if (const auto [it, inserted] = state_.variables.try_emplace(name_type{name}, std::move(variable));
 						inserted) { return it->second; }
-					throw gal::lang::exception::name_conflict_error{name};
+					throw exception::name_conflict_error{name};
 				}
 
 				/**
 				 * @brief Adds a new global (non-const) shared object, between all the threads.
 				 */
-				variable_type& add_global_mutable_no_throw(const name_view_type name, variable_type&& object)
+				variable_type& add_global_mutable_no_throw(const name_view_type name, variable_type variable)
 				{
 					utils::threading::unique_lock lock{mutex_};
-					return state_.variables.try_emplace(name_type{name}, std::move(object)).first->second;
+					return state_.variables.try_emplace(name_type{name}, std::move(variable)).first->second;
 				}
 
 				/**
 				 * @brief Updates an existing global shared object or adds a new global shared object if not found.
 				 */
-				void global_assign_or_insert(const name_view_type name, variable_type&& object)
+				void global_assign_or_insert(const name_view_type name, variable_type variable)
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					state_.variables.insert_or_assign(name_type{name}, std::move(object));
+					state_.variables.insert_or_assign(name_type{name}, std::move(variable));
 				}
 
 				/**
 				 * @brief Set the value of an object, by name. If the object
 				 * is not available in the current scope it is created.
 				 */
-				variable_type& local_assign_or_insert(const name_view_type name, variable_type&& object) { return stack_->add_variable(name, std::move(object)); }
+				variable_type& local_assign_or_insert(const name_view_type name, variable_type variable) { return stack_->add_variable(name, std::move(variable)); }
 
 				/**
 				 * @brief Add a object, if this variable already exists in the current scope, an exception will be thrown.
 				 */
-				variable_type& local_insert_or_throw(const name_view_type name, variable_type&& object) { return stack_->add_variable_no_check(name, std::move(object)); }
+				variable_type& local_insert_or_throw(const name_view_type name, variable_type variable) { return stack_->add_variable_no_check(name, std::move(variable)); }
 
 				/**
 				 * @brief Searches the current stack for an object of the given name
@@ -1017,17 +1028,17 @@ namespace gal::lang
 				 * @brief Returns the registered name of a known type_info object
 				 * compares the "bare_type_info" for the broadest possible match.
 				 */
-				[[nodiscard]] name_view_type get_type_name(const gal_type_info& ti) const
+				[[nodiscard]] name_view_type get_type_name(const gal_type_info& type) const
 				{
 					utils::threading::shared_lock lock{mutex_};
 
 					if (const auto it = std::ranges::find_if(
 								state_.types,
-								[&ti](const auto& t) { return t.bare_equal(ti); },
+								[&type](const auto& t) { return t.bare_equal(type); },
 								[](const auto& pair) { return pair.second; });
 						it != state_.types.end()) { return it->first; }
 
-					return ti.bare_name();
+					return type.bare_name();
 				}
 
 				[[nodiscard]] name_view_type get_type_name(const variable_type& object) const { return get_type_name(object.type_info()); }
@@ -1091,13 +1102,45 @@ namespace gal::lang
 
 					// note: map insert doesn't overwrite existing values, which is why this works
 					std::ranges::for_each(
-							stack.rbegin(),
-							stack.rend(),
+							stack | std::views::reverse,
 							[&ret](const auto& scope) { ret.insert(scope.begin(), scope.end()); });
 
 					// add the global values
 					utils::threading::shared_lock lock{mutex_};
 					ret.insert(state_.variables.begin(), state_.variables.end());
+
+					return ret;
+				}
+
+				/**
+				 * @brief Get a map of all objects that can be seen from the current scope in a scripting context.
+				 *
+				 * todo
+				 */
+				[[nodiscard]] auto get_scripting_objects() const
+				{
+					using return_type = std::map<engine_core::name_view_type, std::reference_wrapper<const engine_core::variable_type>, std::less<>>;
+
+					// We don't want the current context, but one up if it exists
+					const auto& stack = (stack_->stack.size() == 1) ? stack_->recent_stack_data() : stack_->recent_parent_stack_data();
+
+					return_type ret{};
+
+					// note: map insert doesn't overwrite existing values, which is why this works
+					std::ranges::for_each(
+							stack | std::views::reverse,
+							[&ret](const auto& scope)
+							{
+								std::ranges::for_each(
+										scope,
+										[&ret](const auto& pair) { ret.emplace(pair.first, std::cref(pair.second)); });
+							});
+
+					// add the global values
+					utils::threading::shared_lock lock{mutex_};
+					std::ranges::for_each(
+							state_.variables,
+							[&ret](const auto& pair) { ret.emplace(pair.first, std::cref(pair.second)); });
 
 					return ret;
 				}
@@ -1430,11 +1473,11 @@ namespace gal::lang
 
 			inline void scoped_scope::do_destruct() const { state.get().stack().pop_scope(); }
 
-			inline scoped_object_scope::scoped_object_scope(const dispatcher_state& state, engine_core::variable_type&& object)
-				: scoped_scope{state} { (void)state.add_object_no_check(lang::object_self_type_name::value, std::move(object)); }
+			inline scoped_object_scope::scoped_object_scope(const dispatcher_state& s, engine_core::variable_type&& object)
+				: scoped_scope{s} { (void)s.add_object_no_check(lang::object_self_type_name::value, std::move(object)); }
 
-			inline scoped_object_scope::scoped_object_scope(const dispatcher_state& state, const engine_core::variable_type& object)
-				: scoped_scope{state} { (void)state.add_object_no_check(lang::object_self_type_name::value, object); }
+			inline scoped_object_scope::scoped_object_scope(const dispatcher_state& s, const engine_core::variable_type& object)
+				: scoped_scope{s} { (void)s.add_object_no_check(lang::object_self_type_name::value, object); }
 
 			inline void scoped_stack_scope::do_construct() const { state.get().stack().new_stack(); }
 

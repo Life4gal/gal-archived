@@ -101,8 +101,8 @@ namespace gal::lang
 		public:
 			GAL_AST_SET_RTTI(id_ast_node)
 
-			id_ast_node(const foundation::string_view_type text, parse_location&& location)
-				: ast_node{get_rtti_index(), text, std::move(location)} {}
+			id_ast_node(const identifier_type identifier, parse_location&& location)
+				: ast_node{get_rtti_index(), identifier, std::move(location)} {}
 		};
 
 		struct constant_ast_node final : ast_node
@@ -116,10 +116,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(constant_ast_node)
 
 			constant_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					foundation::boxed_value&& value)
-				: ast_node{get_rtti_index(), text, std::move(location)},
+				: ast_node{get_rtti_index(), identifier, std::move(location)},
 				  value{std::move(value)} {}
 
 			explicit constant_ast_node(foundation::boxed_value&& value)
@@ -135,10 +135,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(reference_ast_node)
 
 			reference_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} { gal_assert(this->size() == 1); }
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} { gal_assert(this->size() == 1); }
 		};
 
 		struct compiled_ast_node final : ast_node
@@ -386,10 +386,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(fun_call_ast_node)
 
 			fun_call_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} { gal_assert(not this->empty()); }
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} { gal_assert(not this->empty()); }
 		};
 
 		struct unused_return_fun_call_ast_node final : ast_node
@@ -401,10 +401,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(unused_return_fun_call_ast_node)
 
 			unused_return_fun_call_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} { gal_assert(not this->empty()); }
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} { gal_assert(not this->empty()); }
 		};
 
 		struct array_call_ast_node final : ast_node
@@ -430,10 +430,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(array_call_ast_node)
 
 			array_call_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct dot_access_ast_node final : ast_node
@@ -495,10 +495,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(dot_access_ast_node)
 
 			dot_access_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)},
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)},
 				  function_name_{
 						  this->get_child(1).is_any<fun_call_ast_node, array_call_ast_node>() ? this->get_child(1).front().identifier() : this->get_child(1).identifier()} {}
 		};
@@ -508,10 +508,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(arg_ast_node)
 
 			arg_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct arg_list_ast_node final : ast_node
@@ -519,10 +519,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(arg_list_ast_node)
 
 			arg_list_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 
 			static std::string_view get_arg_name(const ast_node& node)
 			{
@@ -657,10 +657,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(equation_ast_node)
 
 			equation_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)},
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)},
 				  operation_{algebraic_operation(this->identifier())} { gal_assert(this->size() == 2); }
 		};
 
@@ -682,10 +682,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(global_decl_ast_node)
 
 			global_decl_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct var_decl_ast_node final : ast_node
@@ -703,10 +703,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(var_decl_ast_node)
 
 			var_decl_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct assign_decl_ast_node final : ast_node
@@ -732,10 +732,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(assign_decl_ast_node)
 
 			assign_decl_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct class_decl_ast_node final : ast_node
@@ -759,10 +759,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(class_decl_ast_node)
 
 			class_decl_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		/**
@@ -809,10 +809,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(member_decl_ast_node)
 
 			member_decl_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		/**
@@ -927,12 +927,12 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(def_ast_node)
 
 			def_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
 				: ast_node{
 						  get_rtti_index(),
-						  text,
+						  identifier,
 						  std::move(location),
 						  children_type{
 								  std::make_move_iterator(children.begin()),
@@ -1033,12 +1033,12 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(method_ast_node)
 
 			method_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
 				: ast_node{
 						  get_rtti_index(),
-						  text,
+						  identifier,
 						  std::move(location),
 						  children_type{
 								  std::make_move_iterator(children.begin()),
@@ -1096,12 +1096,12 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(lambda_ast_node)
 
 			lambda_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
 				: ast_node{
 						  get_rtti_index(),
-						  text,
+						  identifier,
 						  std::move(location),
 						  children_type{
 								  std::make_move_iterator(children.begin()),
@@ -1134,10 +1134,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(no_scope_block_ast_node)
 
 			no_scope_block_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct block_ast_node final : ast_node
@@ -1153,10 +1153,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(block_ast_node)
 
 			block_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		/**
@@ -1189,10 +1189,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(if_ast_node)
 
 			if_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} { gal_assert(this->size() == 3); }
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} { gal_assert(this->size() == 3); }
 		};
 
 		/**
@@ -1240,10 +1240,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(while_ast_node)
 
 			while_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		/**
@@ -1301,10 +1301,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(for_ast_node)
 
 			for_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} { gal_assert(this->size() == 4); }
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} { gal_assert(this->size() == 4); }
 		};
 
 		struct ranged_for_ast_node final : ast_node
@@ -1397,10 +1397,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(ranged_for_ast_node)
 
 			ranged_for_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} { gal_assert(this->size() == 3); }
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} { gal_assert(this->size() == 3); }
 		};
 
 		struct break_ast_node final : ast_node
@@ -1416,10 +1416,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(break_ast_node)
 
 			break_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct continue_ast_node final : ast_node
@@ -1435,10 +1435,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(continue_ast_node)
 
 			continue_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct file_ast_node final : ast_node
@@ -1467,10 +1467,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(file_ast_node)
 
 			file_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct return_ast_node final : ast_node
@@ -1487,10 +1487,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(return_ast_node)
 
 			return_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct default_ast_node final : ast_node
@@ -1509,10 +1509,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(default_ast_node)
 
 			default_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} { gal_assert(this->size() == 1); }
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} { gal_assert(this->size() == 1); }
 		};
 
 		struct case_ast_node final : ast_node
@@ -1531,10 +1531,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(case_ast_node)
 
 			case_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} { gal_assert(this->size() == 2); }
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} { gal_assert(this->size() == 2); }
 		};
 
 		struct switch_ast_node final : ast_node
@@ -1588,10 +1588,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(switch_ast_node)
 
 			switch_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct logical_and_ast_node final : ast_node
@@ -1608,10 +1608,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(logical_and_ast_node)
 
 			logical_and_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} { gal_assert(this->size() == 2); }
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} { gal_assert(this->size() == 2); }
 		};
 
 		struct logical_or_ast_node final : ast_node
@@ -1628,10 +1628,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(logical_or_ast_node)
 
 			logical_or_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} { gal_assert(this->size() == 2); }
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} { gal_assert(this->size() == 2); }
 		};
 
 		struct inline_range_ast_node final : ast_node
@@ -1662,10 +1662,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(inline_range_ast_node)
 
 			inline_range_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct inline_array_ast_node final : ast_node
@@ -1710,10 +1710,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(inline_array_ast_node)
 
 			inline_array_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct inline_map_ast_node final : ast_node
@@ -1758,10 +1758,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(inline_map_ast_node)
 
 			inline_map_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct map_pair_ast_node final : ast_node
@@ -1769,10 +1769,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(map_pair_ast_node)
 
 			map_pair_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct value_range_ast_node final : ast_node
@@ -1780,10 +1780,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(value_range_ast_node)
 
 			value_range_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct catch_ast_node final : ast_node
@@ -1791,10 +1791,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(catch_ast_node)
 
 			catch_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct finally_ast_node final : ast_node
@@ -1802,10 +1802,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(finally_ast_node)
 
 			finally_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 
 		struct try_ast_node final : ast_node
@@ -1897,10 +1897,10 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(try_ast_node)
 
 			try_ast_node(
-					const foundation::string_view_type text,
+					const identifier_type identifier,
 					parse_location&& location,
 					children_type&& children)
-				: ast_node{get_rtti_index(), text, std::move(location), std::move(children)} {}
+				: ast_node{get_rtti_index(), identifier, std::move(location), std::move(children)} {}
 		};
 	}
 }

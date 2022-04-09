@@ -591,7 +591,7 @@ namespace gal::lang::foundation
 					lang::ast_node_type_name::value,
 					{},
 					{
-							// {lang::ast_node_text_interface_name::value, fun(&lang::ast_node::text_)},
+							// {lang::ast_node_text_interface_name::value, fun(&lang::ast_node::identifier_)},
 							{lang::ast_node_location_begin_interface_name::value, fun(&lang::ast_node::location_begin)},
 							{lang::ast_node_location_end_interface_name::value, fun(&lang::ast_node::location_end)},
 							{lang::ast_node_filename_interface_name::value, fun(&lang::ast_node::filename)},
