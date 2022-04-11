@@ -5,15 +5,15 @@
 
 // todo
 #define GAL_LANG_WINDOWS
+
 #include <fstream>
 #include <iostream>
 #include <gal/language/binary_module_windows.hpp>
-
 #include <gal/language/common.hpp>
 #include <gal/exception_handler.hpp>
 #include <utility>
 #include <utils/thread_storage.hpp>
-#include <utils/string_pool.hpp>
+#include <gal/foundation/string_pool.hpp>
 #include <gal/defines.hpp>
 
 namespace gal::lang::lang
@@ -46,7 +46,7 @@ namespace gal::lang::lang
 		};
 
 		// the filename is also stored in the corresponding pool
-		using file_contents_type = std::map<foundation::string_view_type, utils::string_pool<foundation::string_view_type::value_type>>;
+		using file_contents_type = std::map<foundation::string_view_type, foundation::string_pool_type>;
 		using used_files_type = std::set<file_contents_type::key_type>;
 		using loaded_modules_type = std::map<file_contents_type::key_type, engine_detail::shared_binary_module>;
 		using active_loaded_modules = std::set<loaded_modules_type::key_type>;
@@ -68,7 +68,8 @@ namespace gal::lang::lang
 
 		foundation::dispatcher_detail::dispatcher dispatcher_;
 
-		utils::string_pool<foundation::string_view_type::value_type> namespace_pool_;
+		foundation::string_pool_type string_pool_;
+
 		std::map<foundation::string_view_type, namespace_maker_type> namespace_generators_;
 
 		[[nodiscard]] foundation::string_view_type load_file(const std::string_view filename)
@@ -151,12 +152,50 @@ namespace gal::lang::lang
 		/**
 		 * @brief Builds all the requirements, including its evaluator and a run of its prelude.
 		 */
-		void build_system(engine_detail::shared_binary_module library, const engine_option option)
+		void build_system(const foundation::shared_engine_core& library, const engine_option option)
 		{
-			(void)this;
-			(void)library;
+			if (library) { add_module_ptr(library); }
+
+			// todo: name
+			dispatcher_.add_function(
+					register_global_string("dump_system"),
+					fun([this]
+					{
+						// todo: dump to where
+						std::cerr << dispatcher_.dump_everything();
+					}));
+			dispatcher_.add_function(
+					register_global_string("dump_object"),
+					fun([this](const foundation::boxed_value& object)
+					{
+						// todo: dump to where
+						std::cerr << dispatcher_.dump_object(object);
+					}));
+			dispatcher_.add_function(
+					register_global_string("is_type_match"),
+					fun([this](const foundation::string_view_type name, const foundation::boxed_value& object) { return dispatcher_.is_type_match(name, object); }));
+			dispatcher_.add_function(
+					register_global_string("type_name"),
+					fun([this](const foundation::boxed_value& object) { return dispatcher_.get_type_name(object); }));
+			dispatcher_.add_function(
+					register_global_string("has_function"),
+					fun([this](const foundation::string_view_type name) { return dispatcher_.has_function(name); }));
+
+			dispatcher_.add_function(
+					register_global_string("invokable"),
+					foundation::make_dynamic_proxy_function(
+							[this](const foundation::parameters_view_type params) { return dispatcher_.invokable(params); }));
+
+			dispatcher_.add_function(
+					register_global_string("invoke"),
+					fun([this](const foundation::proxy_function_base& function, const foundation::parameters_view_type params)
+					{
+						const foundation::type_conversion_state state{dispatcher_.get_conversion_manager()};
+						return function(params, state);
+					}));
+
+			// todo: more internal function
 			(void)option;
-			// todo
 		}
 
 	public:
@@ -181,7 +220,7 @@ namespace gal::lang::lang
 		 * @param option Option for build system
 		 */
 		engine_base(
-				engine_detail::shared_binary_module library,
+				const foundation::shared_engine_core& library,
 				std::unique_ptr<parser_detail::parser_base>&& parser,
 				std::vector<std::string> module_paths = {},
 				std::vector<std::string> use_paths = {},
@@ -189,7 +228,7 @@ namespace gal::lang::lang
 			: module_paths_{std::move(module_paths)},
 			  use_paths_{std::move(use_paths)},
 			  parser_{std::move(parser)},
-			  dispatcher_{*parser} { build_system(std::move(library), option); }
+			  dispatcher_{string_pool_, *parser} { build_system(library, option); }
 
 		[[nodiscard]] foundation::boxed_value eval(const ast_node& node)
 		{
@@ -251,6 +290,10 @@ namespace gal::lang::lang
 			// failed to load by any name
 			throw exception::file_not_found_error{filename};
 		}
+
+		[[nodiscard]] foundation::string_view_type register_global_string(const foundation::string_view_type string) { return string_pool_.append(string); }
+
+		// todo: register local string
 
 		/**
 		 * @brief Returns a state object that represents the current state of the global system.
@@ -325,7 +368,7 @@ namespace gal::lang::lang
 		/**
 		 * @brief Registers a new named type.
 		 */
-		engine_base& add_type_info(const foundation::dispatcher_detail::dispatcher::name_view_type name, const foundation::gal_type_info& type)
+		engine_base& add_type_info(const foundation::string_view_type name, const foundation::gal_type_info& type)
 		{
 			dispatcher_.add_type_info(name, type);
 			return *this;
@@ -334,7 +377,7 @@ namespace gal::lang::lang
 		/**
 		 * @brief Add a new named proxy_function to the system.
 		 */
-		engine_base& add_function(const foundation::dispatcher_detail::dispatcher::name_view_type name, foundation::dispatcher_detail::dispatcher::state_type::function_type&& function)
+		engine_base& add_function(const foundation::string_view_type name, foundation::dispatcher_detail::dispatcher::state_type::function_type function)
 		{
 			dispatcher_.add_function(name, std::move(function));
 			return *this;
@@ -348,7 +391,7 @@ namespace gal::lang::lang
 		 *
 		 * @throw global_mutable_error variable is not const
 		 */
-		engine_base& add_global(const foundation::dispatcher_detail::dispatcher::name_view_type name, foundation::boxed_value&& variable)
+		engine_base& add_global(const foundation::string_view_type name, foundation::boxed_value variable)
 		{
 			name_validator::validate_object_name(name);
 			dispatcher_.add_global(name, std::move(variable));
@@ -369,6 +412,7 @@ namespace gal::lang::lang
 		 */
 		engine_base& add_module_ptr(const foundation::shared_engine_core& m)
 		{
+			// todo: take over core's pool ?
 			m->apply(*this, dispatcher_);
 			return *this;
 		}
@@ -379,14 +423,14 @@ namespace gal::lang::lang
 		 * @param name Name of the value to add
 		 * @param variable boxed_value to add as a global
 		 */
-		engine_base& add_global_mutable(const foundation::dispatcher_detail::dispatcher::name_view_type name, foundation::boxed_value&& variable)
+		engine_base& add_global_mutable(const foundation::string_view_type name, foundation::boxed_value variable)
 		{
 			name_validator::validate_object_name(name);
 			dispatcher_.add_global_mutable(name, std::move(variable));
 			return *this;
 		}
 
-		engine_base& global_assign_or_insert(const foundation::dispatcher_detail::dispatcher::name_view_type name, foundation::boxed_value&& variable)
+		engine_base& global_assign_or_insert(const foundation::string_view_type name, foundation::boxed_value variable)
 		{
 			name_validator::validate_object_name(name);
 			dispatcher_.global_assign_or_insert(name, std::move(variable));
@@ -396,17 +440,17 @@ namespace gal::lang::lang
 		/**
 		 * @brief Objects are added to the local thread state.
 		 */
-		engine_base& local_assign_or_insert(const foundation::dispatcher_detail::dispatcher::name_view_type name, foundation::dispatcher_detail::dispatcher::variable_type&& variable)
+		engine_base& local_assign_or_insert(const foundation::string_view_type name, foundation::boxed_value variable)
 		{
 			name_validator::validate_object_name(name);
 			dispatcher_.local_assign_or_insert(name, std::move(variable));
 			return *this;
 		}
 
-		[[nodiscard]] foundation::dispatcher_detail::dispatcher::name_view_type get_type_name(const foundation::gal_type_info& type) const { return dispatcher_.get_type_name(type); }
+		[[nodiscard]] foundation::string_view_type get_type_name(const foundation::gal_type_info& type) const { return dispatcher_.get_type_name(type); }
 
 		template<typename T>
-		[[nodiscard]] foundation::dispatcher_detail::dispatcher::name_view_type get_type_name() const { return this->get_type_name(foundation::make_type_info<T>()); }
+		[[nodiscard]] foundation::string_view_type get_type_name() const { return this->get_type_name(foundation::make_type_info<T>()); }
 
 		/**
 		 * @brief Load a binary module from a dynamic library.
@@ -486,7 +530,7 @@ namespace gal::lang::lang
 		 *
 		 * @throw std::runtime_error In the case that the namespace name was never registered.
 		 */
-		void import_namespace(const foundation::dispatcher_detail::dispatcher::name_view_type namespace_name)
+		void import_namespace(const foundation::string_view_type namespace_name)
 		{
 			utils::threading::unique_lock use_lock{use_mutex_};
 
@@ -504,14 +548,14 @@ namespace gal::lang::lang
 		 *
 		 * @throw std::runtime_error In the case that the namespace name was already registered.
 		 */
-		void register_namespace(const foundation::dispatcher_detail::dispatcher::name_view_type namespace_name, const std::function<void(namespace_type&)>& generator)
+		void register_namespace(const foundation::string_view_type namespace_name, const std::function<void(namespace_type&)>& generator)
 		{
 			utils::threading::unique_lock use_lock{use_mutex_};
 
 			if (not namespace_generators_.contains(namespace_name))
 			{
 				namespace_generators_.emplace(
-						namespace_pool_.append(namespace_name),
+						string_pool_.append(namespace_name),
 						[generator, ns = namespace_type{}]() mutable -> namespace_type&
 						{
 							generator(ns);

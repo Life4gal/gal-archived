@@ -78,7 +78,7 @@ namespace gal::utils
 				return dest;
 			}
 
-			constexpr void return_raw(value_type* raw, const size_type size) noexcept
+			constexpr void return_raw(const value_type* raw, const size_type size) noexcept
 			{
 				auto memory_data = memory_.get();
 
@@ -87,11 +87,12 @@ namespace gal::utils
 				if (memory_data > (raw - (size_ - size)))
 				{
 					// In this case, new string is inserted after the memory is borrowed, and the newly added string needs to be moved to the front
-					auto move_dest = raw;
+					auto move_dest = memory_data + (raw - memory_data);// raw;
+					gal_assert(move_dest == raw);
 					auto move_source = raw + size;
 					auto move_size = size_ - size - (raw - memory_data);
 
-					std::ranges::copy(move_source, move_source + move_size, move_dest);
+					std::ranges::copy_n(move_source, move_size, move_dest);
 				}
 
 				size_ -= size;
@@ -163,7 +164,7 @@ namespace gal::utils
 					std::ranges::for_each(
 							// back to front, because the last inserted string is saved at the end
 							borrowed_blocks_ | std::views::reverse,
-							[this](const auto& pair) mutable
+							[this](auto& pair) mutable
 							{
 								auto& pool = pool_.get();
 
@@ -219,7 +220,7 @@ namespace gal::utils
 			return raw;
 		}
 
-		constexpr void return_raw_memory(value_type* raw, const size_type size, block_iterator pos)
+		constexpr void return_raw_memory(const value_type* raw, const size_type size, block_iterator pos)
 		{
 			pos->return_raw(raw, size);
 			this->shake_it(pos);
@@ -284,9 +285,12 @@ namespace gal::utils
 			: capacity_(capacity) {}
 
 		template<std::same_as<string_pool>... Pools>
-		constexpr explicit string_pool(Pools&&... pools)
+		constexpr explicit string_pool(Pools&&... pools) { this->append(std::forward<Pools>(pools)...); }
+
+		template<std::same_as<string_pool>... Pools>
+		constexpr void append(Pools&&... pools)
 		{
-			pool_.reserve((pools.pool_.size() + ...));
+			pool_.reserve(pool_.size() + (pools.pool_.size() + ...));
 
 			block_iterator iterator;
 			(((iterator = pool_.insert(pool_.end(), std::make_move_iterator(pools.pool_.begin()), std::make_move_iterator(pools.pool_.end()))),
@@ -314,7 +318,9 @@ namespace gal::utils
 
 		[[nodiscard]] constexpr size_type capacity() const noexcept { return capacity_; }
 
-		// Only affect the block created after modification
+		/**
+		 * @note Only affect the block created after modification
+		 */
 		constexpr void resize(size_type capacity) noexcept { capacity_ = capacity; }
 	};
 }

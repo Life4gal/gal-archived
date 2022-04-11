@@ -96,12 +96,12 @@ namespace gal::lang::foundation
 			requires std::is_arithmetic_v<T>
 		static void register_arithmetic(const string_view_type name, engine_core& core)
 		{
-			core.add_type_info(engine_core::name_type{name}, make_type_info<T>());
+			core.add_type_info(name, make_type_info<T>());
 
-			core.add_function(engine_core::name_type{name}, default_ctor<T>());
-			core.add_function(engine_core::name_type{name}, fun([](const boxed_number& num) { return num.as<T>(); }));
+			core.add_function(name, default_ctor<T>());
+			core.add_function(name, fun([](const boxed_number& num) { return num.as<T>(); }));
 			{
-				engine_core::name_type n{lang::number_cast_interface_prefix::value};
+				string_type n{lang::number_cast_interface_prefix::value};
 				n.reserve(n.size() + name.size());
 				n.append(name);
 				core.add_function(
@@ -119,7 +119,7 @@ namespace gal::lang::foundation
 								}));
 			}
 			{
-				engine_core::name_type n{lang::number_cast_interface_prefix::value};
+				string_type n{lang::number_cast_interface_prefix::value};
 				n.reserve(n.size() + name.size());
 				n.append(name);
 				core.add_function(
@@ -483,7 +483,7 @@ namespace gal::lang::foundation
 			core.add_function(lang::dynamic_object_get_member_interface_name::value,
 			                  fun(static_cast<boxed_value& (dynamic_object::*)(dynamic_object::class_member_data_name_type&&)>(&dynamic_object::get_member)));
 			core.add_function(lang::dynamic_object_get_member_interface_name::value,
-			                  fun(static_cast<const boxed_value& (dynamic_object::*)(const dynamic_object::class_member_data_name_view_type) const>(&dynamic_object::get_member)));
+			                  fun(static_cast<const boxed_value& (dynamic_object::*)(dynamic_object::class_member_data_name_view_type) const>(&dynamic_object::get_member)));
 			core.add_function(lang::dynamic_object_has_member_interface_name::value,
 			                  fun(&dynamic_object::has_member));
 			core.add_function(lang::dynamic_object_set_explicit_interface_name::value,
@@ -493,7 +493,7 @@ namespace gal::lang::foundation
 			core.add_function(lang::dynamic_object_method_missing_interface_name::value,
 			                  fun(static_cast<boxed_value& (dynamic_object::*)(dynamic_object::class_member_data_name_type&& name)>(&dynamic_object::method_missing)));
 			core.add_function(lang::dynamic_object_method_missing_interface_name::value,
-			                  fun(static_cast<const boxed_value& (dynamic_object::*)(const dynamic_object::class_member_data_name_view_type name) const>(&dynamic_object::method_missing)));
+			                  fun(static_cast<const boxed_value& (dynamic_object::*)(dynamic_object::class_member_data_name_view_type name) const>(&dynamic_object::method_missing)));
 
 			// todo: define dynamic_object's clone/assign/compare equal/compare not equal operators
 

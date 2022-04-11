@@ -63,6 +63,8 @@ namespace gal::lang::lang
 	using class_not_found_name = GAL_UTILS_TEMPLATE_STRING_TYPE("NOT_A_VALID_CLASS");
 	// default result filename of an evaluation
 	using inline_eval_filename_name = GAL_UTILS_TEMPLATE_STRING_TYPE("__EVAL__");
+	// default call function name if the required method not found
+	using method_missing_name = GAL_UTILS_TEMPLATE_STRING_TYPE("missing_method");
 
 	//*********************************************
 	// void type

@@ -75,16 +75,16 @@ namespace gal::lang
 	template<typename T>
 	void register_class(
 			foundation::engine_core& core,
-			const foundation::engine_core::name_view_type name,
+			const foundation::string_view_type name,
 			foundation::proxy_functions_type&& constructors,
 			// todo: container?
-			std::vector<std::pair<foundation::engine_core::name_type, foundation::proxy_function>>&& functions)
+			std::vector<std::pair<foundation::string_view_type, foundation::proxy_function>>&& functions)
 	{
-		core.add_type_info(foundation::engine_core::name_type{name}, foundation::make_type_info<T>());
+		core.add_type_info(name, foundation::make_type_info<T>());
 
 		std::ranges::for_each(
 				constructors,
-				[&core, name](auto&& ctor) { core.add_function(foundation::engine_core::name_type{name}, std::move(ctor)); });
+				[&core, name](auto&& ctor) { core.add_function(name, std::move(ctor)); });
 
 		std::ranges::for_each(
 				functions,

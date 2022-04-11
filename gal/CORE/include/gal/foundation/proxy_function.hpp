@@ -499,7 +499,7 @@ namespace gal::lang
 		};
 
 		template<typename Callable>
-			requires(std::is_invocable_v<Callable, parameters_view_type> || std::is_invocable_v<Callable, const parameters_type&>)
+			requires(std::is_invocable_v<Callable, const parameters_view_type> || std::is_invocable_v<Callable, const parameters_type&>)
 		class dynamic_proxy_function final : public dynamic_proxy_function_base
 		{
 		private:
@@ -525,9 +525,9 @@ namespace gal::lang
 			}
 
 		public:
-			dynamic_proxy_function(
+			explicit dynamic_proxy_function(
 					Callable&& function,
-					const arity_size_type arity,
+					const arity_size_type arity = no_parameters_arity,
 					parse_ast_node_type node = {},
 					parameter_type_mapper&& mapper = {},
 					proxy_function&& guard = {})

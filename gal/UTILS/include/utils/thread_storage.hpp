@@ -12,9 +12,8 @@
  * may not be accessed from more than one thread simultaneously.
  */
 
-#include <unordered_map>
-
 #ifndef GAL_UTILS_NO_THREAD_STORAGE
+#include <unordered_map>
 #include <mutex>
 #include <shared_mutex>
 #endif
@@ -105,9 +104,9 @@ namespace gal::utils
 	class thread_storage
 	{
 	public:
+		#ifndef GAL_UTILS_NO_THREAD_STORAGE
 		using storage_type = std::unordered_map<const void*, T>;
 
-		#ifndef GAL_UTILS_NO_THREAD_STORAGE
 	private:
 		static storage_type& data() noexcept
 		{
@@ -116,7 +115,7 @@ namespace gal::utils
 		}
 
 	public:
-		thread_storage() = default;
+		thread_storage() noexcept = default;
 
 		thread_storage(const thread_storage&) = delete;
 		thread_storage& operator=(const thread_storage&) = delete;
@@ -125,20 +124,43 @@ namespace gal::utils
 
 		~thread_storage() noexcept { data().erase(this); }
 
-		T& operator*() noexcept { return data()[this]; }
+		// for types that cannot be default-initialized
+		template<typename... Args>
+			requires std::is_constructible_v<T, Args...>
+		void construct(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>) { data().try_emplace(this, std::forward<Args>(args)...); }
 
-		const T& operator*() const noexcept { return this->operator*(); }
+		T& operator*() noexcept requires std::is_default_constructible_v<T> { return data()[this]; }
 
-		T* operator->() noexcept { return &data()[this]; }
+		T& operator*() requires (not std::is_default_constructible_v<T>)
+		{
+			if (auto it = data().find(this);
+				it != data().end()) { return it->second; }
+			throw std::out_of_range{"Element not found"};
+		}
 
-		const T* operator->() const noexcept { return this->operator->(); }
+		const T& operator*() const noexcept requires std::is_default_constructible_v<T> { return const_cast<thread_storage&>(*this).operator*(); }
+
+		const T& operator*() const noexcept requires (not std::is_default_constructible_v<T>) { return const_cast<thread_storage&>(*this).operator*(); }
+
+		T* operator->() noexcept requires std::is_default_constructible_v<T> { return &data()[this]; }
+
+		T* operator->() noexcept requires (not std::is_default_constructible_v<T>)
+		{
+			if (auto it = data().find(this);
+				it != data().end()) { return &it->second; }
+			return nullptr;
+		}
+
+		const T* operator->() const noexcept requires std::is_default_constructible_v<T> { return const_cast<thread_storage&>(*this).operator->(); }
+
+		const T* operator->() const noexcept requires (not std::is_default_constructible_v<T>) { return const_cast<thread_storage&>(*this).operator->(); }
 
 		#else
 	private:
 		mutable T dummy_;
 
 	public:
-		constexpr thread_storage() = default;
+		constexpr thread_storage() noexcept = default;
 
 		constexpr T& operator*() const noexcept { return dummy_; }
 

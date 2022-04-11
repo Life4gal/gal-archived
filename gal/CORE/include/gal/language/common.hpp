@@ -213,7 +213,7 @@ namespace gal::lang
 					filename_type filename = "",
 					file_location location = {})
 				: location{location},
-				  filename{std::move(filename)} {}
+				  filename{filename} {}
 		};
 	}
 
@@ -563,7 +563,6 @@ namespace gal::lang
 				// for ast_node::remake_node
 				friend struct lang::ast_node;
 
-				// todo: do we really need to keep the text?
 				using text_type = foundation::string_type;
 				using identifier_type = foundation::string_view_type;
 
@@ -619,9 +618,9 @@ namespace gal::lang
 				explicit ast_node_common_base(
 						const ast_rtti_index_type index,
 						const identifier_type text,
-						parse_location&& location)
+						parse_location location)
 					: class_index_{index},
-					  location_{std::move(location)},
+					  location_{location},
 					  identifier_{text} {}
 
 				// for ast_node -> ast_node_tracer
@@ -715,15 +714,15 @@ namespace gal::lang
 			ast_node(
 					const common_detail::ast_rtti_index_type index,
 					const identifier_type identifier,
-					parse_location&& location,
+					const parse_location location,
 					children_type&& children = {})
-				: ast_node_common_base{index, identifier, std::move(location)},
+				: ast_node_common_base{index, identifier, location},
 				  children_{std::move(children)} {}
 
 			explicit ast_node(
 					ast_node_common_base&& base,
 					children_type&& children = {})
-				: ast_node_common_base{std::move(base)},
+				: ast_node_common_base{base},
 				  children_{std::move(children)} {}
 
 			[[nodiscard]] virtual foundation::boxed_value do_eval([[maybe_unused]] const foundation::dispatcher_detail::dispatcher_state& state, [[maybe_unused]] ast_visitor& visitor) const { throw std::runtime_error{"un-dispatched ast_node (internal error)"}; }
@@ -760,7 +759,7 @@ namespace gal::lang
 
 			template<typename NodeType, typename... Args>
 				requires std::is_base_of_v<ast_node, NodeType>
-			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) && { return lang::make_node<NodeType>(identifier_, std::move(location_), std::move(children_), std::forward<Args>(extra_args)...); }
+			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) && { return lang::make_node<NodeType>(identifier_, location_, std::move(children_), std::forward<Args>(extra_args)...); }
 
 			template<typename Function>
 				requires (std::is_invocable_v<Function, ast_node&> or std::is_invocable_v<Function, const ast_node&>)
