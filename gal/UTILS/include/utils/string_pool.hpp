@@ -130,13 +130,18 @@ namespace gal::utils
 		using block_iterator = typename pool_type::iterator;
 
 	public:
+		// todo: The borrower has many optimizations,
+		// such as separating the borrow pool from the actual pool,
+		// inserting strings into the borrower pool first,
+		// and then inserting it back into the actual pool when the borrower is destructed.
+		// The current implementation is to record where all strings are inserted, and then delete them one by one, which involves multiple moves (to move the following strings forward)
 		class block_borrower
 		{
+			std::reference_wrapper<string_pool> pool_;
 			// pair -> block memory view <=> which block
 			std::vector<std::pair<view_type, block_iterator>> borrowed_blocks_;
-			std::reference_wrapper<string_pool> pool_;
-
 			bool need_return_ = true;
+
 		public:
 			[[nodiscard]] constexpr bool need_return() const noexcept { return need_return_; }
 
@@ -155,7 +160,8 @@ namespace gal::utils
 				if (need_return_)
 				{
 					std::ranges::for_each(
-							borrowed_blocks_,
+							// back to front, because the last inserted string is saved at the end
+							borrowed_blocks_ | std::views::reverse,
 							[this](const auto& pair) mutable
 							{
 								auto& pool = pool_.get();
