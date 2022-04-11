@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <ranges>
 #include <utils/assert.hpp>
 #include <vector>
 
@@ -184,7 +185,7 @@ namespace gal::utils
 				// not only to insert the string, but also to save the inserted position
 				auto& pool = pool_.get();
 
-				auto [pos, _] = pool.find_or_create_block(str);
+				auto pos = pool.find_or_create_block(str);
 				return borrowed_blocks_.emplace_back(pool.append_str_into_block(str, pos), pos).first;
 			}
 
@@ -198,7 +199,7 @@ namespace gal::utils
 				// not only to insert the string, but also to save the inserted position
 				auto& pool = pool_.get();
 
-				auto [pos, _] = pool.find_or_create_block(size);
+				auto pos = pool.find_or_create_block(size);
 				return borrowed_blocks_.emplace_back({pool.borrow_raw_memory(size, pos), size}, pos).first.data();
 			}
 		};
@@ -226,19 +227,13 @@ namespace gal::utils
 
 		constexpr void return_raw_memory(view_type view, block_iterator pos) { this->return_raw_memory(view.data(), view.size(), pos); }
 
-		/**
-		 * @return pair.first == block position, pair.second == this is the new block.
-		 */
-		[[nodiscard]] constexpr std::pair<block_iterator, bool> find_or_create_block(const size_type size)
+		[[nodiscard]] constexpr block_iterator find_or_create_block(const size_type size)
 		{
-			if (const auto block = this->find_storable_block(size); block != pool_.end()) { return {block, false}; }
-			return {this->create_storable_block(size), true};
+			if (const auto block = this->find_storable_block(size); block != pool_.end()) { return block; }
+			return this->create_storable_block(size);
 		}
 
-		/**
-		 * @return pair.first == block position, pair.second == this is the new block.
-		 */
-		[[nodiscard]] constexpr std::pair<block_iterator, bool> find_or_create_block(const view_type str) { return this->find_or_create_block(str.size()); }
+		[[nodiscard]] constexpr block_iterator find_or_create_block(const view_type str) { return this->find_or_create_block(str.size()); }
 
 		[[nodiscard]] constexpr block_iterator find_first_possible_storable_block(const size_type size) noexcept
 		{
@@ -303,12 +298,12 @@ namespace gal::utils
 		/**
 		 * @brief Add a string to the pool, and then you can freely use the added string.
 		 */
-		constexpr view_type append(const view_type str) { return this->append_str_into_block(str, this->find_or_create_block(str).first); }
+		constexpr view_type append(const view_type str) { return this->append_str_into_block(str, this->find_or_create_block(str)); }
 
 		/**
 		 * @brief Borrow a block of memory to the pool, users can directly write strings in this memory area without worrying about its invalidation.
 		 */
-		[[nodiscard]] constexpr value_type* borrow_raw(const size_type size) { return this->borrow_raw_memory(size, this->find_or_create_block(size).first); }
+		[[nodiscard]] constexpr value_type* borrow_raw(const size_type size) { return this->borrow_raw_memory(size, this->find_or_create_block(size)); }
 
 		/**
 		 * @brief User needs to temporarily use some memory area to store the string and return it later
