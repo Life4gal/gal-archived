@@ -44,7 +44,7 @@ namespace gal::utils
 				else { return str.length(); }
 			}
 
-			[[nodiscard]] constexpr view_type append(const view_type str)
+			[[nodiscard]] constexpr view_type append(const view_type str) noexcept
 			{
 				if (not this->storable(str))
 				{
@@ -61,7 +61,7 @@ namespace gal::utils
 				return {dest, str.length()};
 			}
 
-			[[nodiscard]] constexpr value_type* take(const size_type size)
+			[[nodiscard]] constexpr value_type* borrow_raw(const size_type size) noexcept
 			{
 				if (not this->storable(size))
 				{
@@ -75,6 +75,27 @@ namespace gal::utils
 				size_ += size;
 
 				return dest;
+			}
+
+			constexpr void return_raw(value_type* raw, const size_type size) noexcept
+			{
+				auto memory_data = memory_.get();
+
+				gal_assert(memory_data >= (raw - (size_ - size)), "The given memory does not belong to this block");
+
+				if (memory_data > (raw - (size_ - size)))
+				{
+					// In this case, new string is inserted after the memory is borrowed, and the newly added string needs to be moved to the front
+					auto move_dest = raw;
+					auto move_source = raw + size;
+					auto move_size = size_ - size - (raw - memory_data);
+
+					std::ranges::copy(move_source, move_source + move_size, move_dest);
+				}
+
+				size_ -= size;
+
+				if constexpr (is_null_terminate) { memory_.get()[size_] = 0; }
 			}
 
 			[[nodiscard]] constexpr bool storable(const view_type str) const noexcept { return available_space() >= this->length_of(str); }
@@ -108,6 +129,75 @@ namespace gal::utils
 
 		using block_iterator = typename pool_type::iterator;
 
+	public:
+		class block_borrower
+		{
+			// pair -> block memory view <=> which block
+			std::vector<std::pair<view_type, block_iterator>> borrowed_blocks_;
+			std::reference_wrapper<string_pool> pool_;
+
+			bool need_return_ = true;
+		public:
+			[[nodiscard]] constexpr bool need_return() const noexcept { return need_return_; }
+
+			constexpr void break_promise() noexcept { need_return_ = false; }
+
+			explicit constexpr block_borrower(string_pool& pool) noexcept
+				: pool_{pool} {}
+
+			constexpr block_borrower(const block_borrower&) = delete;
+			constexpr block_borrower& operator=(const block_borrower&) = delete;
+			constexpr block_borrower(block_borrower&&) noexcept = default;
+			constexpr block_borrower& operator=(block_borrower&&) = default;
+
+			constexpr ~block_borrower() noexcept
+			{
+				if (need_return_)
+				{
+					std::ranges::for_each(
+							borrowed_blocks_,
+							[this](const auto& pair) mutable
+							{
+								auto& pool = pool_.get();
+
+								pool.return_raw_memory(pair.first, pair.second);
+								// todo: maybe a lock is needed here?
+								// erase is not performed because the target may still have memory in use.
+								// pool.erase(pair.second);
+							});
+				}
+			}
+
+			/**
+			 * @brief Add a string to the pool, and then you can freely use the added string.
+			 */
+			constexpr view_type append(const view_type str)
+			{
+				// see also: string_pool::append
+
+				// not only to insert the string, but also to save the inserted position
+				auto& pool = pool_.get();
+
+				auto [pos, _] = pool.find_or_create_block(str);
+				return borrowed_blocks_.emplace_back(pool.append_str_into_block(str, pos), pos).first;
+			}
+
+			/**
+			 * @brief Borrow a block of memory to the pool, users can directly write strings in this memory area without worrying about its invalidation.
+			 */
+			[[nodiscard]] constexpr value_type* borrow_raw(const size_type size)
+			{
+				// see also: string_pool::borrow_raw
+
+				// not only to insert the string, but also to save the inserted position
+				auto& pool = pool_.get();
+
+				auto [pos, _] = pool.find_or_create_block(size);
+				return borrowed_blocks_.emplace_back({pool.borrow_raw_memory(size, pos), size}, pos).first.data();
+			}
+		};
+
+	private:
 		[[nodiscard]] constexpr view_type append_str_into_block(const view_type str, block_iterator pos)
 		{
 			const auto ret = pos->append(str);
@@ -115,20 +205,34 @@ namespace gal::utils
 			return ret;
 		}
 
-		[[nodiscard]] constexpr value_type* take_raw_memory(const size_type size, block_iterator pos)
+		[[nodiscard]] constexpr value_type* borrow_raw_memory(const size_type size, block_iterator pos)
 		{
-			auto raw = pos->take(size);
+			auto raw = pos->borrow_raw(size);
 			this->shake_it(pos);
 			return raw;
 		}
 
-		[[nodiscard]] constexpr block_iterator find_or_create_block(const size_type size)
+		constexpr void return_raw_memory(value_type* raw, const size_type size, block_iterator pos)
 		{
-			if (const auto block = this->find_storable_block(size); block != pool_.end()) { return block; }
-			return this->create_storable_block(size);
+			pos->return_raw(raw, size);
+			this->shake_it(pos);
 		}
 
-		[[nodiscard]] constexpr block_iterator find_or_create_block(const view_type str) { return this->find_or_create_block(str.size()); }
+		constexpr void return_raw_memory(view_type view, block_iterator pos) { this->return_raw_memory(view.data(), view.size(), pos); }
+
+		/**
+		 * @return pair.first == block position, pair.second == this is the new block.
+		 */
+		[[nodiscard]] constexpr std::pair<block_iterator, bool> find_or_create_block(const size_type size)
+		{
+			if (const auto block = this->find_storable_block(size); block != pool_.end()) { return {block, false}; }
+			return {this->create_storable_block(size), true};
+		}
+
+		/**
+		 * @return pair.first == block position, pair.second == this is the new block.
+		 */
+		[[nodiscard]] constexpr std::pair<block_iterator, bool> find_or_create_block(const view_type str) { return this->find_or_create_block(str.size()); }
 
 		[[nodiscard]] constexpr block_iterator find_first_possible_storable_block(const size_type size) noexcept
 		{
@@ -152,7 +256,7 @@ namespace gal::utils
 
 		[[nodiscard]] constexpr block_iterator create_storable_block(const size_type size)
 		{
-			pool_.emplace_back(std::ranges::max(capacity_, size));
+			pool_.emplace_back(std::ranges::max(capacity_, size + IsNullTerminate));
 			return std::ranges::prev(pool_.end());
 		}
 
@@ -190,9 +294,20 @@ namespace gal::utils
 				...);
 		}
 
-		constexpr view_type append(const view_type str) { return this->append_str_into_block(str, this->find_or_create_block(str)); }
+		/**
+		 * @brief Add a string to the pool, and then you can freely use the added string.
+		 */
+		constexpr view_type append(const view_type str) { return this->append_str_into_block(str, this->find_or_create_block(str).first); }
 
-		[[nodiscard]] constexpr value_type* take(const size_type size) { return this->take_raw_memory(size, this->find_or_create_block(size)); }
+		/**
+		 * @brief Borrow a block of memory to the pool, users can directly write strings in this memory area without worrying about its invalidation.
+		 */
+		[[nodiscard]] constexpr value_type* borrow_raw(const size_type size) { return this->borrow_raw_memory(size, this->find_or_create_block(size).first); }
+
+		/**
+		 * @brief User needs to temporarily use some memory area to store the string and return it later
+		 */
+		[[nodiscard]] constexpr block_borrower borrow_block() noexcept { return block_borrower{*this}; }
 
 		[[nodiscard]] constexpr size_type size() const noexcept { return pool_.size(); }
 

@@ -101,7 +101,7 @@ namespace gal::lang::lang
 
 			if (size == 0) { return {}; }
 
-			auto dest = pool.take(size);
+			auto dest = pool.borrow_raw(size);
 			file.read(dest, size);
 			return {dest, static_cast<foundation::string_view_type::size_type>(size)};
 		}
