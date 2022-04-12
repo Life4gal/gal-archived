@@ -360,7 +360,7 @@ namespace gal::lang
 			using operator_name_type = std::string_view;
 			using group_id_type = std::size_t;
 
-			constexpr static group_id_type group_ids[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10};
+			constexpr static group_id_type group_ids[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 
 			constexpr static std::array m0{
 					operator_name_type{lang::operator_logical_and_name::value}};

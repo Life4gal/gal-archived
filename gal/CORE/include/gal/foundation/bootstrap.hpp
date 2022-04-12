@@ -14,7 +14,7 @@ namespace gal::lang::foundation
 {
 	template<typename T>
 		requires std::is_array_v<T>
-	void register_array_type(const std::string_view name, engine_core& core)
+	void register_array_type(const string_view_type name, engine_core& core)
 	{
 		using return_type = std::remove_extent_t<T>;
 

@@ -162,6 +162,11 @@ namespace gal::utils
 	public:
 		constexpr thread_storage() noexcept = default;
 
+		template<typename... Args>
+		requires std::is_constructible_v<T, Args...>
+		explicit constexpr thread_storage(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+			: dummy_{std::forward<Args>(args)...} {}
+
 		constexpr T& operator*() const noexcept { return dummy_; }
 
 		constexpr T* operator->() const noexcept { return &this->operator*(); }

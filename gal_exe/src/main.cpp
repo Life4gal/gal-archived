@@ -19,8 +19,6 @@
 #include <gal/language/engine.hpp>
 #include <gal/gal_basic.hpp>
 #include <gal/foundation/bootstrap_stl.hpp>
+#include <gal/foundation/standard_library.hpp>
 
-int main()
-{
-	std::cout << "hello " << gal::lang::lang::dynamic_object_type_name::value << '\n';
-}
+int main() { std::cout << "hello " << gal::lang::lang::dynamic_object_type_name::value << '\n'; }

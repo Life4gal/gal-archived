@@ -241,12 +241,45 @@ namespace gal::lang::lang
 	//*********************************************
 	// container interface
 	//*********************************************
+	using vector_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("vector");
+	using list_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("list");
+	using map_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("map");
+	using string_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("string");
+	using pair_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("pair");
+
 	using container_subscript_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("[]");
 	using container_size_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("size");
-	using container_range_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("range");
 	using container_empty_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("empty");
+	using container_clear_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("clear");
+	using container_begin_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("begin");
+	using container_end_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("end");
 	using container_front_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("front");
+	using container_back_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("back");
+	using container_resize_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("resize");
+	using container_reserve_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("reserve");
+	using container_capacity_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("capacity");
+	using container_insert_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("insert_at");
+	// when container's value type is boxed_value
+	using container_insert_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("insert_ref_at");
+	using container_erase_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("erase_at");
+	using container_push_back_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_back");
+	// when container's value type is boxed_value
+	using container_push_back_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_back_ref");
+	using container_pop_back_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("pop_back");
+	using container_push_front_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_front");
+	// when container's value type is boxed_value
+	using container_push_front_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_front_ref");
 	using container_pop_front_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("pop_front");
+	using container_find_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("find");
+
+	// combined with associative containers, it is used to quickly register pairs of associative containers
+	using pair_suffix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("_pair");
+	using pair_first_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("first");
+	using pair_second_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("second");
+
+	// a container view
+	using range_suffix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("_range");
+	using container_range_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("range");
 
 	//*********************************************
 	// common operators & interface

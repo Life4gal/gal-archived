@@ -17,6 +17,9 @@ namespace gal::lang::foundation
 		template<typename T, typename Name = lang::operator_assign_name>
 		static void register_assign(engine_core& core) { register_operator<T, Name>(core, [](T& lhs, const T& rhs) -> T& { return lhs = rhs; }); }
 
+		template<typename T, typename Name = lang::operator_assign_name>
+		static void register_move_assign(engine_core& core) { register_operator<T, Name>(core, [](T& lhs, T&& rhs) -> T& { return lhs = std::forward<T>(rhs); }); }
+
 		template<typename T, typename Name = lang::operator_equal_name>
 		static void register_equal(engine_core& core) { register_operator<T, Name>(core, [](const T& lhs, const T& rhs) -> bool { return lhs == rhs; }); }
 
