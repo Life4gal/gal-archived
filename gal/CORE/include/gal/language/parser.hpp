@@ -3,8 +3,10 @@
 #ifndef GAL_LANG_LANGUAGE_PARSER_HPP
 #define GAL_LANG_LANGUAGE_PARSER_HPP
 
+#include <gal/language/eval.hpp>
 #include <gal/language/common.hpp>
 #include <utils/string_utils.hpp>
+#include <utils/utility_base.hpp>
 
 namespace gal::lang
 {
@@ -346,7 +348,7 @@ namespace gal::lang
 
 			[[nodiscard]] constexpr bool read_char(const char c) noexcept
 			{
-				if (const auto n = peek(); n != invalid_char && n != c)
+				if (const auto n = peek(); n != invalid_char && n == c)
 				{
 					this->operator++();
 					return true;
@@ -508,33 +510,29 @@ namespace gal::lang
 		class parser final : public parser_detail::parser_base
 		{
 		private:
-			struct scoped_parser : utils::scoped_object<scoped_parser>
+			struct scoped_parser : utils::scoped_base<scoped_parser, std::reference_wrapper<parser>>
 			{
-				friend struct utils::scoped_object<scoped_parser>;
+				friend struct scoped_base<scoped_parser, std::reference_wrapper<parser>>;
 
-			private:
-				std::reference_wrapper<parser> p_;
-
-			public:
 				constexpr explicit scoped_parser(parser& p)
-					: p_{p} {}
+					: scoped_base{p} {}
 
 			private:
 				constexpr void do_construct() const
 				{
-					if (auto& depth = p_.get().current_parse_depth_;
-						depth >= p_.get().max_parse_depth_)
+					if (auto& depth = data().get().current_parse_depth_;
+						depth >= data().get().max_parse_depth_)
 					{
 						throw exception::eval_error{
-								std_format::format("Maximum parse depth '{}' exceeded", p_.get().max_parse_depth_),
-								p_.get().filename_,
-								p_.get().point_
+								std_format::format("Maximum parse depth '{}' exceeded", data().get().max_parse_depth_),
+								data().get().filename_,
+								data().get().point_
 						};
 					}
 					else { ++depth; }
 				}
 
-				constexpr void do_destruct() const noexcept { --p_.get().current_parse_depth_; }
+				constexpr void do_destruct() const noexcept { --data().get().current_parse_depth_; }
 			};
 
 			parser_detail::parse_point point_;
@@ -550,7 +548,7 @@ namespace gal::lang
 			ast_node::children_type match_stack_;
 
 			/**
-			 * @throw eval_error if is not a valid object name
+			 * @throw exception::eval_error if is not a valid object name
 			 */
 			void check_object_name(const name_validator::name_type name) const
 			{
@@ -734,10 +732,12 @@ namespace gal::lang
 			/**
 			 * @brief Skips whitespace, which means space and tab, but not cr/lf
 			 *
-			 * @throw eval_error Illegal character read
+			 * @throw exception::eval_error Illegal character read
 			 */
 			bool skip_whitespace(const bool skip_cr_lf = false)
 			{
+				bool result = false;
+
 				while (not point_.finish())
 				{
 					if (const auto c = point_[0];
@@ -754,15 +754,14 @@ namespace gal::lang
 							}
 							++point_;
 
-							return true;
+							result = true;
 						}
-
-						if (skip_comment()) { return true; }
-						break;
+						else if (skip_comment()) { result = true; }
+						else { break; }
 					}
 				}
 
-				return false;
+				return result;
 			}
 
 			/**
@@ -890,9 +889,9 @@ namespace gal::lang
 			/**
 			 * @brief Reads an identifier from input which conforms to identifier naming conventions, without skipping initial whitespace
 			 *
-			 * @throw eval_error Carriage return in identifier literal
-			 * @throw eval_error Missing contents of identifier literal
-			 * @throw eval_error Incomplete identifier literal
+			 * @throw exception::eval_error Carriage return in identifier literal
+			 * @throw exception::eval_error Missing contents of identifier literal
+			 * @throw exception::eval_error Incomplete identifier literal
 			 */
 			[[nodiscard]] bool read_identifier()
 			{
@@ -1142,7 +1141,7 @@ namespace gal::lang
 			/**
 			 * @brief Reads a quoted string from input, without skipping initial whitespace
 			 *
-			 * @throw eval_error Unclosed quoted string
+			 * @throw exception::eval_error Unclosed quoted string
 			 */
 			[[nodiscard]] bool read_quoted_string()
 			{
@@ -1184,7 +1183,7 @@ namespace gal::lang
 			/**
 			 * @brief Reads a character group from input, without skipping initial whitespace
 			 *
-			 * @throw eval_error Unclosed single-quoted string
+			 * @throw exception::eval_error Unclosed single-quoted string
 			 */
 			[[nodiscard]] bool read_single_quoted_string()
 			{
@@ -1226,7 +1225,7 @@ namespace gal::lang
 			/**
 			 * @brief Reads a char or a symbol from input depend on Name
 			 *
-			 * @throw eval_error throw from read_char(' ') || read_symbol(" ")
+			 * @throw exception::eval_error throw from read_char(' ') || read_symbol(" ")
 			 */
 			template<typename Name>
 			[[nodiscard]] bool build_any()
@@ -1239,7 +1238,7 @@ namespace gal::lang
 			/**
 			 * @brief Reads (and potentially captures) a char from input if it matches the parameter
 			 *
-			 * @throw eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error throw from skip_whitespace()
 			 */
 			[[nodiscard]] bool build_char(const char c) noexcept
 			{
@@ -1251,7 +1250,7 @@ namespace gal::lang
 			/**
 			 * @brief Reads until the end of the current statement
 			 *
-			 * @throw eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error throw from skip_whitespace()
 			 */
 			[[nodiscard]] bool build_eos()
 			{
@@ -1264,7 +1263,7 @@ namespace gal::lang
 			/**
 			 * @brief Reads (and potentially captures) an end-of-line group from input
 			 *
-			 * @throw eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error throw from skip_whitespace()
 			 */
 			[[nodiscard]] bool build_eol()
 			{
@@ -1277,7 +1276,7 @@ namespace gal::lang
 			/**
 			 * @brief Reads a number from the input, detecting if it's an integer or floating point
 			 *
-			 * @throw eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error throw from skip_whitespace()
 			 */
 			[[nodiscard]] bool build_number()
 			{
@@ -1331,8 +1330,8 @@ namespace gal::lang
 			/**
 			 * @brief Reads (and potentially captures) an identifier from input
 			 *
-			 * @throw eval_error throw from read_identifier()
-			 * @throw eval_error throw from check_object_name(name)
+			 * @throw exception::eval_error throw from read_identifier()
+			 * @throw exception::eval_error throw from check_object_name(name)
 			 */
 			[[nodiscard]] bool build_identifier(const bool need_validate_name)
 			{
@@ -1444,7 +1443,7 @@ namespace gal::lang
 			/**
 			 * @brief Reads an argument from input
 			 *
-			 * @throw eval_error throw from read_identifier(true)
+			 * @throw exception::eval_error throw from read_identifier(true)
 			 */
 			[[nodiscard]] bool build_argument(const bool allow_set_type = true)
 			{
@@ -1501,8 +1500,8 @@ namespace gal::lang
 			/**
 			 * @brief Reads a comma-separated list of values from input. Id's only, no types allowed
 			 *
-			 * @throw eval_error throw from skip_whitespace()
-			 * @throw eval_error Unexpected value in parameter list
+			 * @throw exception::eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error Unexpected value in parameter list
 			 */
 			[[nodiscard]] bool build_identifier_argument_list()
 			{
@@ -1513,8 +1512,8 @@ namespace gal::lang
 			/**
 			 * @brief Reads a comma-separated list of values from input, for function declarations
 			 *
-			 * @throw eval_error throw from skip_whitespace()
-			 * @throw eval_error Unexpected value in parameter list
+			 * @throw exception::eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error Unexpected value in parameter list
 			 */
 			[[nodiscard]] bool build_decl_argument_list()
 			{
@@ -1525,8 +1524,8 @@ namespace gal::lang
 			/**
 			 * @brief Reads a comma-separated list of values from input
 			 *
-			 * @throw eval_error throw from skip_whitespace()
-			 * @throw eval_error Unexpected value in parameter list
+			 * @throw exception::eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error Unexpected value in parameter list
 			 */
 			[[nodiscard]] bool build_argument_list()
 			{
@@ -1537,9 +1536,9 @@ namespace gal::lang
 			/**
 			 * @brief Reads possible special container values, including ranges and map_pairs
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ") || skip_whitespace(true) || build_eol()
-			 * @throw eval_error throw from build_value_range() || build_map_pair() || build_operator()
-			 * @throw eval_error Unexpected comma(,) or value in container
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ") || skip_whitespace(true) || build_eol()
+			 * @throw exception::eval_error throw from build_value_range() || build_map_pair() || build_operator()
+			 * @throw exception::eval_error Unexpected comma(,) or value in container
 			 */
 			[[nodiscard]] bool build_container_argument_list()
 			{
@@ -1606,12 +1605,12 @@ namespace gal::lang
 			/**
 			 * @brief Reads a lambda (anonymous function) from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_identifier_argument_list()
-			 * @throw eval_error throw from build_block()
-			 * @throw eval_error Incomplete anonymous function bind
-			 * @throw eval_error Incomplete anonymous function
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_identifier_argument_list()
+			 * @throw exception::eval_error throw from build_block()
+			 * @throw exception::eval_error Incomplete anonymous function bind
+			 * @throw exception::eval_error Incomplete anonymous function
 			 */
 			[[nodiscard]] bool build_lambda()
 			{
@@ -1674,16 +1673,16 @@ namespace gal::lang
 			/**
 			 * @brief Reads a function definition from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_eos() || build_eol()
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_identifier(true)
-			 * @throw eval_error throw from build_decl_argument_list()
-			 * @throw eval_error throw from build_block()
-			 * @throw eval_error Missing function name in definition
-			 * @throw eval_error Missing method name in definition
-			 * @throw eval_error Incomplete function definition
-			 * @throw eval_error Missing guard expression for function
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_eos() || build_eol()
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_identifier(true)
+			 * @throw exception::eval_error throw from build_decl_argument_list()
+			 * @throw exception::eval_error throw from build_block()
+			 * @throw exception::eval_error Missing function name in definition
+			 * @throw exception::eval_error Missing method name in definition
+			 * @throw exception::eval_error Incomplete function definition
+			 * @throw exception::eval_error Missing guard expression for function
 			 */
 			[[nodiscard]] bool build_def(const bool class_context = false, const foundation::string_view_type class_name = "")
 			{
@@ -1763,14 +1762,14 @@ namespace gal::lang
 			/**
 			 * @brief Reads an if/else if/else block from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_eol()
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_equation()
-			 * @throw eval_error throw from build_block()
-			 * @throw eval_error Incomplete 'if' expression
-			 * @throw eval_error Incomplete 'if' expression, missing ':'
-			 * @throw eval_error Incomplete 'if' expression, missing block
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_eol()
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_equation()
+			 * @throw exception::eval_error throw from build_block()
+			 * @throw exception::eval_error Incomplete 'if' expression
+			 * @throw exception::eval_error Incomplete 'if' expression, missing ':'
+			 * @throw exception::eval_error Incomplete 'if' expression, missing block
 			 * Incomplete 'else' expression, missing block
 			 */
 			[[nodiscard]] bool build_if()
@@ -1848,14 +1847,14 @@ namespace gal::lang
 			/**
 			 * @brief Reads a while block from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_eol()
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_equation()
-			 * @throw eval_error throw from build_block()
-			 * @throw eval_error Incomplete 'while' expression
-			 * @throw eval_error Incomplete 'if' expression, missing ':'
-			 * @throw eval_error Incomplete 'if' expression, missing block
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_eol()
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_equation()
+			 * @throw exception::eval_error throw from build_block()
+			 * @throw exception::eval_error Incomplete 'while' expression
+			 * @throw exception::eval_error Incomplete 'if' expression, missing ':'
+			 * @throw exception::eval_error Incomplete 'if' expression, missing block
 			 */
 			[[nodiscard]] bool build_while()
 			{
@@ -1899,14 +1898,14 @@ namespace gal::lang
 			/**
 			 * @brief Reads a for block from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_eol()
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_equation()
-			 * @throw eval_error throw from build_block()
-			 * @throw eval_error Incomplete 'for' expression
-			 * @throw eval_error Incomplete 'ranged-for' expression
-			 * @throw eval_error Incomplete 'for' expression, missing block
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_eol()
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_equation()
+			 * @throw exception::eval_error throw from build_block()
+			 * @throw exception::eval_error Incomplete 'for' expression
+			 * @throw exception::eval_error Incomplete 'ranged-for' expression
+			 * @throw exception::eval_error Incomplete 'for' expression, missing block
 			 */
 			[[nodiscard]] bool build_for()
 			{
@@ -1928,13 +1927,13 @@ namespace gal::lang
 
 					if (not(build_equation() && build_eol()))
 					{
-						if (not build_eol()) { return false; }
+						if (not build_any<keyword_for_loop_variable_delimiter_name>()) { return false; }
 						match_stack_.emplace_back(lang::make_node<noop_ast_node>());
 					}
 
 					if (not(build_equation() && build_eol()))
 					{
-						if (not build_eol()) { return false; }
+						if (not build_any<keyword_for_loop_variable_delimiter_name>()) { return false; }
 						match_stack_.emplace_back(lang::make_node<constant_ast_node>(const_var(true)));
 					}
 
@@ -1998,18 +1997,18 @@ namespace gal::lang
 			/**
 			 * @brief Reads a switch statement from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_eol()
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_equation()
-			 * @throw eval_error throw from build_block()
-			 * @throw eval_error Incomplete 'switch' expression
-			 * @throw eval_error Incomplete 'switch' expression, missing ':'
-			 * @throw eval_error Incomplete 'switch-case' expression
-			 * @throw eval_error Incomplete 'switch-case' expression, missing ':'
-			 * @throw eval_error Incomplete 'switch-case' expression, missing block
-			 * @throw eval_error Incomplete 'switch-default' expression, missing ':'
-			 * @throw eval_error Incomplete 'switch-default' expression, missing block
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_eol()
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_equation()
+			 * @throw exception::eval_error throw from build_block()
+			 * @throw exception::eval_error Incomplete 'switch' expression
+			 * @throw exception::eval_error Incomplete 'switch' expression, missing ':'
+			 * @throw exception::eval_error Incomplete 'switch-case' expression
+			 * @throw exception::eval_error Incomplete 'switch-case' expression, missing ':'
+			 * @throw exception::eval_error Incomplete 'switch-case' expression, missing block
+			 * @throw exception::eval_error Incomplete 'switch-default' expression, missing ':'
+			 * @throw exception::eval_error Incomplete 'switch-default' expression, missing block
 			 */
 			[[nodiscard]] bool build_switch()
 			{
@@ -2135,41 +2134,41 @@ namespace gal::lang
 			/**
 			 * @brief Reads a break statement from input
 			 *
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_operator()
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_operator()
 			 */
 			[[nodiscard]] bool build_break() { return do_build_keyword_statement<break_ast_node, keyword_break_name>(); }
 
 			/**
 			 * @brief Reads a continue statement from input
 			 *
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_operator()
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_operator()
 			 */
 			[[nodiscard]] bool build_continue() { return do_build_keyword_statement<continue_ast_node, keyword_continue_name>(); }
 
 			/**
 			 * @brief Reads a return statement from input
 			 *
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_operator()
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_operator()
 			 */
 			[[nodiscard]] bool build_return() { return do_build_keyword_statement<return_ast_node, keyword_return_name>(); }
 
 			/**
 			 * @brief Reads a function definition from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_eol()
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_block()
-			 * @throw eval_error Incomplete 'try' block, missing ':'
-			 * @throw eval_error Incomplete 'try' block, missing block
-			 * @throw eval_error Incomplete 'try-catch' expression
-			 * @throw eval_error Incomplete 'try-catch' expression, missing ':'
-			 * @throw eval_error Incomplete 'try-catch' expression, missing block
-			 * @throw eval_error Incomplete 'try-finally' expression, missing ':'
-			 * @throw eval_error Incomplete 'try-finally' expression, missing block
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_eol()
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_block()
+			 * @throw exception::eval_error Incomplete 'try' block, missing ':'
+			 * @throw exception::eval_error Incomplete 'try' block, missing block
+			 * @throw exception::eval_error Incomplete 'try-catch' expression
+			 * @throw exception::eval_error Incomplete 'try-catch' expression, missing ':'
+			 * @throw exception::eval_error Incomplete 'try-catch' expression, missing block
+			 * @throw exception::eval_error Incomplete 'try-finally' expression, missing ':'
+			 * @throw exception::eval_error Incomplete 'try-finally' expression, missing block
 			 */
 			[[nodiscard]] bool build_try()
 			{
@@ -2268,13 +2267,13 @@ namespace gal::lang
 			/**
 			 * @brief Reads a class block from input
 			 *
-			 * @throw eval_error throw from build_keyword(" ")
-			 * @throw eval_error throw from build_identifier(true)
-			 * @throw eval_error throw from build_eol()
-			 * @throw eval_error throw from build_class_block(" ")
-			 * @throw eval_error Class definitions only allowed at top scope
-			 * @throw eval_error Missing class name in definition
-			 * @throw eval_error Incomplete 'class' block
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_identifier(true)
+			 * @throw exception::eval_error throw from build_eol()
+			 * @throw exception::eval_error throw from build_class_block(" ")
+			 * @throw exception::eval_error Class definitions only allowed at top scope
+			 * @throw exception::eval_error Missing class name in definition
+			 * @throw exception::eval_error Incomplete 'class' block
 			 */
 			[[nodiscard]] bool build_class(const bool class_allowed)
 			{
@@ -2319,8 +2318,8 @@ namespace gal::lang
 			 * @brief Reads (and potentially captures) a quoted string from input.
 			 * Translates escaped sequences.
 			 *
-			 * @throw eval_error throw from skip_whitespace()
-			 * @throw eval_error Unclosed in-string eval
+			 * @throw exception::eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error Unclosed in-string eval
 			 */
 			[[nodiscard]] bool build_quoted_string()
 			{
@@ -2421,8 +2420,8 @@ namespace gal::lang
 			 * @brief Reads (and potentially captures) a char group from input.
 			 * Translates escaped sequences.
 			 *
-			 * @throw eval_error throw from skip_whitespace()
-			 * @throw eval_error Single-quoted strings must be 1 character long
+			 * @throw exception::eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error Single-quoted strings must be 1 character long
 			 */
 			[[nodiscard]] bool build_single_quoted_string()
 			{
@@ -2457,7 +2456,7 @@ namespace gal::lang
 			/**
 			 * @brief Reads (and potentially captures) a string from input if it matches the parameter
 			 *
-			 * @throw eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error throw from skip_whitespace()
 			 */
 			[[nodiscard]] bool build_keyword(const foundation::string_view_type symbol)
 			{
@@ -2478,7 +2477,7 @@ namespace gal::lang
 			/**
 			 * @brief Reads (and potentially captures) a symbol group from input if it matches the parameter
 			 *
-			 * @throw eval_error throw from skip_whitespace()
+			 * @throw exception::eval_error throw from skip_whitespace()
 			 */
 			[[nodiscard]] bool build_symbol(const foundation::string_view_type symbol, const bool disallow_prevention = false)
 			{
@@ -2506,9 +2505,9 @@ namespace gal::lang
 			/**
 			 * @brief Parses a variable specified with a & aka reference
 			 *
-			 * @throw eval_error throw from build_symbol("&")
-			 * @throw eval_error throw from build_identifier(true)
-			 * @throw eval_error Incomplete '&'(aka reference) expression
+			 * @throw exception::eval_error throw from build_symbol("&")
+			 * @throw exception::eval_error throw from build_identifier(true)
+			 * @throw exception::eval_error Incomplete '&'(aka reference) expression
 			 */
 			[[nodiscard]] bool build_reference()
 			{
@@ -2528,10 +2527,10 @@ namespace gal::lang
 			/**
 			 * @brief Reads an expression surrounded by parentheses from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_operator()
-			 * @throw eval_error Incomplete expression
-			 * @throw eval_error Missing closing parenthesis
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_operator()
+			 * @throw exception::eval_error Incomplete expression
+			 * @throw exception::eval_error Missing closing parenthesis
 			 */
 			[[nodiscard]] bool build_paren_expression()
 			{
@@ -2549,9 +2548,9 @@ namespace gal::lang
 			/**
 			 * @brief Reads, and identifies, a short-form container initialization from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_container_argument_list()
-			 * @throw eval_error Incomplete inline container initializer, missing closing bracket
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_container_argument_list()
+			 * @throw exception::eval_error Incomplete inline container initializer, missing closing bracket
 			 */
 			[[nodiscard]] bool build_inline_container()
 			{
@@ -2615,27 +2614,27 @@ namespace gal::lang
 			/**
 			 * @brief Reads a pair of values used to create a map initialization from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_operator()
-			 * @throw eval_error Incomplete map pair, missing the second
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_operator()
+			 * @throw exception::eval_error Incomplete map pair, missing the second
 			 */
 			[[nodiscard]] bool build_map_pair() { return do_build_pair<map_pair_ast_node, keyword_map_pair_split_name>(); }
 
 			/**
 			 * @brief Reads a pair of values used to create a range initialization from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_operator()
-			 * @throw eval_error Incomplete value_range pair, missing the second
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_operator()
+			 * @throw exception::eval_error Incomplete value_range pair, missing the second
 			 */
 			[[nodiscard]] bool build_value_range() { return do_build_pair<value_range_ast_node, keyword_value_range_split_name>(); }
 
 			/**
 			 * @brief Reads a unary prefixed expression from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_operator(group_id)
-			 * @throw Incomplete unary prefix expression
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_operator(group_id)
+			 * @throw exception::eval_error Incomplete unary prefix expression
 			 */
 			[[nodiscard]] bool build_unary_expression()
 			{
@@ -2667,13 +2666,13 @@ namespace gal::lang
 			/**
 			 * @brief Reads a dot expression(member access), then proceeds to check if it's a function or array call
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_identifier(true) || build_lambda() || build_number() || build_quoted_string() || build_single_quoted_string() || build_paren_expression() || build_inline_container()
-			 * @throw eval_error throw from build_argument_list()
-			 * @throw eval_error throw from build_operator()
-			 * @throw eval_error throw from build_eol()
-			 * @throw eval_error Incomplete function call
-			 * @throw eval_error Incomplete array access
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_identifier(true) || build_lambda() || build_number() || build_quoted_string() || build_single_quoted_string() || build_paren_expression() || build_inline_container()
+			 * @throw exception::eval_error throw from build_argument_list()
+			 * @throw exception::eval_error throw from build_operator()
+			 * @throw exception::eval_error throw from build_eol()
+			 * @throw exception::eval_error Incomplete function call
+			 * @throw exception::eval_error Incomplete array access
 			 */
 			[[nodiscard]] bool build_dot_fun_call()
 			{
@@ -2803,12 +2802,12 @@ namespace gal::lang
 			/**
 			 * @brief Reads a variable declaration from input
 			 *
-			 * @throw eval_error throw from build_keyword("decl") || build_keyword("var") || build_keyword("global")
-			 * @throw eval_error throw from build_identifier(true)
-			 * @throw eval_error throw from build_reference()
-			 * @throw eval_error Incomplete member declaration
-			 * @throw eval_error Incomplete variable declaration
-			 * @throw eval_error Incomplete global declaration
+			 * @throw exception::eval_error throw from build_keyword("decl") || build_keyword("var") || build_keyword("global")
+			 * @throw exception::eval_error throw from build_identifier(true)
+			 * @throw exception::eval_error throw from build_reference()
+			 * @throw exception::eval_error Incomplete member declaration
+			 * @throw exception::eval_error Incomplete variable declaration
+			 * @throw exception::eval_error Incomplete global declaration
 			 */
 			[[nodiscard]] bool build_var_decl(const bool class_context = false, const foundation::string_view_type class_name = "")
 			{
@@ -2865,17 +2864,19 @@ namespace gal::lang
 			/**
 			 * @brief Parses any of a group of 'value' style ast_node groups from input
 			 *
-			 * @throw eval_error throw from build_unary_expression() || build_dot_fun_call() || build_var_decl()
+			 * @throw exception::eval_error throw from build_unary_expression() || build_dot_fun_call() || build_var_decl()
 			 */
 			[[nodiscard]] bool build_value()
 			{
 				scoped_parser p{*this};
-				return build_unary_expression() || build_dot_fun_call() || build_var_decl();
+				// todo: Although these branches do not have no side effects on the `state` of the parser, misjudgment can have a significant effect on the `efficiency` of the parser.
+				// We need to be careful about the order of these branches.
+				return build_var_decl() || build_dot_fun_call() || build_unary_expression();
 			}
 
 			/**
-			 * @throw eval_error throw from build_eol()
-			 * @throw eval_error Incomplete expression
+			 * @throw exception::eval_error throw from build_eol()
+			 * @throw exception::eval_error Incomplete expression
 			 */
 			[[nodiscard]] bool build_operator(const parser_detail::operator_matcher::group_id_type group_id = parser_detail::operator_matcher::group_ids[0])
 			{
@@ -2937,10 +2938,10 @@ namespace gal::lang
 			/**
 			 * @brief Parses a string of binary equation operators
 			 *
-			 * @throw eval_error throw from build_operator()
-			 * @throw eval_error throw from build_symbol(" ")
-			 * @throw eval_error throw from skip_whitespace(true)
-			 * @throw eval_error Incomplete equation
+			 * @throw exception::eval_error throw from build_operator()
+			 * @throw exception::eval_error throw from build_symbol(" ")
+			 * @throw exception::eval_error throw from skip_whitespace(true)
+			 * @throw exception::eval_error Incomplete equation
 			 */
 			[[nodiscard]] bool build_equation()
 			{
@@ -2984,9 +2985,9 @@ namespace gal::lang
 			/**
 			 * @brief Top level parser, starts parsing of all known parses
 			 *
-			 * @throw eval_error throw from build_def() || build_if() || build_while() || build_for() || build_switch() || build_class(class_allowed) || build_try()
-			 * @throw eval_error throw from build_equation() || build_return() || build_break() || build_continue()
-			 * @throw eval_error throw from build_block() || build_eol()
+			 * @throw exception::eval_error throw from build_def() || build_if() || build_while() || build_for() || build_switch() || build_class(class_allowed) || build_try()
+			 * @throw exception::eval_error throw from build_equation() || build_return() || build_break() || build_continue()
+			 * @throw exception::eval_error throw from build_block() || build_eol()
 			 */
 			[[nodiscard]] bool build_statements(const bool class_allowed = false)
 			{
@@ -2996,7 +2997,15 @@ namespace gal::lang
 				for (auto has_more = true, saw_eol = true; has_more;)
 				{
 					const auto begin = point_;
-					if (build_def() || build_if() || build_while() || build_for() || build_switch() || build_class(class_allowed) || build_try())
+					// todo: Although these branches do not have no side effects on the `state` of the parser, misjudgment can have a significant effect on the `efficiency` of the parser.
+					// We need to be careful about the order of these branches.
+					if (build_block() || build_eol())
+					{
+						has_more = true;
+						result = true;
+						saw_eol = true;
+					}
+					else if (build_def() || build_if() || build_while() || build_for() || build_switch() || build_class(class_allowed) || build_try())
 					{
 						if (not saw_eol)
 						{
@@ -3022,12 +3031,6 @@ namespace gal::lang
 						result = true;
 						saw_eol = false;
 					}
-					else if (build_block() || build_eol())
-					{
-						has_more = true;
-						result = true;
-						saw_eol = true;
-					}
 					else { has_more = false; }
 				}
 
@@ -3037,9 +3040,9 @@ namespace gal::lang
 			/**
 			 * @brief Parses statements allowed inside of a class block
 			 *
-			 * @throw eval_error throw from build_def(true, " ") || build_var_decl(true, " ")
-			 * @throw eval_error throw from build_eol()
-			 * @throw eval_error Two function definitions missing line separator
+			 * @throw exception::eval_error throw from build_def(true, " ") || build_var_decl(true, " ")
+			 * @throw exception::eval_error throw from build_eol()
+			 * @throw exception::eval_error Two function definitions missing line separator
 			 */
 			[[nodiscard]] bool build_class_statements(const foundation::string_view_type class_name)
 			{
@@ -3077,8 +3080,8 @@ namespace gal::lang
 			/**
 			 * @brief Reads a block from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_statements()
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_statements()
 			 */
 			[[nodiscard]] bool build_block()
 			{
@@ -3101,9 +3104,9 @@ namespace gal::lang
 			/**
 			 * @brief Reads a curly-brace class block from input
 			 *
-			 * @throw eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw eval_error throw from build_class_statements(" ")
-			 * @throw eval_error Incomplete class block
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_class_statements(" ")
+			 * @throw exception::eval_error Incomplete class block
 			 */
 			[[nodiscard]] bool build_class_block(const foundation::string_view_type class_name)
 			{
@@ -3131,7 +3134,7 @@ namespace gal::lang
 			/**
 			 * @brief Parses the given input string, tagging parsed ast_nodes with the given filename.
 			 *
-			 * @throw eval_error throw from build_statements(true)
+			 * @throw exception::eval_error throw from build_statements(true)
 			 */
 			[[nodiscard]] ast_node_ptr parse_internal(const foundation::string_view_type input, const foundation::string_view_type filename)
 			{
@@ -3154,11 +3157,12 @@ namespace gal::lang
 				}
 				else { match_stack_.emplace_back(lang::make_node<noop_ast_node>()); }
 
+				gal_assert(match_stack_.size() == 1);
 				return std::move(std::exchange(match_stack_, ast_node::children_type{}).front());
 			}
 
 			/**
-			 * @throw eval_error throw from parse_internal(" ")
+			 * @throw exception::eval_error throw from parse_internal(" ")
 			 */
 			[[nodiscard]] ast_node_ptr parse_instruct_eval(const foundation::string_view_type input)
 			{

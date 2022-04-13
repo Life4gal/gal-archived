@@ -294,7 +294,7 @@ namespace gal::lang::foundation
 			auto range_name = string_type{name} + lang::range_suffix_name::value;
 
 			range_register.decltype(range_register)::template operator()<bidirectional_range<container_type>>(range_name);
-			range_register.decltype(range_register)::template operator()<bidirectional_range<const container_type>>(range_name);
+			range_register.decltype(range_register)::template operator()<bidirectional_range<const container_type>>(lang::range_const_prefix_name::value + range_name);
 		}
 
 		template<typename ContainerType>

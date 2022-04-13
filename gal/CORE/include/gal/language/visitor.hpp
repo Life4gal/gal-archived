@@ -12,6 +12,7 @@ namespace gal::lang::lang
 		template<typename... Visitors>
 		class default_visitor final : public ast_visitor, private Visitors...
 		{
+		public:
 			constexpr default_visitor() noexcept((std::is_nothrow_default_constructible_v<Visitors> && ...)) requires(std::is_default_constructible_v<Visitors> && ...) = default;
 
 			constexpr explicit default_visitor(Visitors&&... visitors)

@@ -4,7 +4,7 @@
 #define GAL_LANG_LANGUAGE_OPTIMIZER_HPP
 
 #include <gal/language/eval.hpp>
-
+#include <vector>
 namespace gal::lang::lang
 {
 	namespace optimizer_detail
@@ -12,6 +12,7 @@ namespace gal::lang::lang
 		template<typename... Optimizers>
 		class default_optimizer final : public ast_optimizer, private Optimizers...
 		{
+		public:
 			constexpr default_optimizer() noexcept((std::is_nothrow_default_constructible_v<Optimizers> && ...)) requires(std::is_default_constructible_v<Optimizers> && ...) = default;
 
 			constexpr explicit default_optimizer(Optimizers&&... optimizers)
@@ -57,11 +58,14 @@ namespace gal::lang::lang
 			if (node.is_any<var_decl_ast_node, assign_decl_ast_node, reference_ast_node>()) { return true; }
 
 			return std::ranges::any_of(
-					node,
+					node.view(),
 					[](const auto& child)
 					{
-						return not child.template is_any<block_ast_node, for_ast_node, ranged_for_ast_node>() &&
-						       node_has_var_decl(child);
+						// return not child.template is_any<block_ast_node, for_ast_node, ranged_for_ast_node>() &&
+						//        node_has_var_decl(child);
+						const auto b1 = not child.template is_any<block_ast_node, for_ast_node, ranged_for_ast_node>();
+						const auto b2 = node_has_var_decl(child);
+						return b1 & b2;
 					});
 		}
 

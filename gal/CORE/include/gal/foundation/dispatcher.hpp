@@ -6,13 +6,13 @@
 #include <gal/boxed_cast.hpp>
 #include <gal/boxed_value.hpp>
 #include <gal/foundation/dynamic_object.hpp>
-#include <gal/foundation/proxy_function.hpp>
+#include <gal/proxy_function.hpp>
 #include <gal/foundation/string_pool.hpp>
 #include <gal/language/name.hpp>
 #include <ranges>
 #include <utils/enum_utils.hpp>
 #include <utils/format.hpp>
-#include <utils/scoped_object.hpp>
+#include <utils/utility_base.hpp>
 #include <map>
 #include <array>
 #include <set>
@@ -210,7 +210,7 @@ namespace gal::lang
 
 			engine_core& add_function(const string_view_type name, function_type function)
 			{
-				gal_assert(functions_.emplace(pool_.append(name), std::move(function)).second);
+				functions_.emplace(pool_.append(name), std::move(function));
 				return *this;
 			}
 
@@ -412,12 +412,9 @@ namespace gal::lang
 				 */
 				boxed_value& add_variable_no_check(const string_view_type name, boxed_value variable)
 				{
-					if (const auto [it, inserted] = recent_scope().try_emplace(name, std::move(variable));
-						inserted)
-					{
-						borrowed_block.back().append(name);
-						return it->second;
-					}
+					if (const auto it = recent_scope().find(name);
+						it == recent_scope().end()) { return recent_scope().emplace(borrowed_block.back().append(name), std::move(variable)).first->second; }
+
 					throw exception::name_conflict_error{name};
 				}
 
@@ -630,53 +627,49 @@ namespace gal::lang
 				[[nodiscard]] boxed_value& get_object(string_view_type name, auto& cache_location) const;
 			};
 
-			struct scoped_scope : utils::scoped_object<scoped_scope>
+			struct scoped_scope : utils::scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>
 			{
-				std::reference_wrapper<const dispatcher_state> state;
+				friend struct scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>;
 
 				explicit scoped_scope(const dispatcher_state& s)
-					: state{s} {}
+					: scoped_base{s} {}
 
 			private:
-				friend struct scoped_object<scoped_scope>;
-
 				void do_construct() const;
 				void do_destruct() const;
 			};
 
 			struct scoped_object_scope : scoped_scope
 			{
+				friend struct scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>;
+
 				scoped_object_scope(const dispatcher_state& s, boxed_value object);
 			};
 
-			struct scoped_stack_scope : utils::scoped_object<scoped_stack_scope>
+			struct scoped_stack_scope : utils::scoped_base<scoped_stack_scope, std::reference_wrapper<const dispatcher_state>>
 			{
-				std::reference_wrapper<const dispatcher_state> state;
+				friend struct scoped_base<scoped_stack_scope, std::reference_wrapper<const dispatcher_state>>;
 
 				explicit scoped_stack_scope(const dispatcher_state& state)
-					: state{state} {}
+					: scoped_base{state} {}
 
 			private:
-				friend struct scoped_object<scoped_stack_scope>;
-
 				void do_construct() const;
 				void do_destruct() const;
 			};
 
-			struct scoped_function_scope : utils::scoped_object<scoped_function_scope>
+			struct scoped_function_scope : utils::scoped_base<scoped_function_scope, std::reference_wrapper<const dispatcher_state>>
 			{
-				std::reference_wrapper<const dispatcher_state> state;
+				friend struct scoped_base<scoped_function_scope, std::reference_wrapper<const dispatcher_state>>;
 
 				explicit scoped_function_scope(const dispatcher_state& state)
-					: state{state} {}
+					: scoped_base{state} {}
 
 				void push_params(engine_stack::param_list_type&& params) const;
 
 				void push_params(engine_stack::param_list_view_type params) const;
 
 			private:
-				friend struct scoped_object<scoped_function_scope>;
-
 				void do_construct() const;
 				void do_destruct() const;
 			};
@@ -834,11 +827,14 @@ namespace gal::lang
 				 */
 				void add_type_info(const string_view_type name, const gal_type_info& type)
 				{
-					add_global(std_format::format(type_name_format, name), const_var(type));
+					const auto formatted_name = std_format::format(type_name_format, name);
 
 					utils::threading::unique_lock lock{mutex_};
+					// inline add_global because we need add name into pool
+					if (not state_.variables.contains(formatted_name)) { state_.variables.emplace(pool_.get().append(formatted_name), const_var(type)); }
+					else { throw exception::name_conflict_error{name}; }
 
-					state_.types.emplace(name, type);
+					state_.types.emplace(pool_.get().append(name), type);
 				}
 
 				/**
@@ -849,16 +845,18 @@ namespace gal::lang
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					auto function_object = [name, this]<typename Fun>(Fun&& func) -> state_type::function_object_type
+					string_view_type pool_name = name;
+
+					auto function_object = [&pool_name, this]<typename Fun>(Fun&& func) -> state_type::function_object_type
 					{
 						auto& functions = state_.functions;
 
-						if (const auto it = functions.find(name);
+						if (const auto it = functions.find(pool_name);
 							it != functions.end())
 						{
 							// name already registered
 
-							for (const auto& f: *it->second) { if (*func == *f) { throw exception::name_conflict_error{name}; } }
+							for (const auto& f: *it->second) { if (*func == *f) { throw exception::name_conflict_error{pool_name}; } }
 
 							auto copy_fs = *it->second;
 							// tightly control vec growth
@@ -872,7 +870,7 @@ namespace gal::lang
 						{
 							// need register name
 							// todo: name scope? borrow it?
-							pool_.get().append(name);
+							pool_name = pool_.get().append(pool_name);
 
 							if (func->has_arithmetic_param())
 							{
@@ -882,18 +880,18 @@ namespace gal::lang
 								std::decay_t<decltype(*it->second)> fs;
 								fs.reserve(1);
 								fs.emplace_back(std::forward<Fun>(func));
-								functions.emplace(name, std::make_shared<std::decay_t<decltype(fs)>>(fs));
+								functions.emplace(pool_name, std::make_shared<std::decay_t<decltype(fs)>>(fs));
 								return std::make_shared<dispatch_function>(std::move(fs));
 							}
 							auto fs = std::make_shared<std::decay_t<decltype(*it->second)>>();
 							fs->emplace_back(func);
-							functions.emplace(name, fs);
+							functions.emplace(pool_name, fs);
 							return func;
 						}
 					}(std::move(function));
 
-					state_.boxed_functions.insert_or_assign(name, const_var(function_object));
-					state_.function_objects.insert_or_assign(name, std::move(function_object));
+					state_.boxed_functions.insert_or_assign(pool_name, const_var(function_object));
+					state_.function_objects.insert_or_assign(pool_name, std::move(function_object));
 				}
 
 				/**
@@ -905,15 +903,7 @@ namespace gal::lang
 				{
 					if (not variable.is_const()) { throw exception::global_mutable_error{name}; }
 
-					utils::threading::unique_lock lock{mutex_};
-
-					if (auto [it, inserted] = state_.variables.try_emplace(name, std::move(variable));
-						inserted)
-					{
-						pool_.get().append(name);
-						return it->second;
-					}
-					throw exception::name_conflict_error{name};
+					return add_global_mutable(name, std::move(variable));
 				}
 
 				/**
@@ -928,12 +918,8 @@ namespace gal::lang
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					if (const auto [it, inserted] = state_.variables.try_emplace(name, std::move(variable));
-						inserted)
-					{
-						pool_.get().append(name);
-						return it->second;
-					}
+					if (not state_.variables.contains(name)) { return state_.variables.emplace(pool_.get().append(name), std::move(variable)).first->second; }
+
 					throw exception::name_conflict_error{name};
 				}
 
@@ -944,10 +930,10 @@ namespace gal::lang
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					auto [it, inserted] = state_.variables.try_emplace(name, std::move(variable));
-					if (inserted) { pool_.get().append(name); }
+					if (const auto it = state_.variables.find(name);
+						it != state_.variables.end()) { return it->second; }
 
-					return it->second;
+					return state_.variables.emplace(pool_.get().append(name), std::move(variable)).first->second;
 				}
 
 				/**
@@ -957,8 +943,9 @@ namespace gal::lang
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					auto [it, inserted] = state_.variables.insert_or_assign(name, std::move(variable));
-					if (inserted) { pool_.get().append(name); }
+					if (auto it = state_.variables.find(name);
+						it != state_.variables.end()) { it->second = std::move(variable); }
+					else { state_.variables.emplace(pool_.get().append(name), std::move(variable)); }
 				}
 
 				/**
@@ -1501,24 +1488,24 @@ namespace gal::lang
 
 			boxed_value& dispatcher_state::get_object(string_view_type name, auto& cache_location) const { return this->operator*().get_object(name, cache_location); }
 
-			inline void scoped_scope::do_construct() const { state.get().stack().new_scope(); }
+			inline void scoped_scope::do_construct() const { data().get().stack().new_scope(); }
 
-			inline void scoped_scope::do_destruct() const { state.get().stack().pop_scope(); }
+			inline void scoped_scope::do_destruct() const { data().get().stack().pop_scope(); }
 
 			inline scoped_object_scope::scoped_object_scope(const dispatcher_state& s, boxed_value object)
 				: scoped_scope{s} { (void)s.add_object_no_check(lang::object_self_type_name::value, std::move(object)); }
 
-			inline void scoped_stack_scope::do_construct() const { state.get().stack().new_stack(); }
+			inline void scoped_stack_scope::do_construct() const { data().get().stack().new_stack(); }
 
-			inline void scoped_stack_scope::do_destruct() const { state.get().stack().pop_stack(); }
+			inline void scoped_stack_scope::do_destruct() const { data().get().stack().pop_stack(); }
 
-			inline void scoped_function_scope::push_params(engine_stack::param_list_type&& params) const { state.get().stack().push_param(std::move(params)); }
+			inline void scoped_function_scope::push_params(engine_stack::param_list_type&& params) const { data().get().stack().push_param(std::move(params)); }
 
-			inline void scoped_function_scope::push_params(const engine_stack::param_list_view_type params) const { state.get().stack().push_param(params); }
+			inline void scoped_function_scope::push_params(const engine_stack::param_list_view_type params) const { data().get().stack().push_param(params); }
 
-			inline void scoped_function_scope::do_construct() const { state.get().stack().emit_call(state.get().conversion_saves()); }
+			inline void scoped_function_scope::do_construct() const { data().get().stack().emit_call(data().get().conversion_saves()); }
 
-			inline void scoped_function_scope::do_destruct() const { state.get().stack().finish_call(state.get().conversion_saves()); }
+			inline void scoped_function_scope::do_destruct() const { data().get().stack().finish_call(data().get().conversion_saves()); }
 		}// namespace dispatcher_detail
 	}
 }// namespace gal::lang::foundation

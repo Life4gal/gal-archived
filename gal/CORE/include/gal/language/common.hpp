@@ -730,9 +730,9 @@ namespace gal::lang
 		private:
 			children_type children_;
 
-			[[nodiscard]] auto get_unwrapped_children() { return children_ | std::views::transform([](auto& ptr) -> ast_node& { return *ptr; }); }
+			[[nodiscard]] constexpr auto get_unwrapped_children() { return children_ | std::views::transform([](auto& ptr) -> ast_node& { return *ptr; }); }
 
-			[[nodiscard]] auto get_unwrapped_children() const { return children_ | std::views::transform([](const auto& ptr) -> const ast_node& { return *ptr; }); }
+			[[nodiscard]] constexpr auto get_unwrapped_children() const { return children_ | std::views::transform([](const auto& ptr) -> const ast_node& { return *ptr; }); }
 
 		public:
 			[[nodiscard]] foundation::parameters_type get_boxed_children() const
@@ -796,41 +796,47 @@ namespace gal::lang
 				swap(children_, children);
 			}
 
-			[[nodiscard]] children_type::size_type size() const noexcept { return children_.size(); }
+			[[nodiscard]] constexpr children_type::size_type size() const noexcept { return children_.size(); }
 
-			[[nodiscard]] bool empty() const noexcept { return children_.empty(); }
+			[[nodiscard]] constexpr bool empty() const noexcept { return children_.empty(); }
 
-			[[nodiscard]] ast_node_ptr& get_child_ptr(const children_type::size_type index) noexcept { return children_[index]; }
+			[[nodiscard]] constexpr ast_node_ptr& get_child_ptr(const children_type::size_type index) noexcept { return children_[index]; }
 
-			[[nodiscard]] const ast_node_ptr& get_child_ptr(const children_type::size_type index) const noexcept { return const_cast<ast_node&>(*this).get_child_ptr(index); }
+			[[nodiscard]] constexpr const ast_node_ptr& get_child_ptr(const children_type::size_type index) const noexcept { return const_cast<ast_node&>(*this).get_child_ptr(index); }
 
-			[[nodiscard]] ast_node_ptr& front_ptr() noexcept { return children_.front(); }
+			[[nodiscard]] constexpr ast_node_ptr& front_ptr() noexcept { return children_.front(); }
 
-			[[nodiscard]] const ast_node_ptr& front_ptr() const noexcept { return children_.front(); }
+			[[nodiscard]] constexpr const ast_node_ptr& front_ptr() const noexcept { return children_.front(); }
 
-			[[nodiscard]] ast_node_ptr& back_ptr() noexcept { return children_.back(); }
+			[[nodiscard]] constexpr ast_node_ptr& back_ptr() noexcept { return children_.back(); }
 
-			[[nodiscard]] const ast_node_ptr& back_ptr() const noexcept { return children_.back(); }
+			[[nodiscard]] constexpr const ast_node_ptr& back_ptr() const noexcept { return children_.back(); }
 
-			[[nodiscard]] ast_node& get_child(const children_type::difference_type index) noexcept { return get_unwrapped_children().operator[](index); }
+			[[nodiscard]] constexpr ast_node& get_child(const children_type::difference_type index) noexcept { return get_unwrapped_children().operator[](index); }
 
-			[[nodiscard]] const ast_node& get_child(const children_type::difference_type index) const noexcept { return const_cast<ast_node&>(*this).get_child(index); }
+			[[nodiscard]] constexpr const ast_node& get_child(const children_type::difference_type index) const noexcept { return const_cast<ast_node&>(*this).get_child(index); }
 
-			[[nodiscard]] ast_node& front() noexcept { return get_unwrapped_children().front(); }
+			[[nodiscard]] constexpr ast_node& front() noexcept { return get_unwrapped_children().front(); }
 
-			[[nodiscard]] const ast_node& front() const noexcept { return const_cast<ast_node&>(*this).front(); }
+			[[nodiscard]] constexpr const ast_node& front() const noexcept { return const_cast<ast_node&>(*this).front(); }
 
-			[[nodiscard]] ast_node& back() noexcept { return get_unwrapped_children().back(); }
+			[[nodiscard]] constexpr ast_node& back() noexcept { return get_unwrapped_children().back(); }
 
-			[[nodiscard]] const ast_node& back() const noexcept { return const_cast<ast_node&>(*this).back(); }
+			[[nodiscard]] constexpr const ast_node& back() const noexcept { return const_cast<ast_node&>(*this).back(); }
 
-			[[nodiscard]] auto begin() noexcept { return get_unwrapped_children().begin(); }
+			[[nodiscard]] constexpr auto begin() noexcept { return get_unwrapped_children().begin(); }
 
-			[[nodiscard]] auto begin() const noexcept { return get_unwrapped_children().begin(); }
+			[[nodiscard]] constexpr auto begin() const noexcept { return get_unwrapped_children().begin(); }
 
-			[[nodiscard]] auto end() noexcept { return get_unwrapped_children().end(); }
+			[[nodiscard]] constexpr auto end() noexcept { return get_unwrapped_children().end(); }
 
-			[[nodiscard]] auto end() const noexcept { return get_unwrapped_children().end(); }
+			[[nodiscard]] constexpr auto end() const noexcept { return get_unwrapped_children().end(); }
+
+			[[nodiscard]] constexpr auto view() const noexcept
+			{
+				// todo: something wrong with begin/end
+				return get_unwrapped_children();
+			}
 		};
 
 		struct ast_node_tracer : common_detail::ast_node_common_base<ast_node_tracer>
@@ -842,11 +848,16 @@ namespace gal::lang
 			children_type children;
 
 			explicit ast_node_tracer(const ast_node& node)
-				: ast_node_common_base{node},
-				  children{node.get_unwrapped_children().begin(), node.get_unwrapped_children().end()} { }
+				: ast_node_common_base{node}//,
+			// children{node.get_unwrapped_children().begin(), node.get_unwrapped_children().end()}
+			{
+				children.reserve(node.size());
+				std::ranges::copy(node.view() | std::views::transform([](const auto& n) { return static_cast<ast_node_tracer>(n); }),
+				                  std::back_inserter(children));
+			}
 
 			template<typename Function>
-			void apply(Function&& function)
+			void apply(Function&& function) const
 			{
 				std::ranges::for_each(
 						children,
@@ -940,6 +951,13 @@ namespace gal::lang
 				target.append("\n\tDefined at: ");
 				fun->get_parse_tree().pretty_format_position_to(target);
 			}
+		}
+
+		inline std::string eval_error::pretty_print() const
+		{
+			std::string ret{};
+			pretty_print_to(ret);
+			return ret;
 		}
 	}
 

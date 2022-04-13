@@ -53,16 +53,15 @@ namespace gal::lang::lang
 
 	private:
 		mutable utils::threading::shared_mutex mutex_;
-		mutable utils::threading::recursive_mutex use_mutex_;
+		mutable utils::threading::recursive_mutex load_mutex_;
 
 		file_contents_type file_contents_;
 
-		used_files_type used_files_;
+		used_files_type loaded_files_;
 		loaded_modules_type loaded_modules_;
 		active_loaded_modules active_loaded_modules_;
 
-		std::vector<std::string> module_paths_;
-		std::vector<std::string> use_paths_;
+		std::vector<std::string> preload_paths_;
 
 		std::unique_ptr<parser_detail::parser_base> parser_;
 
@@ -121,13 +120,13 @@ namespace gal::lang::lang
 		/**
 		 * @brief Evaluates the given file and looks in the 'use' paths
 		 */
-		[[nodiscard]] foundation::boxed_value internal_eval_file(const std::string_view filename)
+		[[nodiscard]] foundation::boxed_value internal_eval_file(const foundation::string_view_type filename)
 		{
-			for (const auto& path: use_paths_)
+			for (const auto& path: preload_paths_)
 			{
 				try
 				{
-					const auto real_path = std::string{path}.append(filename);
+					const auto real_path = foundation::string_type{path}.append(filename);
 					return do_internal_eval(load_file(filename), filename);
 				}
 				catch (const exception::file_not_found_error&)
@@ -207,7 +206,7 @@ namespace gal::lang::lang
 		 */
 		struct engine_state
 		{
-			used_files_type used_files;
+			used_files_type loaded_files;
 			foundation::dispatcher_detail::dispatcher::state_type state;
 			active_loaded_modules active_modules;
 		};
@@ -215,18 +214,15 @@ namespace gal::lang::lang
 		/**
 		 * @param library Standard library to apply to this instance.
 		 * @param parser Parser
-		 * @param module_paths Vector of paths to search when attempting to load a binary module
-		 * @param use_paths Vector of paths to search when attempting to "use" an included file
+		 * @param preload_paths Vector of paths to search when attempting to "use" an included file
 		 * @param option Option for build system
 		 */
 		engine_base(
 				const foundation::shared_engine_core& library,
 				std::unique_ptr<parser_detail::parser_base>&& parser,
-				std::vector<std::string> module_paths = {},
-				std::vector<std::string> use_paths = {},
-				const engine_option option = engine_option::default_option)
-			: module_paths_{std::move(module_paths)},
-			  use_paths_{std::move(use_paths)},
+				std::vector<std::string> preload_paths,
+				const engine_option option)
+			: preload_paths_{std::move(preload_paths)},
 			  parser_{std::move(parser)},
 			  dispatcher_{string_pool_, *parser} { build_system(library, option); }
 
@@ -252,25 +248,25 @@ namespace gal::lang::lang
 		 * it will not reloaded. The use paths specified at construction
 		 * time are searched for the requested file.
 		 */
-		[[nodiscard]] foundation::boxed_value use(const foundation::string_view_type filename)
+		[[nodiscard]] foundation::boxed_value load(const foundation::string_view_type filename)
 		{
-			for (const auto& path: use_paths_)
+			for (const auto& path: preload_paths_)
 			{
 				const auto p = std::string{path}.append(filename);
 				try
 				{
 					utils::threading::unique_lock lock{mutex_};
-					utils::threading::unique_lock use_lock{use_mutex_};
+					utils::threading::unique_lock load_lock{load_mutex_};
 
 					foundation::boxed_value ret{};
 
-					if (not used_files_.contains(filename))
+					if (not loaded_files_.contains(filename))
 					{
 						lock.unlock();
 						ret = eval_file(p);
 						lock.lock();
 						// p is added to the pool after eval_file, we can safely use p (as string_view)
-						used_files_.insert(p);
+						loaded_files_.insert(p);
 					}
 
 					// return, we loaded it, or it was already loaded
@@ -306,10 +302,10 @@ namespace gal::lang::lang
 		[[nodiscard]] engine_state get_engine_state() const
 		{
 			utils::threading::shared_lock lock{mutex_};
-			utils::threading::scoped_lock use_lock{use_mutex_};
+			utils::threading::scoped_lock load_lock{load_mutex_};
 
 			return {
-					.used_files = used_files_,
+					.loaded_files = loaded_files_,
 					.state = dispatcher_.copy_state(),
 					.active_modules = active_loaded_modules_
 			};
@@ -326,9 +322,9 @@ namespace gal::lang::lang
 		void set_engine_state(engine_state&& state)
 		{
 			utils::threading::shared_lock lock{mutex_};
-			utils::threading::scoped_lock use_lock{use_mutex_};
+			utils::threading::scoped_lock load_lock{load_mutex_};
 
-			used_files_ = std::move(state.used_files);
+			loaded_files_ = std::move(state.loaded_files);
 			dispatcher_.set_state(state.state);
 			active_loaded_modules_ = std::move(state.active_modules);
 		}
@@ -475,7 +471,7 @@ namespace gal::lang::lang
 		 */
 		void load_module(const foundation::string_view_type module_name, const foundation::string_view_type filename)
 		{
-			utils::threading::scoped_lock lock{use_mutex_};
+			utils::threading::scoped_lock lock{load_mutex_};
 
 			if (not loaded_modules_.contains(module_name))
 			{
@@ -532,7 +528,7 @@ namespace gal::lang::lang
 		 */
 		void import_namespace(const foundation::string_view_type namespace_name)
 		{
-			utils::threading::unique_lock use_lock{use_mutex_};
+			utils::threading::unique_lock load_lock{load_mutex_};
 
 			if (const auto so = dispatcher_.get_scripting_objects();
 				so.contains(namespace_name)) { throw std::runtime_error{std_format::format("namespace '{}' was already defined", namespace_name)}; }
@@ -550,7 +546,7 @@ namespace gal::lang::lang
 		 */
 		void register_namespace(const foundation::string_view_type namespace_name, const std::function<void(namespace_type&)>& generator)
 		{
-			utils::threading::unique_lock use_lock{use_mutex_};
+			utils::threading::unique_lock load_lock{load_mutex_};
 
 			if (not namespace_generators_.contains(namespace_name))
 			{

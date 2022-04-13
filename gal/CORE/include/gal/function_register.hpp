@@ -4,6 +4,7 @@
 #define GAL_LANG_FUNCTION_REGISTER_HPP
 
 #include <gal/foundation/function_register.hpp>
+#include <gal/foundation/dispatcher.hpp>
 
 namespace gal::lang
 {

@@ -279,6 +279,7 @@ namespace gal::lang::lang
 
 	// a container view
 	using range_suffix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("_range");
+	using range_const_prefix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("const_");
 	using container_range_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("range");
 
 	//*********************************************

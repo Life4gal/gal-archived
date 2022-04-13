@@ -20,6 +20,14 @@ add_executable(
 		${${PROJECT_NAME}_SOURCE}
 )
 
+target_compile_options(
+	${PROJECT_NAME}
+	PRIVATE
+
+	$<$<CXX_COMPILER_ID:MSVC>:/bigobj>
+	$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wa,-mbig-obj>
+)
+
 if(MSVC)
 	target_compile_features(
 			${PROJECT_NAME}

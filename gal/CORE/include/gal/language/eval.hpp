@@ -1840,7 +1840,7 @@ namespace gal::lang
 							{
 								foundation::dispatcher_detail::scoped_scope scoped_scope{state};
 
-								auto& catch_block = this->get_child(i);
+								auto& catch_block = this->get_child(static_cast<children_type::difference_type>(i));
 
 								if (catch_block.size() == 1)
 								{
@@ -1862,14 +1862,16 @@ namespace gal::lang
 											return catch_block.get_child(1).eval(state, visitor);
 										}
 									}
-
-									return foundation::boxed_value{};
 								}
-
-								if (const auto& back = this->back();
-									back.is<finally_ast_node>()) { back.front().eval(state, visitor); }
-								throw exception::eval_error{"Internal error: catch block size unrecognized"};
+								else
+								{
+									if (const auto& back = this->back();
+										back.is<finally_ast_node>()) { back.front().eval(state, visitor); }
+									throw exception::eval_error{"Internal error: catch block size unrecognized"};
+								}
 							}
+
+							return foundation::boxed_value{};
 						}();
 					}(exception);
 
@@ -1898,10 +1900,46 @@ namespace gal::lang
 
 			try_ast_node(
 					const identifier_type identifier,
-					parse_location location,
+					const parse_location location,
 					children_type&& children)
 				: ast_node{get_rtti_index(), identifier, location, std::move(children)} {}
 		};
+	}
+
+	namespace exception
+	{
+		inline void eval_error::pretty_print_to(std::string& dest) const
+		{
+			dest.append(what());
+			if (not stack_traces.empty())
+			{
+				std_format::format_to(
+						std::back_inserter(dest),
+						"during evaluation at file '{}'({}).\n\n{}\n\t{}",
+						stack_traces.front().filename(),
+						stack_traces.front().pretty_position_print(),
+						detail,
+						stack_traces.front().pretty_print());
+
+				std::ranges::for_each(
+						stack_traces.begin() + 1,
+						stack_traces.end(),
+						[&dest](const auto& trace)
+						{
+							if (not trace.template is_any<lang::block_ast_node, lang::file_ast_node>())
+							{
+								std_format::format_to(
+										std::back_inserter(dest),
+										"\n\tfrom file '{}'({}).\n\t{}.",
+										trace.filename(),
+										trace.pretty_position_print(),
+										trace.pretty_print());
+							}
+						});
+			}
+
+			dest.push_back('\n');
+		}
 	}
 }
 

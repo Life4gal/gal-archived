@@ -3,11 +3,21 @@
 #ifndef GAL_UTILS_STRING_POOL_HPP
 #define GAL_UTILS_STRING_POOL_HPP
 
+#ifndef GAL_UTILS_STRING_POOL_DEBUG
+#ifndef _NDEBUG
+#define GAL_UTILS_STRING_POOL_DEBUG
+#endif
+#endif
+
 #include <algorithm>
 #include <memory>
 #include <ranges>
 #include <utils/assert.hpp>
 #include <vector>
+
+#ifdef GAL_UTILS_STRING_POOL_DEBUG
+#include <map>
+#endif
 
 namespace gal::utils
 {
@@ -131,6 +141,10 @@ namespace gal::utils
 
 		using block_iterator = typename pool_type::iterator;
 
+		#ifdef GAL_UTILS_STRING_POOL_DEBUG
+		std::multimap<view_type, block_iterator> debug_mapping_;
+		#endif
+
 	public:
 		// todo: The borrower has many optimizations,
 		// such as separating the borrow pool from the actual pool,
@@ -209,6 +223,11 @@ namespace gal::utils
 		[[nodiscard]] constexpr view_type append_str_into_block(const view_type str, block_iterator pos)
 		{
 			const auto ret = pos->append(str);
+
+			#ifdef GAL_UTILS_STRING_POOL_DEBUG
+			debug_mapping_.emplace(ret, pos);
+			#endif
+
 			this->shake_it(pos);
 			return ret;
 		}
@@ -216,6 +235,11 @@ namespace gal::utils
 		[[nodiscard]] constexpr value_type* borrow_raw_memory(const size_type size, block_iterator pos)
 		{
 			auto raw = pos->borrow_raw(size);
+
+			#ifdef GAL_UTILS_STRING_POOL_DEBUG
+			debug_mapping_.emplace(view_type{raw, size}, pos);
+			#endif
+
 			this->shake_it(pos);
 			return raw;
 		}
@@ -223,6 +247,11 @@ namespace gal::utils
 		constexpr void return_raw_memory(const value_type* raw, const size_type size, block_iterator pos)
 		{
 			pos->return_raw(raw, size);
+
+			#ifdef GAL_UTILS_STRING_POOL_DEBUG
+			debug_mapping_.erase(view_type{raw, size});
+			#endif
+
 			this->shake_it(pos);
 		}
 
@@ -322,6 +351,10 @@ namespace gal::utils
 		 * @note Only affect the block created after modification
 		 */
 		constexpr void resize(size_type capacity) noexcept { capacity_ = capacity; }
+
+		#ifdef GAL_UTILS_STRING_POOL_DEBUG
+		[[nodiscard]] const auto& get_mapping() const noexcept { return debug_mapping_; }
+		#endif
 	};
 }
 
