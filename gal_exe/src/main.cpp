@@ -1,6 +1,7 @@
 #include <gal/gal.hpp>
 
-int plus_2(const int a, const int b) noexcept { return a + b; }
+// note: we currently only registered string (not registered string_view)
+void hello_cpp(const std::string& string, double d, bool b) { std::cout << std_format::format("hello '{}', double: {}, bool: {}\n", string, d, b); }
 
 int main()
 {
@@ -9,16 +10,16 @@ int main()
 	lang::engine engine{};
 
 	engine.add_function(
-			"plus_2",
-			lang::fun(&plus_2));
+			"hello_cpp",
+			lang::fun(&hello_cpp));
 
 	try
 	{
 		auto result = engine.eval(
-				R"(
-					for var i = 0; i < 42; i += 1:
-						plus_2(i, 42 - i)
-				)");
+				R"(for var i = 0; i < 42; i += 1:
+								hello_cpp("gal", i - 42.0, i % 2 == 0)
+						)"
+				);
 	}
 	catch (const std::exception& e) { std::cerr << e.what() << '\n'; }
 }

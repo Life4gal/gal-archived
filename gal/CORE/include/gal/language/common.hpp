@@ -680,7 +680,7 @@ namespace gal::lang
 				{
 					std_format::format_to(
 							std::back_inserter(target),
-							"{}(class index: {}) {} : ",
+							"{}(class index: {}) identifier: {} at:\n ",
 							prepend,
 							class_index_,
 							identifier_);
@@ -784,7 +784,7 @@ namespace gal::lang
 			 */
 			static bool get_scoped_bool_condition(const ast_node& node, const foundation::dispatcher_detail::dispatcher_state& state, ast_visitor& visitor)
 			{
-				foundation::dispatcher_detail::scoped_stack_scope scoped_stack{state};
+				foundation::dispatcher_detail::scoped_scope scoped_scope{state};
 				return get_bool_condition(node.eval(state, visitor), state);
 			}
 
@@ -824,19 +824,32 @@ namespace gal::lang
 
 			[[nodiscard]] constexpr const ast_node& back() const noexcept { return const_cast<ast_node&>(*this).back(); }
 
-			[[nodiscard]] constexpr auto begin() noexcept { return get_unwrapped_children().begin(); }
+			// todo: begin/end returns a `new` view's begin/end each time, so comparing them will generate an error
+			// [[nodiscard]] [[deprecated("use view instead")]] constexpr auto begin() noexcept { return get_unwrapped_children().begin(); }
 
-			[[nodiscard]] constexpr auto begin() const noexcept { return get_unwrapped_children().begin(); }
+			// [[nodiscard]] [[deprecated("use view instead")]] constexpr auto begin() const noexcept { return get_unwrapped_children().begin(); }
 
-			[[nodiscard]] constexpr auto end() noexcept { return get_unwrapped_children().end(); }
+			// [[nodiscard]] [[deprecated("use view instead")]] constexpr auto end() noexcept { return get_unwrapped_children().end(); }
 
-			[[nodiscard]] constexpr auto end() const noexcept { return get_unwrapped_children().end(); }
+			// [[nodiscard]] [[deprecated("use view instead")]] constexpr auto end() const noexcept { return get_unwrapped_children().end(); }
 
-			[[nodiscard]] constexpr auto view() const noexcept
-			{
-				// todo: something wrong with begin/end
-				return get_unwrapped_children();
-			}
+			[[nodiscard]] constexpr auto view() const noexcept { return get_unwrapped_children(); }
+
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin, const children_type::difference_type count) noexcept { return get_unwrapped_children() | std::views::drop(begin) | std::views::take(count); }
+
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin, const children_type::difference_type count) const noexcept { return get_unwrapped_children() | std::views::drop(begin) | std::views::take(count); }
+
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin) noexcept { return get_unwrapped_children() | std::views::drop(begin); }
+
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin) const noexcept { return get_unwrapped_children() | std::views::drop(begin); }
+
+			[[nodiscard]] constexpr auto front_view(const children_type::difference_type count) noexcept { return sub_view(0, count); }
+
+			[[nodiscard]] constexpr auto front_view(const children_type::difference_type count) const noexcept { return sub_view(0, count); }
+
+			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) noexcept { return get_unwrapped_children() | std::views::reverse | std::views::take(count) | std::views::reverse; }
+
+			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) const noexcept { return get_unwrapped_children() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 		};
 
 		struct ast_node_tracer : common_detail::ast_node_common_base<ast_node_tracer>
@@ -918,7 +931,7 @@ namespace gal::lang
 					std_format::format_to(std::back_inserter(target),
 					                      "{} ({})",
 					                      dispatcher.get_type_name(*it),
-					                      it->is_const() ? " (immutable)" : " (mutable)");
+					                      it->is_const() ? "immutable" : "mutable");
 
 					if (it == types.begin() + 1 && has_dot_notation)
 					{
