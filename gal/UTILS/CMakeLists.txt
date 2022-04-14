@@ -65,13 +65,14 @@ else ()
 			PUBLIC # todo: should be PRIVATE
 			GAL_FMT_NOT_SUPPORT
 	)
-	include(${GAL_3RDPARTY_PATH}/fmtlib.cmake)
-	message("${PROJECT_NAME} info: build fmtlib as a public module of ${PROJECT_NAME}.")
-	target_link_libraries(
-			${PROJECT_NAME}
-			PUBLIC
-			fmt
-	)
+	# note: spdlog below already include fmtlib
+	# include(${GAL_3RDPARTY_PATH}/fmtlib.cmake)
+	# message("${PROJECT_NAME} info: build fmtlib as a public module of ${PROJECT_NAME}.")
+	# target_link_libraries(
+	# 		${PROJECT_NAME}
+	# 		PUBLIC
+	# 		fmt
+	# )
 endif (${COMPILER_SUPPORT_FORMAT})
 
 include(${GAL_3RDPARTY_PATH}/range-v3.cmake)
@@ -80,6 +81,14 @@ target_link_libraries(
 			${PROJECT_NAME}
 			PUBLIC
 			range-v3
+)
+
+include(${GAL_3RDPARTY_PATH}/spdlog.cmake)
+message("${PROJECT_NAME} info: use spdlog as logger, build spdlog as a public module of ${PROJECT_NAME}.")
+target_link_libraries(
+			${PROJECT_NAME}
+			PUBLIC
+			spdlog
 )
 
 include(${GAL_MODULE_PATH}/config_build_type.cmake)

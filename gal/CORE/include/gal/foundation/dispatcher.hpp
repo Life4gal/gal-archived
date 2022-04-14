@@ -13,6 +13,7 @@
 #include <utils/enum_utils.hpp>
 #include <utils/format.hpp>
 #include <utils/utility_base.hpp>
+#include <utils/logger.hpp>
 #include <map>
 #include <array>
 #include <set>
@@ -143,6 +144,21 @@ namespace gal::lang
 			template<typename Engine>
 			void apply_type_info(Engine& engine)
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("There are currently {} type_info(s)", types_.size());
+						)
+
+				GAL_UTILS_DO_IF_DEBUG(
+						std::string detail{};
+						std::ranges::for_each(
+							types_ | std::views::keys,
+							[&detail](const auto& key)
+							{
+							detail.append(key).push_back('\n');
+							});
+						utils::logger::debug("details:\n\t{}", pool_.size(), detail);
+						)
+
 				std::ranges::for_each(
 						types_,
 						[&engine](const auto& type)
@@ -158,6 +174,19 @@ namespace gal::lang
 			template<typename Engine>
 			void apply_function(Engine& engine)
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("There are currently {} function(s)", types_.size());)
+
+				GAL_UTILS_DO_IF_DEBUG(
+						std::string detail{};
+						std::ranges::for_each(
+							functions_ | std::views::keys,
+							[&detail](const auto& key)
+							{
+							detail.append(key).push_back('\n');
+							});
+						utils::logger::debug("details:\n\t{}", pool_.size(), detail);)
+
 				std::ranges::for_each(
 						functions_,
 						[&engine](const auto& function)
@@ -173,6 +202,19 @@ namespace gal::lang
 			template<typename Engine>
 			void apply_variable(Engine& engine)
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("There are currently {} variable(s)", types_.size());)
+
+				GAL_UTILS_DO_IF_DEBUG(
+						std::string detail{};
+						std::ranges::for_each(
+							variables_ | std::views::keys,
+							[&detail](const auto& key)
+							{
+							detail.append(key).push_back('\n');
+							});
+						utils::logger::debug("details:\n\t{}", pool_.size(), detail);)
+
 				std::ranges::for_each(
 						variables_,
 						[&engine](const auto& variable) { engine.add_global(variable.first, variable.second); });
@@ -181,6 +223,19 @@ namespace gal::lang
 			template<typename Eval>
 			void apply_evaluation(Eval& eval)
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("There are currently {} evaluation(s)", types_.size());)
+
+				GAL_UTILS_DO_IF_DEBUG(
+						std::string detail{};
+						std::ranges::for_each(
+							evaluations_,
+							[&detail](const auto& key)
+							{
+							detail.append(key).push_back('\n');
+							});
+						utils::logger::debug("details:\n\t{}", pool_.size(), detail);)
+
 				std::ranges::for_each(
 						evaluations_,
 						[&eval](const auto& evaluation) { (void)eval.eval(evaluation); });
@@ -189,6 +244,9 @@ namespace gal::lang
 			template<typename Engine>
 			void apply_type_conversion(Engine& engine)
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("There are currently {} type_conversion(s)", types_.size());)
+
 				std::ranges::for_each(
 						type_conversions_,
 						[&engine](const auto& conversion) { engine.add_type_conversion(conversion); });
@@ -197,46 +255,156 @@ namespace gal::lang
 		public:
 			// todo: should only allow right value?
 			// todo: The dispatcher should take over the string_pool of the core after getting all the contents of the core, there should be a coercive measure to ensure that this happens
-			[[nodiscard]] string_pool_type take_pool() noexcept/* && */
+			[[nodiscard]] string_pool_type take_pool(
+					GAL_UTILS_DO_IF_LOG_INFO(
+							const std::string_view reason = "no reason",
+							const std_source_location& location = std_source_location::current()
+							)
+					) noexcept/* && */
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);
+						)
+
+				GAL_UTILS_DO_IF_DEBUG(
+						std::string detail{};
+						std::ranges::for_each(
+							pool_.get_mapping() | std::views::keys,
+							[&detail](const auto& key)
+							{
+							detail.append(key).push_back('\n');
+							});
+						utils::logger::debug("pool size: '{}'\ndetails:\n\t{}", pool_.size(), detail);
+						)
+
 				return std::exchange(pool_, string_pool_type{});
 			}
 
-			engine_core& add_type_info(const string_view_type name, gal_type_info type)
+			engine_core& add_type_info(
+					const string_view_type name,
+					gal_type_info type
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					)
 			{
-				gal_assert(types_.emplace(pool_.append(name), type).second);
+				[[maybe_unused]] const auto result = types_.emplace(pool_.append(name), type).second;
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							result ? "but it was already exist" : "add successed");
+						)
+
+				gal_assert(result);
 				return *this;
 			}
 
-			engine_core& add_function(const string_view_type name, function_type function)
+			engine_core& add_function(
+					const string_view_type name,
+					function_type function
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					)
 			{
-				functions_.emplace(pool_.append(name), std::move(function));
+				[[maybe_unused]] const auto result = functions_.emplace(pool_.append(name), std::move(function)).second;
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							result ? "but it was already exist" : "add successed");)
+
 				return *this;
 			}
 
-			engine_core& add_variable(const string_view_type name, boxed_value variable)
+			engine_core& add_variable(
+					const string_view_type name,
+					boxed_value variable
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					)
 			{
 				if (not variable.is_const()) { throw exception::global_mutable_error{name}; }
 
-				gal_assert(variables_.emplace(pool_.append(name), std::move(variable)).second);
+				[[maybe_unused]] const auto result = variables_.emplace(pool_.append(name), std::move(variable)).second;
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							result ? "but it was already exist" : "add successed");)
+
+				gal_assert(result);
 				return *this;
 			}
 
-			engine_core& add_evaluation(const string_view_type evaluation)
+			engine_core& add_evaluation(
+					const string_view_type evaluation
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					)
 			{
-				gal_assert(evaluations_.emplace(pool_.append(evaluation)).second);
+				[[maybe_unused]] const auto result = evaluations_.emplace(pool_.append(evaluation)).second;
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							result ? "but it was already exist" : "add successed");)
+
+				gal_assert(result);
 				return *this;
 			}
 
-			engine_core& add_type_conversion(type_conversion_type conversion)
+			engine_core& add_type_conversion(
+					type_conversion_type conversion
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					)
 			{
-				gal_assert(type_conversions_.emplace(std::move(conversion)).second);
+				[[maybe_unused]] const auto result = type_conversions_.emplace(std::move(conversion)).second;
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							result ? "but it was already exist" : "add successed");)
+
+				gal_assert(result);
 				return *this;
 			}
 
 			// todo: optimize it (reduce copy)
 			template<typename Eval, typename Engine>
-			void apply(Eval& eval, Engine& engine)
+			void apply(
+					Eval& eval,
+					Engine& engine
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					)
 				requires requires
 				{
 					engine.add_type_info(std::declval<const string_view_type>(), std::declval<const gal_type_info&>());
@@ -246,6 +414,14 @@ namespace gal::lang
 					engine.add_type_conversion(std::declval<const type_conversion_type&>());
 				}
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column());)
+
 				this->apply_type_info(engine);
 				this->apply_function(engine);
 				this->apply_variable(engine);
@@ -373,35 +549,118 @@ namespace gal::lang
 				call_depth_type depth;
 
 			private:
-				void prepare_new_stack()
+				void prepare_new_stack(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current()
+								)
+						)
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} prepare a new stack from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason);
+							)
+
 					// add a new Stack with 1 element
 					stack.emplace_back(1);
 				}
 
-				void prepare_new_scope()
+				void prepare_new_scope(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						)
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} prepare a new scope from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason));
+
 					recent_stack_data().emplace_back();
 					borrowed_block.emplace_back(pool.get());
 				}
 
-				void prepare_new_call() { param_lists.emplace_back(); }
-
-				void finish_stack() noexcept
+				void prepare_new_call(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						)
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} prepare a new call from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason));
+
+					param_lists.emplace_back();
+				}
+
+				void finish_stack(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						) noexcept
+				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} finish a stack from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason));
+
 					gal_assert(not stack.empty());
 					stack.pop_back();
 				}
 
-				void finish_scope() noexcept
+				void finish_scope(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						) noexcept
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} finish a scope from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason));
+
 					gal_assert(not recent_stack_data().empty());
 					recent_stack_data().pop_back();
 					borrowed_block.pop_back();
 				}
 
-				void finish_call() noexcept
+				void finish_call(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						) noexcept
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} finish a call from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason));
+
 					gal_assert(not param_lists.empty());
 					param_lists.pop_back();
 				}
@@ -410,39 +669,102 @@ namespace gal::lang
 				 * @brief Adds a named object to the current scope.
 				 * @note This version does not check the validity of the name.
 				 */
-				boxed_value& add_variable_no_check(const string_view_type name, boxed_value variable)
+				boxed_value& add_variable_no_check(
+						const string_view_type name,
+						boxed_value variable
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} variable '{}' from (file: '{}' function: '{}' position: ({}:{}))",
+								__func__,
+								name,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column());
+							)
+
 					if (const auto it = recent_scope().find(name);
 						it == recent_scope().end()) { return recent_scope().emplace(borrowed_block.back().append(name), std::move(variable)).first->second; }
 
 					throw exception::name_conflict_error{name};
 				}
 
-				void push_param(param_list_type&& params)
+				void push_param(
+						param_list_type&& params
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} {} params from (file: '{}' function: '{}' position: ({}:{}))",
+								__func__,
+								params.size(),
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column());)
+
 					auto& current_call = recent_call_param();
 					current_call.insert(current_call.end(), std::make_move_iterator(params.begin()), std::make_move_iterator(params.end()));
 				}
 
-				void push_param(const param_list_view_type params)
+				void push_param(
+						const param_list_view_type params
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} {} params from (file: '{}' function: '{}' position: ({}:{}))",
+								__func__,
+								params.size(),
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column());)
+
 					auto& current_call = recent_call_param();
 					current_call.insert(current_call.end(), params.begin(), params.end());
 				}
 
-				void pop_param() noexcept
+				void pop_param(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						) noexcept
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason);)
+
 					auto& current_call = param_lists.back();
 					current_call.clear();
 				}
 
 			public:
-				explicit engine_stack(string_pool_type& pool)
+				explicit engine_stack(
+						string_pool_type& pool
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std::string_view reason = "initial a new engine_stack",
+								const std_source_location& location = std_source_location::current())
+						)
 					: pool{pool},
 					  depth{0}
 				{
-					prepare_new_stack();
-					prepare_new_call();
+					prepare_new_stack(GAL_UTILS_DO_IF_DEBUG(reason, location));
+					prepare_new_call(GAL_UTILS_DO_IF_DEBUG(reason, location));
 				}
 
 				[[nodiscard]] constexpr bool is_root() const noexcept { return depth == 0; }
@@ -450,9 +772,17 @@ namespace gal::lang
 				/**
 				 * @brief Pushes a new stack on to the list of stacks.
 				 */
-				void new_stack() { prepare_new_stack(); }
+				void new_stack(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						) { prepare_new_stack(GAL_UTILS_DO_IF_DEBUG(reason, location)); }
 
-				void pop_stack() { finish_stack(); }
+				void pop_stack(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						) { finish_stack(GAL_UTILS_DO_IF_DEBUG(reason, location)); }
 
 				[[nodiscard]] stack_data_type& recent_stack_data() noexcept { return stack.back(); }
 
@@ -519,8 +849,32 @@ namespace gal::lang
 				 *
 				 * @note Any existing locals are removed and the given set of variables is added.
 				 */
-				void set_locals(const scope_type& new_locals)
+				void set_locals(
+						const scope_type& new_locals
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						)
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							std::string detail{};
+							std::ranges::for_each(
+								new_locals | std::views::keys,
+								[&detail](const auto& key)
+								{
+								detail.append(key).push_back('\n');
+								});
+
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}', detail:\n{}",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason,
+								detail);)
+
 					auto& s = recent_stack_data();
 					s.front().insert(new_locals.begin(), new_locals.end());
 				}
@@ -532,8 +886,32 @@ namespace gal::lang
 				 *
 				 * @note Any existing locals are removed and the given set of variables is added.
 				 */
-				void set_locals(scope_type&& new_locals)
+				void set_locals(
+						scope_type&& new_locals
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						)
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							std::string detail{};
+							std::ranges::for_each(
+								new_locals | std::views::keys,
+								[&detail](const auto& key)
+								{
+								detail.append(key).push_back('\n');
+								});
+
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}', detail:\n{}",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason,
+								detail);)
+
 					auto& s = recent_stack_data();
 					s.front().insert(std::make_move_iterator(new_locals.begin()), std::make_move_iterator(new_locals.end()));
 				}
@@ -541,10 +919,14 @@ namespace gal::lang
 				/**
 				 * @brief Adds a new scope to the stack.
 				 */
-				void new_scope()
+				void new_scope(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						)
 				{
-					prepare_new_scope();
-					prepare_new_call();
+					prepare_new_scope(GAL_UTILS_DO_IF_DEBUG(reason, location));
+					prepare_new_call(GAL_UTILS_DO_IF_DEBUG(reason, location));
 				}
 
 				[[nodiscard]] scope_type& recent_scope() noexcept { return recent_stack_data().back(); }
@@ -554,47 +936,118 @@ namespace gal::lang
 				/**
 				 * @brief Pops the current scope from the stack.
 				 */
-				void pop_scope() noexcept
+				void pop_scope(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						) noexcept
 				{
-					finish_call();
-					finish_scope();
+					finish_call(GAL_UTILS_DO_IF_DEBUG(reason, location));
+					finish_scope(GAL_UTILS_DO_IF_DEBUG(reason, location));
 				}
 
-				boxed_value& add_variable(const string_view_type name, boxed_value variable)
+				boxed_value& add_variable(
+						const string_view_type name,
+						boxed_value variable
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} variable '{}' from (file: '{}' function: '{}' position: ({}:{}))",
+								__func__,
+								name,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column());)
+
+					GAL_UTILS_DO_IF_DEBUG(
+							int scope_no = 0;
+							)
+
 					for (auto& stack_data = recent_stack_data();
 					     auto& scope: stack_data | std::views::reverse)
 					{
+						GAL_UTILS_DO_IF_DEBUG(
+								utils::logger::debug("searching variable '{}' in '{}'th scope",
+									name,
+									scope_no);
+								)
+
 						if (auto it = scope.find(name); it != scope.end())
 						{
+							GAL_UTILS_DO_IF_DEBUG(
+									utils::logger::debug("find variable '{}' in '{}'th scope",
+										name,
+										scope_no);
+									)
+
 							it->second = std::move(variable);
 							return it->second;
 						}
+
+						GAL_UTILS_DO_IF_DEBUG(
+								++scope_no
+								);
 					}
 
-					return add_variable_no_check(name, std::move(variable));
+					return add_variable_no_check(name, std::move(variable) GAL_UTILS_DO_IF_DEBUG(, location));
 				}
 
 				[[nodiscard]] param_list_type& recent_call_param() noexcept { return param_lists.back(); }
 
 				[[nodiscard]] const param_list_type& recent_call_param() const noexcept { return param_lists.back(); }
 
-				void emit_call(type_conversion_manager::conversion_saves& saves)
+				void emit_call(
+						type_conversion_manager::conversion_saves& saves
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						)
 				{
 					if (is_root()) { type_conversion_manager::enable_conversion_saves(saves, true); }
 					++depth;
 
-					push_param(type_conversion_manager::take_conversion_saves(saves));
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}', current depth: '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason,
+								depth);)
+
+					push_param(type_conversion_manager::take_conversion_saves(saves) GAL_UTILS_DO_IF_DEBUG(, location));
 				}
 
-				void finish_call(type_conversion_manager::conversion_saves& saves) noexcept
+				void finish_call(
+						type_conversion_manager::conversion_saves& saves
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						) noexcept
 				{
 					--depth;
 					gal_assert(depth >= 0);
 
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}', current depth: '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason,
+								depth);)
+
 					if (is_root())
 					{
-						pop_param();
+						pop_param(GAL_UTILS_DO_IF_DEBUG(reason, location));
 						type_conversion_manager::enable_conversion_saves(saves, false);
 					}
 				}
@@ -622,7 +1075,13 @@ namespace gal::lang
 
 				[[nodiscard]] type_conversion_manager::conversion_saves& conversion_saves() const noexcept { return conversion_.saves(); }
 
-				boxed_value& add_object_no_check(string_view_type name, boxed_value object) const;
+				boxed_value& add_object_no_check(
+						string_view_type name,
+						boxed_value object
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						) const;
 
 				[[nodiscard]] boxed_value& get_object(string_view_type name, auto& cache_location) const;
 			};
@@ -631,8 +1090,24 @@ namespace gal::lang
 			{
 				friend struct scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>;
 
-				explicit scoped_scope(const dispatcher_state& s)
-					: scoped_base{s} {}
+				explicit scoped_scope(
+						const dispatcher_state& s
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std::string_view reason = "initial a new scoped_scope",
+								const std_source_location& location = std_source_location::current())
+						)
+					: scoped_base{s}
+				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason);)
+				}
 
 			private:
 				void do_construct() const;
@@ -643,15 +1118,38 @@ namespace gal::lang
 			{
 				friend struct scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>;
 
-				scoped_object_scope(const dispatcher_state& s, boxed_value object);
+				scoped_object_scope(
+						const dispatcher_state& s,
+						boxed_value object
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								std::string_view reason = "initial a new scoped_object_scope",
+								const std_source_location& location = std_source_location::current())
+						);
 			};
 
 			struct scoped_stack_scope : utils::scoped_base<scoped_stack_scope, std::reference_wrapper<const dispatcher_state>>
 			{
 				friend struct scoped_base<scoped_stack_scope, std::reference_wrapper<const dispatcher_state>>;
 
-				explicit scoped_stack_scope(const dispatcher_state& state)
-					: scoped_base{state} {}
+				explicit scoped_stack_scope(
+						const dispatcher_state& state
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std::string_view reason = "initial a new scoped_stack_scope",
+								const std_source_location& location = std_source_location::current())
+						)
+					: scoped_base{state}
+				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason);)
+				}
 
 			private:
 				void do_construct() const;
@@ -662,12 +1160,38 @@ namespace gal::lang
 			{
 				friend struct scoped_base<scoped_function_scope, std::reference_wrapper<const dispatcher_state>>;
 
-				explicit scoped_function_scope(const dispatcher_state& state)
-					: scoped_base{state} {}
+				explicit scoped_function_scope(
+						const dispatcher_state& state
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std::string_view reason = "initial a new scoped_function_scope",
+								const std_source_location& location = std_source_location::current())
+						)
+					: scoped_base{state}
+				{
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								reason);)
+				}
 
-				void push_params(engine_stack::param_list_type&& params) const;
+				void push_params(
+						engine_stack::param_list_type&& params
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						) const;
 
-				void push_params(engine_stack::param_list_view_type params) const;
+				void push_params(
+						engine_stack::param_list_view_type params
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						) const;
 
 			private:
 				void do_construct() const;
@@ -825,11 +1349,27 @@ namespace gal::lang
 				/**
 				 * @brief Registers a new named type.
 				 */
-				void add_type_info(const string_view_type name, const gal_type_info& type)
+				void add_type_info(
+						const string_view_type name,
+						const gal_type_info& type
+						GAL_UTILS_DO_IF_LOG_INFO(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
 					const auto formatted_name = std_format::format(type_name_format, name);
 
 					utils::threading::unique_lock lock{mutex_};
+
+					GAL_UTILS_DO_IF_LOG_INFO(
+							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								state_.variables.contains(formatted_name) ? "but it was already exist" : "add successed");)
+
 					// inline add_global because we need add name into pool
 					if (not state_.variables.contains(formatted_name)) { state_.variables.emplace(pool_.get().append(formatted_name), const_var(type)); }
 					else { throw exception::name_conflict_error{name}; }
@@ -841,9 +1381,24 @@ namespace gal::lang
 				 * @brief Add a new named proxy_function to the system.
 				 * @throw name_conflict_error if there's a function matching the given one being added.
 				 */
-				void add_function(const string_view_type name, state_type::function_type function)
+				void add_function(
+						const string_view_type name,
+						state_type::function_type function
+						GAL_UTILS_DO_IF_LOG_INFO(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
 					utils::threading::unique_lock lock{mutex_};
+
+					GAL_UTILS_DO_IF_LOG_INFO(
+							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								state_.functions.contains(name) ? "but it was already exist" : "add successed");)
 
 					string_view_type pool_name = name;
 
@@ -899,24 +1454,58 @@ namespace gal::lang
 				 *
 				 * @throw global_mutable_error variable is not const
 				 */
-				boxed_value& add_global(const string_view_type name, boxed_value variable)
+				boxed_value& add_global(
+						const string_view_type name,
+						boxed_value variable
+						GAL_UTILS_DO_IF_LOG_INFO(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
+					GAL_UTILS_DO_IF_LOG_INFO(
+							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column());)
+
 					if (not variable.is_const()) { throw exception::global_mutable_error{name}; }
 
-					return add_global_mutable(name, std::move(variable));
+					return add_global_mutable(name, std::move(variable) GAL_UTILS_DO_IF_DEBUG(, location));
 				}
 
 				/**
 				 * @brief Add a new conversion for up-casting to a base class.
 				 */
-				void add_type_conversion(const type_conversion_manager::conversion_type& conversion) { manager_.add(conversion); }
+				void add_type_conversion(
+						const type_conversion_manager::conversion_type& conversion
+						GAL_UTILS_DO_IF_LOG_INFO(
+								,
+								const std_source_location& location = std_source_location::current())
+						) { manager_.add(conversion GAL_UTILS_DO_IF_DEBUG(, location)); }
 
 				/**
 				 * @brief Adds a new global (non-const) shared object, between all the threads.
 				 */
-				boxed_value& add_global_mutable(const string_view_type name, boxed_value variable)
+				boxed_value& add_global_mutable(
+						const string_view_type name,
+						boxed_value variable
+						GAL_UTILS_DO_IF_LOG_INFO(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
 					utils::threading::unique_lock lock{mutex_};
+
+					GAL_UTILS_DO_IF_LOG_INFO(
+							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								state_.variables.contains(name) ? "but it was already exist" : "add successed");)
 
 					if (not state_.variables.contains(name)) { return state_.variables.emplace(pool_.get().append(name), std::move(variable)).first->second; }
 
@@ -926,9 +1515,24 @@ namespace gal::lang
 				/**
 				 * @brief Adds a new global (non-const) shared object, between all the threads.
 				 */
-				boxed_value& add_global_mutable_no_throw(const string_view_type name, boxed_value variable)
+				boxed_value& add_global_mutable_no_throw(
+						const string_view_type name,
+						boxed_value variable
+						GAL_UTILS_DO_IF_LOG_INFO(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
 					utils::threading::unique_lock lock{mutex_};
+
+					GAL_UTILS_DO_IF_LOG_INFO(
+							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								state_.variables.contains(name) ? "but it was already exist" : "add successed");)
 
 					if (const auto it = state_.variables.find(name);
 						it != state_.variables.end()) { return it->second; }
@@ -939,11 +1543,26 @@ namespace gal::lang
 				/**
 				 * @brief Updates an existing global shared object or adds a new global shared object if not found.
 				 */
-				void global_assign_or_insert(const string_view_type name, boxed_value variable)
+				void global_assign_or_insert(
+						const string_view_type name,
+						boxed_value variable
+						GAL_UTILS_DO_IF_LOG_INFO(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					if (auto it = state_.variables.find(name);
+					GAL_UTILS_DO_IF_LOG_INFO(
+							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								state_.variables.contains(name) ? "but it was already exist, assign it" : "add successed");)
+
+					if (const auto it = state_.variables.find(name);
 						it != state_.variables.end()) { it->second = std::move(variable); }
 					else { state_.variables.emplace(pool_.get().append(name), std::move(variable)); }
 				}
@@ -952,36 +1571,81 @@ namespace gal::lang
 				 * @brief Set the value of an object, by name. If the object
 				 * is not available in the current scope it is created.
 				 */
-				boxed_value& local_assign_or_insert(const string_view_type name, boxed_value variable) { return stack_->add_variable(name, std::move(variable)); }
+				boxed_value& local_assign_or_insert(
+						const string_view_type name,
+						boxed_value variable
+						GAL_UTILS_DO_IF_LOG_INFO(
+								,
+								const std_source_location& location = std_source_location::current())
+						) { return stack_->add_variable(name, std::move(variable) GAL_UTILS_DO_IF_DEBUG(, location)); }
 
 				/**
 				 * @brief Add a object, if this variable already exists in the current scope, an exception will be thrown.
 				 */
-				boxed_value& local_insert_or_throw(const string_view_type name, boxed_value variable) { return stack_->add_variable_no_check(name, std::move(variable)); }
+				boxed_value& local_insert_or_throw(
+						const string_view_type name,
+						boxed_value variable
+						GAL_UTILS_DO_IF_LOG_INFO(
+								,
+								const std_source_location& location = std_source_location::current())
+						) { return stack_->add_variable_no_check(name, std::move(variable) GAL_UTILS_DO_IF_DEBUG(, location)); }
 
 				/**
 				 * @brief Searches the current stack for an object of the given name
 				 * includes a special overload for the _ place holder object to
 				 * ensure that it is always in scope.
 				 */
-				[[nodiscard]] boxed_value& get_object(const string_view_type name, variable_cache_location_type& cache_location)
+				[[nodiscard]] boxed_value& get_object(
+						const string_view_type name,
+						variable_cache_location_type& cache_location
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
-					if (not cache_location.has_value())
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} variable '{}' from (file: '{}' function: '{}' position: ({}:{})), {}",
+								__func__,
+								name,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								cache_location.has_value() ? "it was already cached" : "try to find it");)
+
+					if (cache_location.has_value()) { return *cache_location; }
+
+					GAL_UTILS_DO_IF_DEBUG(
+							int scope_no = 0;)
+
+					// Is it in the stack?
+					for (auto& stack_data = stack_->recent_stack_data();
+					     auto& scope: stack_data | std::views::reverse)
 					{
-						// Is it in the stack?
-						for (auto& stack_data = stack_->recent_stack_data();
-						     auto& scope: stack_data | std::views::reverse)
+						GAL_UTILS_DO_IF_DEBUG(
+								utils::logger::debug("searching variable '{}' in '{}'th scope",
+									name,
+									scope_no);)
+
+						if (auto it = scope.find(name);
+							it != scope.end())
 						{
-							if (const auto it = std::ranges::find_if(
-										scope,
-										[name](const auto& pair) { return pair.first == name; });
-								it != scope.end())
-							{
-								cache_location.emplace(it->second);
-								return it->second;
-							}
+							GAL_UTILS_DO_IF_DEBUG(
+									utils::logger::debug("find variable '{}' in '{}'th scope",
+										name,
+										scope_no);)
+
+							cache_location.emplace(it->second);
+							return it->second;
 						}
+
+						GAL_UTILS_DO_IF_DEBUG(
+								++scope_no);
 					}
+
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("can not find local variable '{}', try to find it in global scope or function scope", name);
+							)
 
 					// Is the value we are looking for a global or function?
 					utils::threading::shared_lock lock{mutex_};
@@ -989,6 +1653,9 @@ namespace gal::lang
 					if (const auto it = state_.variables.find(name);
 						it != state_.variables.end())
 					{
+						GAL_UTILS_DO_IF_DEBUG(
+								utils::logger::debug("find variable '{}' in global scope", name);)
+
 						cache_location.emplace(it->second);
 						return it->second;
 					}
@@ -1001,9 +1668,23 @@ namespace gal::lang
 				 * @brief Returns the type info for a named type.
 				 * @throw std::range_error
 				 */
-				[[nodiscard]] gal_type_info get_type_info(const string_view_type name, const bool throw_if_not_exist = true) const
+				[[nodiscard]] gal_type_info get_type_info(
+						const string_view_type name,
+						const bool throw_if_not_exist = true GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						) const
 				{
 					utils::threading::shared_lock lock{mutex_};
+
+					GAL_UTILS_DO_IF_LOG_INFO(
+							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								not state_.types.contains(name) ? "but it was not exist" : "found it");)
 
 					if (const auto it = state_.types.find(name);
 						it != state_.types.end()) { return it->second; }
@@ -1066,9 +1747,23 @@ namespace gal::lang
 				 *
 				 * @todo Do we really need return a valid pointer?
 				 */
-				[[nodiscard]] state_type::functions_type::mapped_type get_function(const string_view_type name) const
+				[[nodiscard]] state_type::functions_type::mapped_type get_function(
+						const string_view_type name
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						) const
 				{
 					utils::threading::shared_lock lock{mutex_};
+
+					GAL_UTILS_DO_IF_LOG_INFO(
+							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								not state_.functions.contains(name) ? "but it was not exist" : "found it");)
 
 					const auto& functions = state_.functions;
 					if (const auto it = functions.find(name);
@@ -1235,9 +1930,17 @@ namespace gal::lang
 					return const_var(fun->match(params.sub_list(1), state));
 				}
 
-				void emit_call() { stack_->emit_call(manager_.get_conversion_saves()); }
+				void emit_call(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						) { stack_->emit_call(manager_.get_conversion_saves() GAL_UTILS_DO_IF_DEBUG(, reason, location)); }
 
-				void finish_call() noexcept { stack_->finish_call(manager_.get_conversion_saves()); }
+				void finish_call(
+						GAL_UTILS_DO_IF_DEBUG(
+								const std::string_view reason = "no reason",
+								const std_source_location& location = std_source_location::current())
+						) noexcept { stack_->finish_call(manager_.get_conversion_saves() GAL_UTILS_DO_IF_DEBUG(, reason, location)); }
 
 				static bool is_member_function_call(
 						const dispatch_function::functions_type& functions,
@@ -1257,10 +1960,23 @@ namespace gal::lang
 						function_cache_location_type& cache_location,
 						const parameters_view_type params,
 						const bool has_params,
-						const type_conversion_state& conversion)
+						const type_conversion_state& conversion
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						)
 				{
+					GAL_UTILS_DO_IF_LOG_INFO(
+							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), function '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								name);)
+
 					gal_assert(not cache_location.has_value());
-					const auto& functions = get_function(name);
+					const auto& functions = get_function(name GAL_UTILS_DO_IF_DEBUG(, location));
 					cache_location.emplace(functions);
 
 					const auto do_member_function_call = [this, &conversion](
@@ -1360,11 +2076,24 @@ namespace gal::lang
 						const string_view_type name,
 						function_cache_location_type& cache_location,
 						const parameters_view_type params,
-						const type_conversion_state& conversion) const
+						const type_conversion_state& conversion
+						GAL_UTILS_DO_IF_DEBUG(
+								,
+								const std_source_location& location = std_source_location::current())
+						) const
 				{
+					GAL_UTILS_DO_IF_LOG_INFO(
+							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), function '{}'",
+								__func__,
+								location.file_name(),
+								location.function_name(),
+								location.line(),
+								location.column(),
+								name);)
+
 					if (cache_location.has_value()) { return dispatch(**cache_location, params, conversion); }
 
-					auto functions = get_function(name);
+					auto functions = get_function(name GAL_UTILS_DO_IF_DEBUG(, location));
 					cache_location.emplace(functions);
 
 					return dispatch(*functions, params, conversion);
@@ -1484,7 +2213,13 @@ namespace gal::lang
 
 			inline auto& dispatcher_state::stack() const noexcept { return *this->operator*().stack_; }
 
-			inline boxed_value& dispatcher_state::add_object_no_check(const string_view_type name, boxed_value object) const { return stack().add_variable_no_check(name, std::move(object)); }
+			inline boxed_value& dispatcher_state::add_object_no_check(
+					const string_view_type name,
+					boxed_value object
+					GAL_UTILS_DO_IF_DEBUG(
+							,
+							const std_source_location& location)
+					) const { return stack().add_variable_no_check(name, std::move(object) GAL_UTILS_DO_IF_DEBUG(, location)); }
 
 			boxed_value& dispatcher_state::get_object(string_view_type name, auto& cache_location) const { return this->operator*().get_object(name, cache_location); }
 
@@ -1492,16 +2227,33 @@ namespace gal::lang
 
 			inline void scoped_scope::do_destruct() const { data().get().stack().pop_scope(); }
 
-			inline scoped_object_scope::scoped_object_scope(const dispatcher_state& s, boxed_value object)
-				: scoped_scope{s} { (void)s.add_object_no_check(lang::object_self_type_name::value, std::move(object)); }
+			inline scoped_object_scope::scoped_object_scope(
+					const dispatcher_state& s,
+					boxed_value object
+					GAL_UTILS_DO_IF_DEBUG(
+							,
+							const std::string_view reason,
+							const std_source_location& location)
+					)
+				: scoped_scope{s GAL_UTILS_DO_IF_DEBUG(, reason, location)} { (void)s.add_object_no_check(lang::object_self_type_name::value, std::move(object) GAL_UTILS_DO_IF_DEBUG(, location)); }
 
 			inline void scoped_stack_scope::do_construct() const { data().get().stack().new_stack(); }
 
 			inline void scoped_stack_scope::do_destruct() const { data().get().stack().pop_stack(); }
 
-			inline void scoped_function_scope::push_params(engine_stack::param_list_type&& params) const { data().get().stack().push_param(std::move(params)); }
+			inline void scoped_function_scope::push_params(
+					engine_stack::param_list_type&& params
+					GAL_UTILS_DO_IF_DEBUG(
+							,
+							const std_source_location& location)
+					) const { data().get().stack().push_param(std::move(params) GAL_UTILS_DO_IF_DEBUG(, location)); }
 
-			inline void scoped_function_scope::push_params(const engine_stack::param_list_view_type params) const { data().get().stack().push_param(params); }
+			inline void scoped_function_scope::push_params(
+					const engine_stack::param_list_view_type params
+					GAL_UTILS_DO_IF_DEBUG(
+							,
+							const std_source_location& location)
+					) const { data().get().stack().push_param(params GAL_UTILS_DO_IF_DEBUG(, location)); }
 
 			inline void scoped_function_scope::do_construct() const { data().get().stack().emit_call(data().get().conversion_saves()); }
 

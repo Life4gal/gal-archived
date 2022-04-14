@@ -4,6 +4,7 @@
 #define GAL_LANG_FOUNDATION_BOXED_CAST_HPP
 
 #include <atomic>
+#include <utils/logger.hpp>
 #include <gal/foundation/boxed_value.hpp>
 #include <gal/foundation/type_info.hpp>
 #include <set>
@@ -571,8 +572,22 @@ namespace gal::lang
 				return cache;
 			}
 
-			void add(const conversion_type& conversion)
+			void add(
+					const conversion_type& conversion
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					)
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							bidirectional_find(conversion) != conversions_.end() ? "but it was already exist" : "add successed");)
+
 				utils::threading::shared_lock lock(mutex_);
 
 				if (bidirectional_find(conversion) != conversions_.end()) { throw exception::conversion_error{conversion->to(), conversion->from(), "Trying to re-insert an existing conversion"}; }
@@ -615,8 +630,23 @@ namespace gal::lang
 								to.bare_name())};
 			}
 
-			[[nodiscard]] boxed_value boxed_type_conversion(const gal_type_info& to, conversion_saves& saves, const boxed_value& from) const
+			[[nodiscard]] boxed_value boxed_type_conversion(
+					const gal_type_info& to,
+					conversion_saves& saves,
+					const boxed_value& from
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					) const
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column());)
+
 				try
 				{
 					auto ret = get_conversion(to, from.type_info())->convert(from);
@@ -628,10 +658,31 @@ namespace gal::lang
 			}
 
 			template<typename To>
-			[[nodiscard]] boxed_value boxed_type_conversion(conversion_saves& saves, const boxed_value& from) const { return boxed_type_conversion(make_type_info<To>(), saves, from); }
+			[[nodiscard]] boxed_value boxed_type_conversion(
+					conversion_saves& saves,
+					const boxed_value& from
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					) const { return type_conversion_manager::boxed_type_conversion(make_type_info<To>(), saves, from GAL_UTILS_DO_IF_DEBUG(, location)); }
 
-			[[nodiscard]] boxed_value boxed_type_down_conversion(const gal_type_info& from, conversion_saves& saves, const boxed_value& to) const
+			[[nodiscard]] boxed_value boxed_type_down_conversion(
+					const gal_type_info& from,
+					conversion_saves& saves,
+					const boxed_value& to
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					) const
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column());)
+
 				try
 				{
 					auto ret = get_conversion(to.type_info(), from)->convert_down(to);
@@ -643,18 +694,72 @@ namespace gal::lang
 			}
 
 			template<typename From>
-			[[nodiscard]] boxed_value boxed_type_down_conversion(conversion_saves& saves, const boxed_value& to) const { return boxed_type_down_conversion(make_type_info<From>(), saves, to); }
+			[[nodiscard]] boxed_value boxed_type_down_conversion(
+					conversion_saves& saves,
+					const boxed_value& to
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std_source_location& location = std_source_location::current())
+					) const { return type_conversion_manager::boxed_type_down_conversion(make_type_info<From>(), saves, to GAL_UTILS_DO_IF_DEBUG(, location)); }
 
-			constexpr static void enable_conversion_saves(conversion_saves& saves, const bool enable) noexcept { saves.enable = enable; }
-
-			[[nodiscard]] constexpr static auto take_conversion_saves(conversion_saves& saves) noexcept
+			static void enable_conversion_saves(
+					conversion_saves& saves,
+					const bool enable
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std::string_view reason = "no reason",
+							const std_source_location& location = std_source_location::current())
+					) noexcept
 			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);)
+
+				saves.enable = enable;
+			}
+
+			[[nodiscard]] static auto take_conversion_saves(
+					conversion_saves& saves
+					GAL_UTILS_DO_IF_LOG_INFO(
+							,
+							const std::string_view reason = "no reason",
+							const std_source_location& location = std_source_location::current())
+					) noexcept
+			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);)
+
 				decltype(conversion_saves::saves) dummy;
 				std::swap(dummy, saves.saves);
 				return dummy;
 			}
 
-			[[nodiscard]] conversion_saves& get_conversion_saves() const noexcept { return *conversion_saves_; }
+			[[nodiscard]] conversion_saves& get_conversion_saves(
+					GAL_UTILS_DO_IF_LOG_INFO(
+							const std_source_location& location = std_source_location::current())
+					) const noexcept
+			{
+				GAL_UTILS_DO_IF_LOG_INFO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column());)
+
+				return *conversion_saves_;
+			}
 		};
 
 		class type_conversion_state

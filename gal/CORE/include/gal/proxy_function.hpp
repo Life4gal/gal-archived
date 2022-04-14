@@ -3,6 +3,7 @@
 #ifndef GAL_LANG_PROXY_FUNCTION_HPP
 #define GAL_LANG_PROXY_FUNCTION_HPP
 
+#include <utils/logger.hpp>
 #include <gal/foundation/proxy_function.hpp>
 #include <utils/algorithm.hpp>
 
@@ -13,8 +14,20 @@ namespace gal::lang
 	[[nodiscard]] foundation::boxed_value dispatch(
 			const Functions& functions,
 			const foundation::parameters_view_type parameters,
-			const foundation::type_conversion_state& conversion)
+			const foundation::type_conversion_state& conversion
+			GAL_UTILS_DO_IF_DEBUG(
+					,
+					const std_source_location& location = std_source_location::current())
+			)
 	{
+		GAL_UTILS_DO_IF_LOG_INFO(
+				utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+					__func__,
+					location.file_name(),
+					location.function_name(),
+					location.line(),
+					location.column());)
+
 		std::vector<std::pair<std::size_t, std::reference_wrapper<const foundation::proxy_function_base>>> ordered_functions{};
 		ordered_functions.reserve(functions.size());
 
