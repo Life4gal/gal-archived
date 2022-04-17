@@ -7,26 +7,31 @@
 DISABLE_WARNING_PUSH
 DISABLE_WARNING(4189)
 
+#define SPDLOG_FMT_EXTERNAL
 #include <spdlog/spdlog.h>
 
-#ifndef GAL_UTILS_LOGGER_DEBUG
-#ifndef _NODEBUG
-#define GAL_UTILS_LOGGER_DEBUG
-#include <utils/source_location.hpp>
+// default silent logger
+#define GAL_UTILS_LOGGER_NO_DEBUG
+
+#ifndef GAL_UTILS_LOGGER_NO_DEBUG
+#ifdef _NODEBUG
+#define GAL_UTILS_LOGGER_NO_DEBUG
 #endif
+#endif
+
+#ifndef GAL_UTILS_LOGGER_NO_DEBUG
+#include <utils/source_location.hpp>
 #endif
 
 namespace gal::utils
 {
 	namespace logger = spdlog;
 
-	#ifdef GAL_UTILS_LOGGER_DEBUG
+	#ifndef GAL_UTILS_LOGGER_NO_DEBUG
 	#define GAL_UTILS_DO_IF_DEBUG(...) __VA_ARGS__
 	#else
-		#define GAL_UTILS_DO_IF_DEBUG(...)
+	#define GAL_UTILS_DO_IF_DEBUG(...)
 	#endif
-
-	#define GAL_UTILS_DO_IF_LOG_INFO(...) __VA_ARGS__
 }
 
 DISABLE_WARNING_POP

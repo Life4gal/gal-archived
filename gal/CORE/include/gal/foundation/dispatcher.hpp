@@ -144,10 +144,6 @@ namespace gal::lang
 			template<typename Engine>
 			void apply_type_info(Engine& engine)
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
-						utils::logger::info("There are currently {} type_info(s)", types_.size());
-						)
-
 				GAL_UTILS_DO_IF_DEBUG(
 						std::string detail{};
 						std::ranges::for_each(
@@ -156,7 +152,7 @@ namespace gal::lang
 							{
 							detail.append(key).push_back('\n');
 							});
-						utils::logger::debug("details:\n\t{}", pool_.size(), detail);
+						utils::logger::debug("There are currently {} type_info(s), details:\n\t{}", types_.size(), detail);
 						)
 
 				std::ranges::for_each(
@@ -174,9 +170,6 @@ namespace gal::lang
 			template<typename Engine>
 			void apply_function(Engine& engine)
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
-						utils::logger::info("There are currently {} function(s)", types_.size());)
-
 				GAL_UTILS_DO_IF_DEBUG(
 						std::string detail{};
 						std::ranges::for_each(
@@ -185,7 +178,7 @@ namespace gal::lang
 							{
 							detail.append(key).push_back('\n');
 							});
-						utils::logger::debug("details:\n\t{}", pool_.size(), detail);)
+						utils::logger::debug("There are currently {} function(s), details:\n\t{}", functions_.size(), detail);)
 
 				std::ranges::for_each(
 						functions_,
@@ -202,9 +195,6 @@ namespace gal::lang
 			template<typename Engine>
 			void apply_variable(Engine& engine)
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
-						utils::logger::info("There are currently {} variable(s)", types_.size());)
-
 				GAL_UTILS_DO_IF_DEBUG(
 						std::string detail{};
 						std::ranges::for_each(
@@ -213,7 +203,7 @@ namespace gal::lang
 							{
 							detail.append(key).push_back('\n');
 							});
-						utils::logger::debug("details:\n\t{}", pool_.size(), detail);)
+						utils::logger::debug("There are currently {} variable(s), details:\n\t{}", variables_.size(), detail);)
 
 				std::ranges::for_each(
 						variables_,
@@ -223,9 +213,6 @@ namespace gal::lang
 			template<typename Eval>
 			void apply_evaluation(Eval& eval)
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
-						utils::logger::info("There are currently {} evaluation(s)", types_.size());)
-
 				GAL_UTILS_DO_IF_DEBUG(
 						std::string detail{};
 						std::ranges::for_each(
@@ -234,7 +221,7 @@ namespace gal::lang
 							{
 							detail.append(key).push_back('\n');
 							});
-						utils::logger::debug("details:\n\t{}", pool_.size(), detail);)
+						utils::logger::debug("There are currently {} evaluation(s), details:\n\t{}", evaluations_.size(), detail);)
 
 				std::ranges::for_each(
 						evaluations_,
@@ -244,8 +231,8 @@ namespace gal::lang
 			template<typename Engine>
 			void apply_type_conversion(Engine& engine)
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
-						utils::logger::info("There are currently {} type_conversion(s)", types_.size());)
+				GAL_UTILS_DO_IF_DEBUG(
+						utils::logger::debug("There are currently {} type_conversion(s)", types_.size());)
 
 				std::ranges::for_each(
 						type_conversions_,
@@ -256,13 +243,13 @@ namespace gal::lang
 			// todo: should only allow right value?
 			// todo: The dispatcher should take over the string_pool of the core after getting all the contents of the core, there should be a coercive measure to ensure that this happens
 			[[nodiscard]] string_pool_type take_pool(
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							const std::string_view reason = "no reason",
 							const std_source_location& location = std_source_location::current()
 							)
 					) noexcept/* && */
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
+				GAL_UTILS_DO_IF_DEBUG(
 						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
 							__func__,
 							location.file_name(),
@@ -289,14 +276,14 @@ namespace gal::lang
 			engine_core& add_type_info(
 					const string_view_type name,
 					gal_type_info type
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					)
 			{
 				[[maybe_unused]] const auto result = types_.emplace(pool_.append(name), type).second;
-				GAL_UTILS_DO_IF_LOG_INFO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+				GAL_UTILS_DO_IF_DEBUG(
+						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -312,20 +299,21 @@ namespace gal::lang
 			engine_core& add_function(
 					const string_view_type name,
 					function_type function
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					)
 			{
 				[[maybe_unused]] const auto result = functions_.emplace(pool_.append(name), std::move(function)).second;
-				GAL_UTILS_DO_IF_LOG_INFO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+				GAL_UTILS_DO_IF_DEBUG(
+						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
 							location.line(),
 							location.column(),
-							result ? "but it was already exist" : "add successed");)
+							result ? "but it was already exist" : "add successed");
+						)
 
 				return *this;
 			}
@@ -333,7 +321,7 @@ namespace gal::lang
 			engine_core& add_variable(
 					const string_view_type name,
 					boxed_value variable
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					)
@@ -341,14 +329,15 @@ namespace gal::lang
 				if (not variable.is_const()) { throw exception::global_mutable_error{name}; }
 
 				[[maybe_unused]] const auto result = variables_.emplace(pool_.append(name), std::move(variable)).second;
-				GAL_UTILS_DO_IF_LOG_INFO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+				GAL_UTILS_DO_IF_DEBUG(
+						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
 							location.line(),
 							location.column(),
-							result ? "but it was already exist" : "add successed");)
+							result ? "but it was already exist" : "add successed");
+						)
 
 				gal_assert(result);
 				return *this;
@@ -356,20 +345,21 @@ namespace gal::lang
 
 			engine_core& add_evaluation(
 					const string_view_type evaluation
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					)
 			{
 				[[maybe_unused]] const auto result = evaluations_.emplace(pool_.append(evaluation)).second;
-				GAL_UTILS_DO_IF_LOG_INFO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+				GAL_UTILS_DO_IF_DEBUG(
+						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
 							location.line(),
 							location.column(),
-							result ? "but it was already exist" : "add successed");)
+							result ? "but it was already exist" : "add successed");
+						)
 
 				gal_assert(result);
 				return *this;
@@ -377,20 +367,21 @@ namespace gal::lang
 
 			engine_core& add_type_conversion(
 					type_conversion_type conversion
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					)
 			{
 				[[maybe_unused]] const auto result = type_conversions_.emplace(std::move(conversion)).second;
-				GAL_UTILS_DO_IF_LOG_INFO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+				GAL_UTILS_DO_IF_DEBUG(
+						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
 							location.line(),
 							location.column(),
-							result ? "but it was already exist" : "add successed");)
+							result ? "but it was already exist" : "add successed");
+						)
 
 				gal_assert(result);
 				return *this;
@@ -401,7 +392,7 @@ namespace gal::lang
 			void apply(
 					Eval& eval,
 					Engine& engine
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					)
@@ -414,13 +405,14 @@ namespace gal::lang
 					engine.add_type_conversion(std::declval<const type_conversion_type&>());
 				}
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
+				GAL_UTILS_DO_IF_DEBUG(
 						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
 							__func__,
 							location.file_name(),
 							location.function_name(),
 							location.line(),
-							location.column());)
+							location.column());
+						)
 
 				this->apply_type_info(engine);
 				this->apply_function(engine);
@@ -1352,7 +1344,7 @@ namespace gal::lang
 				void add_type_info(
 						const string_view_type name,
 						const gal_type_info& type
-						GAL_UTILS_DO_IF_LOG_INFO(
+						GAL_UTILS_DO_IF_DEBUG(
 								,
 								const std_source_location& location = std_source_location::current())
 						)
@@ -1361,14 +1353,15 @@ namespace gal::lang
 
 					utils::threading::unique_lock lock{mutex_};
 
-					GAL_UTILS_DO_IF_LOG_INFO(
-							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 								__func__,
 								location.file_name(),
 								location.function_name(),
 								location.line(),
 								location.column(),
-								state_.variables.contains(formatted_name) ? "but it was already exist" : "add successed");)
+								state_.variables.contains(formatted_name) ? "but it was already exist" : "add successed");
+							)
 
 					// inline add_global because we need add name into pool
 					if (not state_.variables.contains(formatted_name)) { state_.variables.emplace(pool_.get().append(formatted_name), const_var(type)); }
@@ -1384,21 +1377,22 @@ namespace gal::lang
 				void add_function(
 						const string_view_type name,
 						state_type::function_type function
-						GAL_UTILS_DO_IF_LOG_INFO(
+						GAL_UTILS_DO_IF_DEBUG(
 								,
 								const std_source_location& location = std_source_location::current())
 						)
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					GAL_UTILS_DO_IF_LOG_INFO(
-							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 								__func__,
 								location.file_name(),
 								location.function_name(),
 								location.line(),
 								location.column(),
-								state_.functions.contains(name) ? "but it was already exist" : "add successed");)
+								state_.functions.contains(name) ? "but it was already exist" : "add successed");
+							)
 
 					string_view_type pool_name = name;
 
@@ -1457,18 +1451,19 @@ namespace gal::lang
 				boxed_value& add_global(
 						const string_view_type name,
 						boxed_value variable
-						GAL_UTILS_DO_IF_LOG_INFO(
+						GAL_UTILS_DO_IF_DEBUG(
 								,
 								const std_source_location& location = std_source_location::current())
 						)
 				{
-					GAL_UTILS_DO_IF_LOG_INFO(
-							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{}))",
 								__func__,
 								location.file_name(),
 								location.function_name(),
 								location.line(),
-								location.column());)
+								location.column());
+							)
 
 					if (not variable.is_const()) { throw exception::global_mutable_error{name}; }
 
@@ -1480,7 +1475,7 @@ namespace gal::lang
 				 */
 				void add_type_conversion(
 						const type_conversion_manager::conversion_type& conversion
-						GAL_UTILS_DO_IF_LOG_INFO(
+						GAL_UTILS_DO_IF_DEBUG(
 								,
 								const std_source_location& location = std_source_location::current())
 						) { manager_.add(conversion GAL_UTILS_DO_IF_DEBUG(, location)); }
@@ -1491,14 +1486,14 @@ namespace gal::lang
 				boxed_value& add_global_mutable(
 						const string_view_type name,
 						boxed_value variable
-						GAL_UTILS_DO_IF_LOG_INFO(
+						GAL_UTILS_DO_IF_DEBUG(
 								,
 								const std_source_location& location = std_source_location::current())
 						)
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 								__func__,
 								location.file_name(),
@@ -1518,21 +1513,22 @@ namespace gal::lang
 				boxed_value& add_global_mutable_no_throw(
 						const string_view_type name,
 						boxed_value variable
-						GAL_UTILS_DO_IF_LOG_INFO(
+						GAL_UTILS_DO_IF_DEBUG(
 								,
 								const std_source_location& location = std_source_location::current())
 						)
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					GAL_UTILS_DO_IF_LOG_INFO(
-							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 								__func__,
 								location.file_name(),
 								location.function_name(),
 								location.line(),
 								location.column(),
-								state_.variables.contains(name) ? "but it was already exist" : "add successed");)
+								state_.variables.contains(name) ? "but it was already exist" : "add successed");
+							)
 
 					if (const auto it = state_.variables.find(name);
 						it != state_.variables.end()) { return it->second; }
@@ -1546,21 +1542,22 @@ namespace gal::lang
 				void global_assign_or_insert(
 						const string_view_type name,
 						boxed_value variable
-						GAL_UTILS_DO_IF_LOG_INFO(
+						GAL_UTILS_DO_IF_DEBUG(
 								,
 								const std_source_location& location = std_source_location::current())
 						)
 				{
 					utils::threading::unique_lock lock{mutex_};
 
-					GAL_UTILS_DO_IF_LOG_INFO(
-							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+					GAL_UTILS_DO_IF_DEBUG(
+							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 								__func__,
 								location.file_name(),
 								location.function_name(),
 								location.line(),
 								location.column(),
-								state_.variables.contains(name) ? "but it was already exist, assign it" : "add successed");)
+								state_.variables.contains(name) ? "but it was already exist, assign it" : "add successed");
+							)
 
 					if (const auto it = state_.variables.find(name);
 						it != state_.variables.end()) { it->second = std::move(variable); }
@@ -1574,7 +1571,7 @@ namespace gal::lang
 				boxed_value& local_assign_or_insert(
 						const string_view_type name,
 						boxed_value variable
-						GAL_UTILS_DO_IF_LOG_INFO(
+						GAL_UTILS_DO_IF_DEBUG(
 								,
 								const std_source_location& location = std_source_location::current())
 						) { return stack_->add_variable(name, std::move(variable) GAL_UTILS_DO_IF_DEBUG(, location)); }
@@ -1585,7 +1582,7 @@ namespace gal::lang
 				boxed_value& local_insert_or_throw(
 						const string_view_type name,
 						boxed_value variable
-						GAL_UTILS_DO_IF_LOG_INFO(
+						GAL_UTILS_DO_IF_DEBUG(
 								,
 								const std_source_location& location = std_source_location::current())
 						) { return stack_->add_variable_no_check(name, std::move(variable) GAL_UTILS_DO_IF_DEBUG(, location)); }
@@ -1670,14 +1667,15 @@ namespace gal::lang
 				 */
 				[[nodiscard]] gal_type_info get_type_info(
 						const string_view_type name,
-						const bool throw_if_not_exist = true GAL_UTILS_DO_IF_DEBUG(
+						const bool throw_if_not_exist = true
+						GAL_UTILS_DO_IF_DEBUG(
 								,
 								const std_source_location& location = std_source_location::current())
 						) const
 				{
 					utils::threading::shared_lock lock{mutex_};
 
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 								__func__,
 								location.file_name(),
@@ -1756,7 +1754,7 @@ namespace gal::lang
 				{
 					utils::threading::shared_lock lock{mutex_};
 
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 								__func__,
 								location.file_name(),
@@ -1966,7 +1964,7 @@ namespace gal::lang
 								const std_source_location& location = std_source_location::current())
 						)
 				{
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), function '{}'",
 								__func__,
 								location.file_name(),
@@ -2082,7 +2080,7 @@ namespace gal::lang
 								const std_source_location& location = std_source_location::current())
 						) const
 				{
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), function '{}'",
 								__func__,
 								location.file_name(),

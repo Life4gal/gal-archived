@@ -50,6 +50,7 @@ namespace gal::lang::lang
 	using keyword_inline_container_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("[]");
 	using keyword_map_pair_split_name = GAL_UTILS_TEMPLATE_STRING_TYPE(":");
 	using keyword_value_range_split_name = GAL_UTILS_TEMPLATE_STRING_TYPE("..");
+	using keyword_operator_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("``");
 	// see container_subscript_interface_name below
 	using keyword_array_call_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("[]");
 	using keyword_magic_line_name = GAL_UTILS_TEMPLATE_STRING_TYPE("__LINE__");

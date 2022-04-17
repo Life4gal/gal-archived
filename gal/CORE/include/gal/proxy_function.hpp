@@ -20,7 +20,7 @@ namespace gal::lang
 					const std_source_location& location = std_source_location::current())
 			)
 	{
-		GAL_UTILS_DO_IF_LOG_INFO(
+		GAL_UTILS_DO_IF_DEBUG(
 				utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
 					__func__,
 					location.file_name(),

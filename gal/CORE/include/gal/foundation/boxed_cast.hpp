@@ -574,12 +574,12 @@ namespace gal::lang
 
 			void add(
 					const conversion_type& conversion
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					)
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
+				GAL_UTILS_DO_IF_DEBUG(
 						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
 							__func__,
 							location.file_name(),
@@ -634,12 +634,12 @@ namespace gal::lang
 					const gal_type_info& to,
 					conversion_saves& saves,
 					const boxed_value& from
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					) const
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
+				GAL_UTILS_DO_IF_DEBUG(
 						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
 							__func__,
 							location.file_name(),
@@ -661,7 +661,7 @@ namespace gal::lang
 			[[nodiscard]] boxed_value boxed_type_conversion(
 					conversion_saves& saves,
 					const boxed_value& from
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					) const { return type_conversion_manager::boxed_type_conversion(make_type_info<To>(), saves, from GAL_UTILS_DO_IF_DEBUG(, location)); }
@@ -670,12 +670,12 @@ namespace gal::lang
 					const gal_type_info& from,
 					conversion_saves& saves,
 					const boxed_value& to
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					) const
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
+				GAL_UTILS_DO_IF_DEBUG(
 						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
 							__func__,
 							location.file_name(),
@@ -697,7 +697,7 @@ namespace gal::lang
 			[[nodiscard]] boxed_value boxed_type_down_conversion(
 					conversion_saves& saves,
 					const boxed_value& to
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std_source_location& location = std_source_location::current())
 					) const { return type_conversion_manager::boxed_type_down_conversion(make_type_info<From>(), saves, to GAL_UTILS_DO_IF_DEBUG(, location)); }
@@ -705,13 +705,13 @@ namespace gal::lang
 			static void enable_conversion_saves(
 					conversion_saves& saves,
 					const bool enable
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std::string_view reason = "no reason",
 							const std_source_location& location = std_source_location::current())
 					) noexcept
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
+				GAL_UTILS_DO_IF_DEBUG(
 						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
 							__func__,
 							location.file_name(),
@@ -725,13 +725,13 @@ namespace gal::lang
 
 			[[nodiscard]] static auto take_conversion_saves(
 					conversion_saves& saves
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							,
 							const std::string_view reason = "no reason",
 							const std_source_location& location = std_source_location::current())
 					) noexcept
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
+				GAL_UTILS_DO_IF_DEBUG(
 						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
 							__func__,
 							location.file_name(),
@@ -746,11 +746,11 @@ namespace gal::lang
 			}
 
 			[[nodiscard]] conversion_saves& get_conversion_saves(
-					GAL_UTILS_DO_IF_LOG_INFO(
+					GAL_UTILS_DO_IF_DEBUG(
 							const std_source_location& location = std_source_location::current())
 					) const noexcept
 			{
-				GAL_UTILS_DO_IF_LOG_INFO(
+				GAL_UTILS_DO_IF_DEBUG(
 						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
 							__func__,
 							location.file_name(),

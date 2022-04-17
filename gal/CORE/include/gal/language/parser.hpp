@@ -897,6 +897,7 @@ namespace gal::lang
 			{
 				if (point_.finish()) { return false; }
 
+				// identifier
 				if (parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::identifier))
 				{
 					++point_;
@@ -904,12 +905,14 @@ namespace gal::lang
 					return true;
 				}
 
-				if (point_.peek() == '`')
+				// operator
+				// todo: better support
+				if (point_.peek() == keyword_operator_name::left_type::value[0])
 				{
 					++point_;
 					const auto begin = point_;
 
-					while (not point_.finish() && point_.peek() != '`')
+					while (not point_.finish() && point_.peek() != keyword_operator_name::right_type::value[0])
 					{
 						if (read_eol())
 						{
@@ -1427,7 +1430,8 @@ namespace gal::lang
 					// todo: other internal magic name?
 					default:
 					{
-						if (begin.peek() == '`')
+						// todo: better support
+						if (begin.peek() == keyword_operator_name::right_type::value[0])
 						{
 							// 'escaped' literal, like an operator name
 							text = (begin + 1).str(point_ - 1);
