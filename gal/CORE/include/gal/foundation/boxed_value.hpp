@@ -21,6 +21,12 @@ namespace gal::lang::foundation
 
 		using internal_data_type = std::shared_ptr<internal_data>;
 
+		GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) static const gal_type_info& class_type() noexcept
+		{
+			GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)static gal_type_info type = make_type_info<boxed_value>();
+			return type;
+		}
+
 	private:
 		/**
 		 * @brief structure which holds the internal state of a boxed_value
@@ -219,7 +225,8 @@ namespace gal::lang::foundation
 				{
 					// save new pointer data
 					const auto p = ptr.get().get();
-					data.get().raw = const_cast<void*>(p);
+					// todo: check it
+					data.get().raw = const_cast<void*>(static_cast<const void*>(p));
 					data.get().const_raw = p;
 				}
 
@@ -262,5 +269,8 @@ namespace gal::lang::foundation
 		[[nodiscard]] const void* get_const_raw() const noexcept { return data_->const_raw; }
 	};
 }
+
+template<>
+struct std::hash<gal::lang::foundation::boxed_value> : std::hash<gal::lang::foundation::boxed_value::internal_data_type>{};
 
 #endif// GAL_LANG_FOUNDATION_BOXED_VALUE_HPP

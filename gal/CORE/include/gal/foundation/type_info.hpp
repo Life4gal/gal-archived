@@ -67,7 +67,7 @@ namespace gal::lang::foundation
 				const char* type_name;
 				const char* bare_type_name;)
 
-		constexpr gal_type_info(
+		GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) gal_type_info(
 				const info_builder builder,
 				const std::type_info& type,
 				const std::type_info& bare_type) noexcept
@@ -82,7 +82,7 @@ namespace gal::lang::foundation
 					)
 		}
 
-		constexpr gal_type_info() noexcept
+		GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)gal_type_info() noexcept
 			: type_{typeid(unknown_type)},
 			  bare_type_{typeid(unknown_type)},
 			  flag_{flag_undefined}
@@ -281,7 +281,7 @@ namespace gal::lang::foundation
 	/**
 	 * @brief Creates a type_info object representing the invalid type.
 	 */
-	[[nodiscard]] constexpr auto make_invalid_type_type() noexcept { return gal_type_info{}; }
+	[[nodiscard]] GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,inline) auto make_invalid_type_type() noexcept { return gal_type_info{}; }
 
 	/**
 	 * @brief Creates a type_info object representing the templated type.
@@ -289,7 +289,7 @@ namespace gal::lang::foundation
 	 * @return type_info for T
 	 */
 	template<typename T>
-	[[nodiscard]] constexpr auto make_type_info() noexcept { return type_info_detail::type_info_factory<T>::make(); }
+	[[nodiscard]] GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) auto make_type_info() noexcept { return type_info_detail::type_info_factory<T>::make(); }
 }
 
 #endif// GAL_LANG_FOUNDATION_TYPE_INFO_HPP

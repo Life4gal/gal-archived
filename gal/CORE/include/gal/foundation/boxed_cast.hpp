@@ -25,7 +25,7 @@ namespace gal::lang
 		class bad_boxed_cast : public std::bad_cast
 		{
 		private:
-			const char* what_;
+			GAL_LANG_TYPE_INFO_DEBUG_DO_OR(const char*, foundation::string_type) what_;
 
 		public:
 			// gal_type_info contained in the boxed_value
@@ -41,7 +41,7 @@ namespace gal::lang
 				: what_{
 						  GAL_LANG_TYPE_INFO_DEBUG_DO_OR(
 								  what,
-								  std_format::format("Cast from '{}({})' to '{}', detail: {}.", from.type_name, from.bare_type_name, to.name(), what).c_str()
+								  std_format::format("Cast from '{}({})' to '{}', detail: {}.", from.type_name, from.bare_type_name, to.name(), what)
 								  )
 				  },
 				  from{from},
@@ -58,7 +58,7 @@ namespace gal::lang
 				: what_{what},
 				  to{nullptr} {}
 
-			[[nodiscard]] const char* what() const override { return what_; }
+			[[nodiscard]] const char* what() const override { return what_ GAL_LANG_TYPE_INFO_DEBUG_DO(.c_str()); }
 		};
 
 		/**
@@ -544,7 +544,7 @@ namespace gal::lang
 		using convertor_type = std::shared_ptr<boxed_cast_detail::convertor_base>;
 
 		template<typename T, typename... Args>
-		requires std::is_base_of_v<boxed_cast_detail::convertor_base, T>
+			requires std::is_base_of_v<boxed_cast_detail::convertor_base, T>
 		[[nodiscard]] convertor_type make_convertor(Args&&... args) { return std::make_shared<T>(std::forward<Args>(args)...); }
 
 		class convertor_manager

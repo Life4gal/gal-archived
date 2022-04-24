@@ -24,6 +24,8 @@
 		#define GAL_LANG_RECODE_CALL_LOCATION_DEBUG(...)
 #endif
 
+#define GAL_LANG_ARITHMETIC_DIVIDE_ZERO_PROTECT
+
 #include <utils/macro.hpp>
 
 namespace gal::lang { }
