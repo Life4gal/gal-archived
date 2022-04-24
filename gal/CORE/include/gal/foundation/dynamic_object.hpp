@@ -19,7 +19,7 @@ namespace gal::lang::foundation
 		// using members_type = std::unordered_map<string_type, boxed_value, std::hash<string_type>, std::equal_to<>>;
 		using members_type = std::map<string_type, boxed_value, std::less<>>;
 
-		GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) static const gal_type_info& class_type() noexcept
+		static const gal_type_info& class_type() noexcept
 		{
 			GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) static gal_type_info type = make_type_info<dynamic_object>();
 			return type;

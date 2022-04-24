@@ -21,7 +21,7 @@ namespace gal::lang::foundation
 
 		using internal_data_type = std::shared_ptr<internal_data>;
 
-		GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) static const gal_type_info& class_type() noexcept
+		static const gal_type_info& class_type() noexcept
 		{
 			GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)static gal_type_info type = make_type_info<boxed_value>();
 			return type;

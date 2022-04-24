@@ -24,7 +24,7 @@ namespace gal
 			const std_source_location& location = std_source_location::current()) noexcept;
 	#else
 		#define GAL_ASSERT_CONSTEXPR constexpr
-		#define gal_assert(...) (void)__VA_ARGS__;
+		#define gal_assert(...) 
 	#endif
 }// namespace gal
 

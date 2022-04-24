@@ -630,7 +630,7 @@ namespace gal::lang
 		 */
 		struct function_argument_placeholder final
 		{
-			GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)static const gal_type_info& class_type() noexcept
+			static const gal_type_info& class_type() noexcept
 			{
 				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)static gal_type_info type = make_type_info<function_argument_placeholder>();
 				return type;

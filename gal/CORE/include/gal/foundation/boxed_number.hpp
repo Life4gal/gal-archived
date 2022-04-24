@@ -32,7 +32,7 @@ namespace gal::lang
 		{
 		public:
 
-			GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) static const gal_type_info& class_type() noexcept
+			static const gal_type_info& class_type() noexcept
 			{
 				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) static gal_type_info type = make_type_info<boxed_number>();
 				return type;

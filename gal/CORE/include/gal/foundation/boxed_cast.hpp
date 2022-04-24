@@ -652,7 +652,8 @@ namespace gal::lang
 
 				if (find_bidirectional_convertor(convertor) != convertors_.end()) { throw exception::convertor_error{convertor->from(), convertor->to(), "Trying to re-insert an existing conversion"}; }
 
-				gal_assert(convertors_.insert(convertor).second);
+				[[maybe_unused]] const auto result = convertors_.insert(convertor).second;
+				gal_assert(result);
 				convertibles_.insert({convertor->to().bare_type_info(), convertor->from().bare_type_info()});
 				type_size_ = convertibles_.size();
 			}
