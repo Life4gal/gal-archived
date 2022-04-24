@@ -3,6 +3,7 @@
 #ifndef GAL_LANG_FOUNDATION_TYPE_INFO_HPP
 #define GAL_LANG_FOUNDATION_TYPE_INFO_HPP
 
+#include<gal/defines.hpp>
 #include<type_traits>
 #include<typeinfo>
 #include<memory>
@@ -13,6 +14,8 @@ namespace gal::lang::foundation
 	class gal_type_info
 	{
 	public:
+		// reference_wrapper are used for CopyConstructible && CopyAssignable
+		using type_info_wrapper_type = std::reference_wrapper<const std::type_info>;
 		using flag_type = std::uint32_t;
 
 		constexpr static flag_type flag_void = 1 << 0;
@@ -24,64 +27,70 @@ namespace gal::lang::foundation
 		constexpr static flag_type flag_undefined = 1 << 5;
 		constexpr static const char* undefined_type_name = "unknown-type";
 
+		struct info_builder
+		{
+			bool is_void;
+			bool is_arithmetic;
+			bool is_const;
+			bool is_reference;
+			bool is_pointer;
+
+			constexpr flag_type operator()() const noexcept
+			{
+				return (is_void ? flag_void : 0) |
+				       (is_arithmetic ? flag_arithmetic : 0) |
+				       (is_const ? flag_const : 0) |
+				       (is_reference ? flag_reference : 0) |
+				       (is_pointer ? flag_pointer : 0);
+			}
+		};
+
 	private:
 		struct unknown_type { };
 
-		using real_type_info_type = std::reference_wrapper<const std::type_info>;
-
-		// reference_wrapper are used for CopyConstructible && CopyAssignable
-		real_type_info_type ti_;
-		real_type_info_type bare_ti_;
+		type_info_wrapper_type type_;
+		type_info_wrapper_type bare_type_;
 		flag_type flag_;
 
-	public:
-		constexpr gal_type_info(
-				const bool is_void,
-				const bool is_arithmetic,
-				const bool is_const,
-				const bool is_reference,
-				const bool is_pointer,
-				const std::type_info& ti,
-				const std::type_info& bare_ti) noexcept
-			: ti_{ti},
-			  bare_ti_{bare_ti},
-			  flag_{
-				(is_void ? flag_void : 0) |
-					  (is_arithmetic ? flag_arithmetic : 0) |
-					  (is_const ? flag_const : 0) |
-					  (is_reference ? flag_reference : 0) |
-					  (is_pointer ? flag_pointer : 0)}
+		[[nodiscard]] static auto get_typename(const std::type_info& type)
 		{
+			#ifdef COMPILER_MSVC
+			return type.raw_name();
+			#else
+			return type.name();
+			#endif
+		}
+
+
+	public:
+		GAL_LANG_TYPE_INFO_DEBUG_DO(
+				const char* type_name;
+				const char* bare_type_name;)
+
+		constexpr gal_type_info(
+				const info_builder builder,
+				const std::type_info& type,
+				const std::type_info& bare_type) noexcept
+			: type_{type},
+			  bare_type_{bare_type},
+			  flag_{builder()}
+		{
+			GAL_LANG_TYPE_INFO_DEBUG_DO(
+
+					type_name = get_typename(type);
+					bare_type_name = get_typename(bare_type);
+					)
 		}
 
 		constexpr gal_type_info() noexcept
-			: ti_{typeid(unknown_type)},
-			  bare_ti_{typeid(unknown_type)},
-			  flag_{flag_undefined} {}
-
-		// `constexpr` requires c++23
-		[[nodiscard]] /* constexpr */ bool operator==(const gal_type_info& other) const noexcept { return ti_.get() == other.ti_.get(); }
-
-		[[nodiscard]] constexpr bool operator==(const std::type_info& other) const noexcept { return not is_undefined() && ti_.get() == other; }
-
-		// `constexpr` requires c++23
-		[[nodiscard]] /* constexpr */ bool bare_equal(const gal_type_info& other) const noexcept { return bare_ti_.get() == other.bare_ti_.get(); }
-
-		// `constexpr` requires c++23
-		[[nodiscard]] /* constexpr */ bool bare_equal(const std::type_info& other) const noexcept { return not is_undefined() && bare_ti_.get() == other; }
-
-		[[nodiscard]] bool before(const gal_type_info& other) const noexcept { return ti_.get().before(other.ti_.get()); }
-
-		[[nodiscard]] const char* name() const noexcept
+			: type_{typeid(unknown_type)},
+			  bare_type_{typeid(unknown_type)},
+			  flag_{flag_undefined}
 		{
-			if (not is_undefined()) { return ti_.get().name(); }
-			return undefined_type_name;
-		}
-
-		[[nodiscard]] const char* bare_name() const noexcept
-		{
-			if (not is_undefined()) { return bare_ti_.get().name(); }
-			return undefined_type_name;
+			GAL_LANG_TYPE_INFO_DEBUG_DO(
+					type_name = get_typename(type_);
+					bare_type_name = get_typename(bare_type_);
+					)
 		}
 
 		[[nodiscard]] constexpr bool is_void() const noexcept { return flag_ & flag_void; }
@@ -91,7 +100,33 @@ namespace gal::lang::foundation
 		[[nodiscard]] constexpr bool is_pointer() const noexcept { return flag_ & flag_pointer; }
 		[[nodiscard]] constexpr bool is_undefined() const noexcept { return flag_ & flag_undefined; }
 
-		[[nodiscard]] constexpr const std::type_info& bare_type_info() const noexcept { return bare_ti_.get(); }
+		// `constexpr` requires c++23
+		[[nodiscard]] /* constexpr */ bool operator==(const gal_type_info& other) const noexcept { return type_.get() == other.type_.get(); }
+
+		// `constexpr` requires c++23
+		[[nodiscard]] /* constexpr */ bool operator==(const std::type_info& other) const noexcept { return not is_undefined() && type_.get() == other; }
+
+		// `constexpr` requires c++23
+		[[nodiscard]] /* constexpr */ bool bare_equal(const gal_type_info& other) const noexcept { return bare_type_.get() == other.bare_type_.get(); }
+
+		// `constexpr` requires c++23
+		[[nodiscard]] /* constexpr */ bool bare_equal(const std::type_info& other) const noexcept { return not is_undefined() && bare_type_.get() == other; }
+
+		[[nodiscard]] bool before(const gal_type_info& other) const noexcept { return type_.get().before(other.type_.get()); }
+
+		[[nodiscard]] const char* name() const noexcept
+		{
+			if (not is_undefined()) { return type_.get().name(); }
+			return undefined_type_name;
+		}
+
+		[[nodiscard]] const char* bare_name() const noexcept
+		{
+			if (not is_undefined()) { return bare_type_.get().name(); }
+			return undefined_type_name;
+		}
+
+		[[nodiscard]] constexpr type_info_wrapper_type bare_type_info() const noexcept { return bare_type_; }
 	};
 
 	static_assert(std::is_copy_constructible_v<gal_type_info>);
@@ -123,11 +158,12 @@ namespace gal::lang::foundation
 			constexpr static gal_type_info make() noexcept
 			{
 				return {
-						std::is_void_v<T>,
-						(std::is_arithmetic_v<T> || std::is_arithmetic_v<std::remove_reference_t<T>>) && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
-						std::is_const_v<std::remove_pointer_t<std::remove_reference_t<T>>>,
-						std::is_reference_v<T>,
-						std::is_pointer_v<T>,
+						gal_type_info::info_builder{
+								.is_void = std::is_void_v<T>,
+								.is_arithmetic = (std::is_arithmetic_v<T> || std::is_arithmetic_v<std::remove_reference_t<T>>) && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
+								.is_const = std::is_const_v<std::remove_pointer_t<std::remove_reference_t<T>>>,
+								.is_reference = std::is_reference_v<T>,
+								.is_pointer = std::is_pointer_v<T>},
 						typeid(T),
 						typeid(bare_type_t<T>)};
 			}
@@ -139,11 +175,12 @@ namespace gal::lang::foundation
 			constexpr static gal_type_info make() noexcept
 			{
 				return {
-						std::is_void_v<T>,
-						std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
-						std::is_const_v<T>,
-						std::is_reference_v<T>,
-						std::is_pointer_v<T>,
+						gal_type_info::info_builder{
+								.is_void = std::is_void_v<T>,
+								.is_arithmetic = std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
+								.is_const = std::is_const_v<T>,
+								.is_reference = std::is_reference_v<T>,
+								.is_pointer = std::is_pointer_v<T>},
 						typeid(std::shared_ptr<T>),
 						typeid(bare_type_t<T>)};
 			}
@@ -158,11 +195,12 @@ namespace gal::lang::foundation
 			constexpr static gal_type_info make() noexcept
 			{
 				return {
-						std::is_void_v<T>,
-						std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
-						std::is_const_v<T>,
-						std::is_reference_v<T>,
-						std::is_pointer_v<T>,
+						gal_type_info::info_builder{
+								.is_void = std::is_void_v<T>,
+								.is_arithmetic = std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
+								.is_const = std::is_const_v<T>,
+								.is_reference = std::is_reference_v<T>,
+								.is_pointer = std::is_pointer_v<T>},
 						typeid(const std::shared_ptr<T>&),
 						typeid(bare_type_t<T>)};
 			}
@@ -174,11 +212,12 @@ namespace gal::lang::foundation
 			constexpr static gal_type_info make() noexcept
 			{
 				return {
-						std::is_void_v<T>,
-						std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
-						std::is_const_v<T>,
-						std::is_reference_v<T>,
-						std::is_pointer_v<T>,
+						gal_type_info::info_builder{
+								.is_void = std::is_void_v<T>,
+								.is_arithmetic = std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
+								.is_const = std::is_const_v<T>,
+								.is_reference = std::is_reference_v<T>,
+								.is_pointer = std::is_pointer_v<T>},
 						typeid(std::unique_ptr<T>),
 						typeid(bare_type_t<T>)};
 			}
@@ -193,11 +232,12 @@ namespace gal::lang::foundation
 			constexpr static gal_type_info make() noexcept
 			{
 				return {
-						std::is_void_v<T>,
-						std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
-						std::is_const_v<T>,
-						std::is_reference_v<T>,
-						std::is_pointer_v<T>,
+						gal_type_info::info_builder{
+								.is_void = std::is_void_v<T>,
+								.is_arithmetic = std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
+								.is_const = std::is_const_v<T>,
+								.is_reference = std::is_reference_v<T>,
+								.is_pointer = std::is_pointer_v<T>},
 						typeid(const std::unique_ptr<T>&),
 						typeid(bare_type_t<T>)};
 			}
@@ -209,11 +249,12 @@ namespace gal::lang::foundation
 			constexpr static gal_type_info make() noexcept
 			{
 				return {
-						std::is_void_v<T>,
-						std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
-						std::is_const_v<T>,
-						std::is_reference_v<T>,
-						std::is_pointer_v<T>,
+						gal_type_info::info_builder{
+								.is_void = std::is_void_v<T>,
+								.is_arithmetic = std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
+								.is_const = std::is_const_v<T>,
+								.is_reference = std::is_reference_v<T>,
+								.is_pointer = std::is_pointer_v<T>},
 						typeid(std::reference_wrapper<T>),
 						typeid(bare_type_t<T>)};
 			}
@@ -225,18 +266,22 @@ namespace gal::lang::foundation
 			constexpr static gal_type_info make() noexcept
 			{
 				return {
-						std::is_void_v<T>,
-						std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
-						std::is_const_v<T>,
-						std::is_reference_v<T>,
-						std::is_pointer_v<T>,
+						gal_type_info::info_builder{
+								.is_void = std::is_void_v<T>,
+								.is_arithmetic = std::is_arithmetic_v<T> && (not std::is_same_v<std::remove_cvref_t<T>, bool>),
+								.is_const = std::is_const_v<T>,
+								.is_reference = std::is_reference_v<T>,
+								.is_pointer = std::is_pointer_v<T>},
 						typeid(const std::reference_wrapper<T>&),
 						typeid(bare_type_t<T>)};
 			}
 		};
-	}
+	}// namespace type_info_detail
 
-	constexpr auto make_invalid_type_info() noexcept { return gal_type_info{}; }
+	/**
+	 * @brief Creates a type_info object representing the invalid type.
+	 */
+	[[nodiscard]] constexpr auto make_invalid_type_type() noexcept { return gal_type_info{}; }
 
 	/**
 	 * @brief Creates a type_info object representing the templated type.
@@ -244,15 +289,7 @@ namespace gal::lang::foundation
 	 * @return type_info for T
 	 */
 	template<typename T>
-	constexpr auto make_type_info() noexcept { return type_info_detail::type_info_factory<T>::make(); }
-
-	/**
-	 * @brief Creates a type_info object representing the type passed in.
-	 * @tparam T Type of object to get a type_info for, derived from the passed in parameter.
-	 * @return type_info for T
-	 */
-	template<typename T>
-	constexpr auto make_type_info(const T&) noexcept { return type_info_detail::type_info_factory<T>::make(); }
+	[[nodiscard]] constexpr auto make_type_info() noexcept { return type_info_detail::type_info_factory<T>::make(); }
 }
 
-#endif // GAL_LANG_FOUNDATION_TYPE_INFO_HPP
+#endif// GAL_LANG_FOUNDATION_TYPE_INFO_HPP
