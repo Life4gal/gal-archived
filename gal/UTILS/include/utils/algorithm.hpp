@@ -24,14 +24,14 @@ namespace gal::utils
 		while (begin != end) { real_function(begin, iterators...); }
 	}
 
-	template<typename Function, std::ranges::range Range, typename... Iterator>
+	template<typename Function, typename... Iterator>
 	constexpr void zip_invoke(
 			Function&& function,
-			Range&& r,
+			std::ranges::range auto&& r,
 			Iterator ... iterator
 			)
 	{
-		zip_invoke(
+		utils::zip_invoke(
 				std::forward<Function>(function),
 				std::ranges::begin(r),
 				std::ranges::end(r),

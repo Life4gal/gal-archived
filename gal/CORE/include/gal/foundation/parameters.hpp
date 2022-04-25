@@ -36,11 +36,11 @@ namespace gal::lang::foundation
 	 */
 	using mutable_function_proxy_type = std::shared_ptr<function_proxy_base>;
 	using mutable_function_proxies_type = std::vector<mutable_function_proxy_type>;
-	using mutable_proxy_functions_view_type = utils::container_view<mutable_function_proxy_type>;
+	using mutable_function_proxies_view_type = utils::container_view<mutable_function_proxy_type>;
 
 	using function_proxy_type = mutable_function_proxy_type;
 	using function_proxies_type = mutable_function_proxies_type;
-	using function_proxies_view_type = mutable_proxy_functions_view_type;
+	using function_proxies_view_type = mutable_function_proxies_view_type;
 }
 
 #endif // GAL_LANG_FOUNDATION_PARAMETERS_HPP

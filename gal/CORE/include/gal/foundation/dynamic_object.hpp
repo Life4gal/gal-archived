@@ -9,12 +9,12 @@
 
 namespace gal::lang::foundation
 {
-	class dynamic_object;
-
 	class dynamic_object
 	{
 	public:
 		constexpr static string_view_type unknown_type_name = "unknown_type";
+		constexpr static string_view_type missing_method_name = "missing_method";
+
 		// todo: transparent!
 		// using members_type = std::unordered_map<string_type, boxed_value, std::hash<string_type>, std::equal_to<>>;
 		using members_type = std::map<string_type, boxed_value, std::less<>>;
@@ -32,7 +32,7 @@ namespace gal::lang::foundation
 
 	public:
 		explicit dynamic_object(const string_type& name)
-			: type_name_{std::move(name)} {}
+			: type_name_{name} {}
 
 		explicit dynamic_object(const string_view_type name = unknown_type_name)
 			: type_name_{name} {}
@@ -72,6 +72,25 @@ namespace gal::lang::foundation
 		}
 
 		bool del_attr(const string_view_type name) { return members_.erase(name); }
+
+		/**
+		 * @brief A function of the signature method_missing(object, name, param1, param2, param3) will be called if an appropriate method cannot be found.
+		 *
+		 * @code
+		 *
+		 * def method_missing(int i, string name, vector v) :
+		 *	print("integer ${i} has no method named ${name} with ${v.size()} params")
+		 *
+		 * 42.not_exist_function(1, 2, 3) // prints "integer 42 has no method named not_exist_function with 3 params"
+		 *
+		 * @endcode
+		 *
+		 * @note method_missing signature can be either 2 parameters or 3 parameters.
+		 * If the signature contains two parameters it is treated as a property.
+		 * If the property contains a function then additional parameters are passed to the contained function.
+		 * If both a 2 parameter and a 3 parameter signature match, the 3 parameter function always wins.
+		 */
+		[[nodiscard]] decltype(auto) method_missing(const string_view_type name) const { return get_attr(name); }
 	};
 }
 

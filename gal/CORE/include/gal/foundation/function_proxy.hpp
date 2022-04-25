@@ -9,6 +9,7 @@
 #include <gal/foundation/return_wrapper.hpp>
 #include <gal/language/name.hpp>
 #include <gal/tools/logger.hpp>
+#include <utils/algorithm.hpp>
 #include <memory>
 #include <ranges>
 
@@ -303,6 +304,12 @@ namespace gal::lang
 		class function_proxy_base
 		{
 		public:
+			static const gal_type_info& class_type() noexcept
+			{
+				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr, ) static gal_type_info type = make_type_info<function_proxy_base>();
+				return type;
+			}
+
 			function_proxy_base() = default;
 			function_proxy_base(const function_proxy_base&) = default;
 			function_proxy_base& operator=(const function_proxy_base&) = default;
@@ -330,6 +337,11 @@ namespace gal::lang
 
 			function_proxy_base(type_infos_type types, const arity_size_type arity)
 				: types_{std::move(types)},
+				  arity_{arity},
+				  has_arithmetic_param_{std::ranges::any_of(types_, [](const auto& type) { return type.is_arithmetic(); })} {}
+
+			function_proxy_base(std::ranges::range auto&& r, const arity_size_type arity)
+				: types_{std::ranges::begin(r), std::ranges::end(r)},
 				  arity_{arity},
 				  has_arithmetic_param_{std::ranges::any_of(types_, [](const auto& type) { return type.is_arithmetic(); })} {}
 
@@ -889,6 +901,9 @@ namespace gal::lang
 						       [&](const auto& object, const auto& type) { return function_proxy_base::is_convertible(type, object, state) || (object.type_info().is_arithmetic() && type.is_arithmetic()); }) == std::make_pair(params.end(), types.end());
 			}
 
+			/**
+			 * @throw exception::dispatch_error
+			 */
 			template<typename Functions>
 			[[nodiscard]] boxed_value dispatch_with_conversion(
 					const std::ranges::range auto& range,
@@ -918,7 +933,7 @@ namespace gal::lang
 					if (proxy_function_detail::types_match_except_for_arithmetic(*begin, params, conversion))
 					{
 						GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-								tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), types_match_except_for_arithmetic matched at the '{}'th function.",
+								tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), types_match_except_for_arithmetic matched at the '{}'th function.",
 									__func__,
 									location.file_name(),
 									location.function_name(),
@@ -1009,6 +1024,80 @@ namespace gal::lang
 								functions.end()}};
 			}
 		}// namespace proxy_function_detail
+
+		/**
+		 * @throw exception::dispatch_error
+		 */
+		template<typename Functions>
+			requires std::is_same_v<typename Functions::value_type, const_function_proxy_type> || std::is_same_v<typename Functions::value_type, mutable_function_proxy_type>
+		[[nodiscard]] boxed_value dispatch(
+				const Functions& functions,
+				const parameters_view_type parameters,
+				const convertor_manager_state& state
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						,
+						const std_source_location& location = std_source_location::current()))
+		{
+			GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+					utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), dispatch with '{}' params.",
+						__func__,
+						location.file_name(),
+						location.function_name(),
+						location.line(),
+						location.column(),
+						parameters.size());)
+
+			std::vector<std::pair<std::size_t, std::reference_wrapper<const function_proxy_base>>> ordered_functions{};
+			ordered_functions.reserve(functions.size());
+
+			std::ranges::for_each(
+					functions,
+					[&ordered_functions, parameters](const auto& function)
+					{
+						if (const auto arity = function->arity_size();
+							arity == function_proxy_base::no_parameters_arity) { ordered_functions.emplace_back(parameters.size(), std::cref(*function)); }
+						else if (arity == static_cast<function_proxy_base::arity_size_type>(parameters.size()))
+						{
+							std::size_t num_diffs = 0;
+
+							utils::zip_invoke(
+									[&num_diffs](const auto& type, const auto& object) { if (not type.bare_equal(object.type_info())) { ++num_diffs; } },
+									// skip the first one
+									function->type_view() | std::views::drop(1),
+									parameters.begin());
+
+							ordered_functions.emplace_back(num_diffs, std::cref(*function));
+						}
+					});
+
+			for (decltype(parameters.size()) i = 0; i < parameters.size(); ++i)
+			{
+				for (const auto& [order, function]: ordered_functions)
+				{
+					try { if (order == i && (i == 0 || function.get().filter(parameters, state))) { return function.get()(parameters, state); } }
+					catch (const exception::bad_boxed_cast&)
+					{
+						// parameter failed to cast, try again
+					}
+					catch (const exception::arity_error&)
+					{
+						// invalid num params, try again
+					}
+					catch (const exception::guard_error&)
+					{
+						// guard failed to allow the function to execute, try again
+					}
+				}
+			}
+
+			return proxy_function_detail::dispatch_with_conversion(
+					ordered_functions |
+					std::views::values |
+					std::views::transform([](const std::reference_wrapper<const function_proxy_base>& f) -> const function_proxy_base& { return f.get(); }),
+					parameters,
+					state,
+					functions);
+		}
 	}
 }
 

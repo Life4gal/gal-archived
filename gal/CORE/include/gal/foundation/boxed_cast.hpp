@@ -803,8 +803,9 @@ namespace gal::lang
 				conversion_saves_->enable = enable;
 			}
 
-			[[nodiscard]] conversion_saves exchange_conversion_saves(
-					const conversion_saves& new_value = {} GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+			[[nodiscard]] parameters_type exchange_conversion_saves(
+					const parameters_type& new_value = {}
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
 							,
 							const std_source_location& location = std_source_location::current())
 					) const
@@ -817,7 +818,7 @@ namespace gal::lang
 							location.line(),
 							location.column());)
 
-				return std::exchange(*conversion_saves_, new_value);
+				return std::exchange(conversion_saves_->saves, new_value);
 			}
 		};
 
