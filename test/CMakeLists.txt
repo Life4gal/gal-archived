@@ -22,7 +22,7 @@ set(
 set(
 	${PROJECT_NAME}_SOURCE_CORE
 
-	test_gal/test_cast.cpp
+	#test_gal/test_cast.cpp
 )
 
 add_executable(

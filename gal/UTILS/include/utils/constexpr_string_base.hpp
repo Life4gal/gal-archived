@@ -663,6 +663,232 @@ namespace gal::utils
 					comparator);
 		}
 	};
+
+	template<typename Derived, typename ValueType, typename SizeType, typename... ConstexprString>
+		requires(sizeof...(ConstexprString) >= 1) && (std::is_base_of_v<constexpr_string_base<ConstexprString, ValueType, SizeType>, ConstexprString> && ...)
+	struct multiple_constexpr_string_base
+	{
+		using derived_type = Derived;
+
+		using multiple_type = std::tuple<ConstexprString...>;
+		using multiple_size_type = std::tuple_size<multiple_type>;
+		constexpr static std::size_t multiple_size = multiple_size_type::value;
+
+		template<std::size_t Index>
+			requires(Index < multiple_size)
+		using subtype = std::tuple_element_t<Index, multiple_type>;
+
+		using value_type = typename subtype<0>::template value_type;
+		using size_type = typename subtype<0>::template size_type;
+
+		template<std::size_t Index>
+		[[nodiscard]] constexpr static bool match(const value_type* string) noexcept
+			requires requires
+			{
+				subtype<Index>::size_no_0;
+			} { return subtype<Index>::match(string); }
+
+		template<std::size_t Index>
+		[[nodiscard]] constexpr bool match(const value_type* string) const noexcept
+			requires std::is_member_function_pointer_v<decltype(&subtype<Index>::size_no_0)> { return static_cast<const derived_type&>(*this).template value<Index>().match(string); }
+
+		/**
+		 * @note CharGetter' s parameters are the indices of value
+		 * @note CharComparator' s first parameter is container's element 
+		 */
+		template<std::size_t Index, template<typename...> typename Container, typename CharGetter, typename CharComparator = std::equal_to<>, typename... AnyOther>
+		[[nodiscard]] constexpr static bool match(
+				const Container<value_type, AnyOther...>& container,
+				CharGetter&& getter,
+				CharComparator&& comparator = CharComparator{})
+		noexcept(std::is_nothrow_invocable_v<CharGetter, const Container<value_type, AnyOther...>&, size_type> &&
+		         std::is_nothrow_invocable_v<CharComparator, decltype(getter(container, std::declval<size_type>())), value_type>)
+			requires requires
+			         {
+				         {
+					         container.size()
+				         } -> std::convertible_to<size_type>;
+				         {
+					         comparator(getter(container, std::declval<size_type>()), std::declval<value_type>())
+				         } -> std::convertible_to<bool>;
+			         } &&
+			         requires
+			         {
+				         subtype<Index>::size_no_0;
+				         subtype<Index>::value;
+			         } { return subtype<Index>::match(container, std::forward<CharGetter>(getter), std::forward<CharComparator>(comparator)); }
+
+		/**
+		 * @note CharGetter' s parameters are the indices of value
+		 * @note CharComparator' s first parameter is container's element 
+		 */
+		template<std::size_t Index, template<typename...> typename Container, typename CharGetter, typename CharComparator = std::equal_to<>, typename... AnyOther>
+		[[nodiscard]] constexpr bool match(
+				const Container<value_type, AnyOther...>& container,
+				CharGetter&& getter,
+				CharComparator&& comparator = CharComparator{}) const
+		noexcept(std::is_nothrow_invocable_v<CharGetter, const Container<value_type, AnyOther...>&, size_type> &&
+		         std::is_nothrow_invocable_v<CharComparator, decltype(getter(container, std::declval<size_type>())), value_type>)
+			requires requires
+			{
+				{
+					container.size()
+				} -> std::convertible_to<size_type>;
+				{
+					comparator(getter(container, std::declval<size_type>()), std::declval<value_type>())
+				} -> std::convertible_to<bool>;
+			} && std::is_member_function_pointer_v<decltype(&subtype<Index>::size_no_0)> { return static_cast<const derived_type&>(*this).template value<Index>().match(container, std::forward<CharGetter>(getter), std::forward<CharComparator>(comparator)); }
+
+		/**
+	 * @note CharGetter' s parameters are the indices of value
+	 * @note CharComparator' s first parameter is container's element 
+	 */
+		template<std::size_t Index, typename Container, typename CharGetter, typename CharComparator = decltype([](const std::decay_t<decltype(std::declval<Container>()[0])> lhs, const value_type rhs) { return static_cast<value_type>(lhs) == rhs; })>
+		[[nodiscard]] constexpr static bool match_left(
+				const Container& container,
+				CharGetter&& getter,
+				CharComparator&& comparator = CharComparator{})
+		noexcept(std::is_nothrow_invocable_v<CharGetter, const Container&, size_type> &&
+		         std::is_nothrow_invocable_v<CharComparator, decltype(getter(container, std::declval<size_type>())), value_type>)
+			requires requires
+			         {
+				         {
+					         container.size()
+				         } -> std::convertible_to<size_type>;
+				         {
+					         comparator(getter(container, std::declval<size_type>()), std::declval<value_type>())
+				         } -> std::convertible_to<bool>;
+			         } &&
+			         requires
+			         {
+				         subtype<Index>::size_no_0;
+				         subtype<Index>::value;
+			         } { return subtype<Index>::match(container, std::forward<CharGetter>(getter), std::forward<CharComparator>(comparator)); }
+
+		/**
+		 * @note CharGetter' s parameters are the indices of value
+		 * @note CharComparator' s first parameter is container's element 
+		 */
+		template<std::size_t Index, typename Container, typename CharGetter, typename CharComparator = decltype([](const std::decay_t<decltype(std::declval<Container>()[0])> lhs, const value_type rhs) { return static_cast<value_type>(lhs) == rhs; })>
+		[[nodiscard]] constexpr bool match_left(
+				const Container& container,
+				CharGetter&& getter,
+				CharComparator&& comparator = CharComparator{}) const
+		noexcept(std::is_nothrow_invocable_v<CharGetter, const Container&, size_type> &&
+		         std::is_nothrow_invocable_v<CharComparator, decltype(getter(container, std::declval<size_type>())), value_type>)
+			requires requires
+			{
+				{
+					container.size()
+				} -> std::convertible_to<size_type>;
+				{
+					comparator(getter(container, std::declval<size_type>()), std::declval<value_type>())
+				} -> std::convertible_to<bool>;
+			} && std::is_member_function_pointer_v<decltype(&subtype<Index>::size_no_0)> { return static_cast<const derived_type&>(*this).template value<Index>().match(container, std::forward<CharGetter>(getter), std::forward<CharComparator>(comparator)); }
+
+		template<std::size_t Index, template<typename...> typename Container, typename CharComparator = std::equal_to<>, typename... AnyOther>
+		[[nodiscard]] constexpr static bool match(
+				const Container<value_type, AnyOther...>& container,
+				CharComparator comparator = {})
+		noexcept(noexcept(container[std::declval<size_type>()]) && noexcept(multiple_constexpr_string_base::match<Index>(
+				         container,
+				         [](const auto& c, size_type index) { return c[index]; },
+				         comparator)))
+			requires requires
+			         {
+				         {
+					         container.size()
+				         } -> std::convertible_to<size_type>;
+				         {
+					         container[std::declval<size_type>()]
+				         } -> std::same_as<value_type>;
+			         } &&
+			         requires
+			         {
+				         subtype<Index>::size_no_0;
+				         subtype<Index>::value;
+			         }
+		{
+			return multiple_constexpr_string_base::match<Index>(
+					container,
+					[](const auto& c, size_type index) { return c[index]; },
+					comparator);
+		}
+
+		template<std::size_t Index, template<typename...> typename Container, typename CharComparator = std::equal_to<>, typename... AnyOther>
+		[[nodiscard]] constexpr bool match_left(
+				const Container<value_type, AnyOther...>& container,
+				CharComparator comparator = {}) const
+		noexcept(noexcept(container[std::declval<size_type>()]) &&
+		         noexcept(std::declval<const multiple_constexpr_string_base&>.template match<Index>(
+				         container,
+				         [](const auto& c, size_type index) { return c[index]; },
+				         comparator)))
+			requires requires
+			{
+				{
+					container.size()
+				} -> std::convertible_to<size_type>;
+				{
+					container[std::declval<size_type>()]
+				} -> std::same_as<value_type>;
+			} && std::is_member_function_pointer_v<decltype(&subtype<Index>::size_no_0)>
+		{
+			return this->template match<Index>(
+					container,
+					[](const auto& c, size_type index) { return c[index]; },
+					comparator);
+		}
+
+		template<std::size_t Index, typename Container, typename CharComparator = decltype([](const std::decay_t<decltype(std::declval<Container>()[0])> lhs, const value_type rhs) { return static_cast<value_type>(lhs) == rhs; })>
+		[[nodiscard]] constexpr static bool match(
+				const Container& container,
+				CharComparator comparator = {})
+		noexcept(noexcept(container[std::declval<size_type>()]) &&
+		         noexcept(multiple_constexpr_string_base::match<Index>(
+				         container,
+				         [](const auto& c, size_type index) { return c[index]; },
+				         comparator)))
+			requires requires
+			         {
+				         {
+					         container.size()
+				         } -> std::convertible_to<size_type>;
+			         } &&
+			         requires
+			         {
+				         subtype<Index>::size_no_0;
+				         subtype<Index>::value;
+			         }
+		{
+			return multiple_constexpr_string_base::match<Index>(
+					container,
+					[](const auto& c, size_type index) { return c[index]; },
+					comparator);
+		}
+
+		template<std::size_t Index, typename Container, typename CharComparator = decltype([](const std::decay_t<decltype(std::declval<Container>()[0])> lhs, const value_type rhs) { return static_cast<value_type>(lhs) == rhs; })>
+		[[nodiscard]] constexpr bool match_left(
+				const Container& container,
+				CharComparator comparator = {}) const
+		noexcept(noexcept(container[std::declval<size_type>()]) &&
+		         noexcept(std::declval<const multiple_constexpr_string_base&>.template match<Index>(
+				         container,
+				         [](const auto& c, size_type index) { return c[index]; },
+				         comparator)))
+			requires requires
+			{
+				{
+					container.size()
+				} -> std::convertible_to<size_type>;
+			} && std::is_member_function_pointer_v<decltype(&subtype<Index>::size_no_0)>
+		{
+			return this->template match<Index>(
+					container,
+					[](const auto& c, size_type index) { return c[index]; },
+					comparator);
+		}
+	};
 }
 
 #endif // GAL_UTILS_CONSTEXPR_STRING_BASE_HPP

@@ -230,3 +230,187 @@ TEST(TestTemplateString, Testu32charSymmetry)
 	static_assert(hello_world_type::match_right(U")}]})"sv));
 	ASSERT_TRUE(hello_world_type::match_right(U")}]})"s));
 }
+
+TEST(TestTemplateString, TestCharMultiple1)
+{
+	using hello_world_type = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_1("hello world");
+
+	static_assert(hello_world_type::match<0>("hello world"));
+	static_assert(hello_world_type::match<0>("hello world"sv));
+	ASSERT_TRUE(hello_world_type::match<0>("hello world"s));
+}
+
+TEST(TestTemplateString, TestCharMultiple2)
+{
+	using hello_world_type = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_2("hello", "world");
+
+	static_assert(hello_world_type::match<0>("hello"));
+	static_assert(hello_world_type::match<0>("hello"sv));
+	ASSERT_TRUE(hello_world_type::match<0>("hello"s));
+
+	static_assert(hello_world_type::match<1>("world"));
+	static_assert(hello_world_type::match<1>("world"sv));
+	ASSERT_TRUE(hello_world_type::match<1>("world"s));
+}
+
+TEST(TestTemplateString, TestCharMultiple3)
+{
+	using hello_world_type = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_3("hello", " ", "world");
+
+	static_assert(hello_world_type::match<0>("hello"));
+	static_assert(hello_world_type::match<0>("hello"sv));
+	ASSERT_TRUE(hello_world_type::match<0>("hello"s));
+
+	static_assert(hello_world_type::match<1>(" "));
+	static_assert(hello_world_type::match<1>(" "sv));
+	ASSERT_TRUE(hello_world_type::match<1>(" "s));
+
+	static_assert(hello_world_type::match<2>("world"));
+	static_assert(hello_world_type::match<2>("world"sv));
+	ASSERT_TRUE(hello_world_type::match<2>("world"s));
+}
+
+TEST(TestTemplateString, TestCharMultiple4)
+{
+	using hello_world_type = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_4("hello", " ", "world", "!");
+
+	static_assert(hello_world_type::match<0>("hello"));
+	static_assert(hello_world_type::match<0>("hello"sv));
+	ASSERT_TRUE(hello_world_type::match<0>("hello"s));
+
+	static_assert(hello_world_type::match<1>(" "));
+	static_assert(hello_world_type::match<1>(" "sv));
+	ASSERT_TRUE(hello_world_type::match<1>(" "s));
+
+	static_assert(hello_world_type::match<2>("world"));
+	static_assert(hello_world_type::match<2>("world"sv));
+	ASSERT_TRUE(hello_world_type::match<2>("world"s));
+
+	static_assert(hello_world_type::match<3>("!"));
+	static_assert(hello_world_type::match<3>("!"sv));
+	ASSERT_TRUE(hello_world_type::match<3>("!"s));
+}
+
+TEST(TestTemplateString, TestCharMultiple5)
+{
+	using hello_world_type = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_5("hello", " ", "world", "!", "?");
+
+	static_assert(hello_world_type::match<0>("hello"));
+	static_assert(hello_world_type::match<0>("hello"sv));
+	ASSERT_TRUE(hello_world_type::match<0>("hello"s));
+
+	static_assert(hello_world_type::match<1>(" "));
+	static_assert(hello_world_type::match<1>(" "sv));
+	ASSERT_TRUE(hello_world_type::match<1>(" "s));
+
+	static_assert(hello_world_type::match<2>("world"));
+	static_assert(hello_world_type::match<2>("world"sv));
+	ASSERT_TRUE(hello_world_type::match<2>("world"s));
+
+	static_assert(hello_world_type::match<3>("!"));
+	static_assert(hello_world_type::match<3>("!"sv));
+	ASSERT_TRUE(hello_world_type::match<3>("!"s));
+
+	static_assert(hello_world_type::match<4>("?"));
+	static_assert(hello_world_type::match<4>("?"sv));
+	ASSERT_TRUE(hello_world_type::match<4>("?"s));
+}
+
+TEST(TestTemplateString, TestCharMultiple6)
+{
+	using hello_world_type = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_6("h", "e", "l", "l", "o", "world");
+
+	static_assert(hello_world_type::match<0>("h"));
+	static_assert(hello_world_type::match<0>("h"sv));
+	ASSERT_TRUE(hello_world_type::match<0>("h"s));
+
+	static_assert(hello_world_type::match<1>("e"));
+	static_assert(hello_world_type::match<1>("e"sv));
+	ASSERT_TRUE(hello_world_type::match<1>("e"s));
+
+	static_assert(hello_world_type::match<2>("l"));
+	static_assert(hello_world_type::match<2>("l"sv));
+	ASSERT_TRUE(hello_world_type::match<2>("l"s));
+
+	static_assert(hello_world_type::match<3>("l"));
+	static_assert(hello_world_type::match<3>("l"sv));
+	ASSERT_TRUE(hello_world_type::match<3>("l"s));
+
+	static_assert(hello_world_type::match<4>("o"));
+	static_assert(hello_world_type::match<4>("o"sv));
+	ASSERT_TRUE(hello_world_type::match<4>("o"s));
+
+	static_assert(hello_world_type::match<5>("world"));
+	static_assert(hello_world_type::match<5>("world"sv));
+	ASSERT_TRUE(hello_world_type::match<5>("world"s));
+}
+
+TEST(TestTemplateString, TestCharMultiple7)
+{
+	using hello_world_type = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_7("h", "e", "l", "l", "o", " ", "world");
+
+	static_assert(hello_world_type::match<0>("h"));
+	static_assert(hello_world_type::match<0>("h"sv));
+	ASSERT_TRUE(hello_world_type::match<0>("h"s));
+
+	static_assert(hello_world_type::match<1>("e"));
+	static_assert(hello_world_type::match<1>("e"sv));
+	ASSERT_TRUE(hello_world_type::match<1>("e"s));
+
+	static_assert(hello_world_type::match<2>("l"));
+	static_assert(hello_world_type::match<2>("l"sv));
+	ASSERT_TRUE(hello_world_type::match<2>("l"s));
+
+	static_assert(hello_world_type::match<3>("l"));
+	static_assert(hello_world_type::match<3>("l"sv));
+	ASSERT_TRUE(hello_world_type::match<3>("l"s));
+
+	static_assert(hello_world_type::match<4>("o"));
+	static_assert(hello_world_type::match<4>("o"sv));
+	ASSERT_TRUE(hello_world_type::match<4>("o"s));
+
+	static_assert(hello_world_type::match<5>(" "));
+	static_assert(hello_world_type::match<5>(" "sv));
+	ASSERT_TRUE(hello_world_type::match<5>(" "s));
+
+	static_assert(hello_world_type::match<6>("world"));
+	static_assert(hello_world_type::match<6>("world"sv));
+	ASSERT_TRUE(hello_world_type::match<6>("world"s));
+}
+
+TEST(TestTemplateString, TestCharMultiple8)
+{
+	using hello_world_type = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_8("h", "e", "l", "l", "o", " ", "world", "!");
+
+	static_assert(hello_world_type::match<0>("h"));
+	static_assert(hello_world_type::match<0>("h"sv));
+	ASSERT_TRUE(hello_world_type::match<0>("h"s));
+
+	static_assert(hello_world_type::match<1>("e"));
+	static_assert(hello_world_type::match<1>("e"sv));
+	ASSERT_TRUE(hello_world_type::match<1>("e"s));
+
+	static_assert(hello_world_type::match<2>("l"));
+	static_assert(hello_world_type::match<2>("l"sv));
+	ASSERT_TRUE(hello_world_type::match<2>("l"s));
+
+	static_assert(hello_world_type::match<3>("l"));
+	static_assert(hello_world_type::match<3>("l"sv));
+	ASSERT_TRUE(hello_world_type::match<3>("l"s));
+
+	static_assert(hello_world_type::match<4>("o"));
+	static_assert(hello_world_type::match<4>("o"sv));
+	ASSERT_TRUE(hello_world_type::match<4>("o"s));
+
+	static_assert(hello_world_type::match<5>(" "));
+	static_assert(hello_world_type::match<5>(" "sv));
+	ASSERT_TRUE(hello_world_type::match<5>(" "s));
+
+	static_assert(hello_world_type::match<6>("world"));
+	static_assert(hello_world_type::match<6>("world"sv));
+	ASSERT_TRUE(hello_world_type::match<6>("world"s));
+
+	static_assert(hello_world_type::match<7>("!"));
+	static_assert(hello_world_type::match<7>("!"sv));
+	ASSERT_TRUE(hello_world_type::match<7>("!"s));
+}
