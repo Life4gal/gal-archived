@@ -36,6 +36,21 @@ namespace gal::lang::lang
 	using keyword_continue_break_name = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_2("pass", "break");
 	// match-case-default
 	using keyword_match_case_default_name = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_3("match", "=>", "_");
+	/**
+	 * match xxx:
+	 *	=> case1:
+	 *		do_something1_here
+	 *		(implicit break here)
+	 *	=> case2:
+	 *		do_something2_here
+	 *		fallthrough
+	 *		(explicit continue here)
+	 *	=> case3:
+	 *		...
+	 *	_:
+	 *		...
+	 */
+	using keyword_match_fallthrough_name = GAL_UTILS_TEMPLATE_STRING_TYPE("fallthrough");
 	// placeholder '_'
 	using keyword_function_argument_placeholder_name = GAL_UTILS_TEMPLATE_STRING_TYPE("_");
 	// try-catch-finally
@@ -78,6 +93,7 @@ namespace gal::lang::lang
 
 	using object_self_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("__this");
 	using object_self_name = GAL_UTILS_TEMPLATE_STRING_TYPE("this");
+	using object_clone_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("clone");
 
 	//*********************************************
 	// dynamic object & interface
@@ -89,7 +105,7 @@ namespace gal::lang::lang
 	//*********************************************
 	using operator_unknown_name = GAL_UTILS_TEMPLATE_STRING_TYPE("unknown");
 	using operator_assign_name = GAL_UTILS_TEMPLATE_STRING_TYPE("=");
-	using operator_assign_if_type_match_name = GAL_UTILS_TEMPLATE_STRING_TYPE(":=");
+	using operator_reference_assign_name = GAL_UTILS_TEMPLATE_STRING_TYPE(":=");
 	using operator_equal_name = GAL_UTILS_TEMPLATE_STRING_TYPE("==");
 	using operator_not_equal_name = GAL_UTILS_TEMPLATE_STRING_TYPE("!=");
 	using operator_less_than_name = GAL_UTILS_TEMPLATE_STRING_TYPE("<");
@@ -126,6 +142,50 @@ namespace gal::lang::lang
 	//*********************************************
 	using operator_logical_and_name = GAL_UTILS_TEMPLATE_STRING_TYPE("and");
 	using operator_logical_or_name = GAL_UTILS_TEMPLATE_STRING_TYPE("or");
+
+	//*********************************************
+	// container interface
+	//*********************************************
+	using vector_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("vector");
+	using list_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("list");
+	using map_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("map");
+	using string_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("string");
+	using pair_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("pair");
+
+	using container_subscript_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("[]");
+	using container_size_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("size");
+	using container_empty_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("empty");
+	using container_clear_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("clear");
+	using container_begin_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("begin");
+	using container_end_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("end");
+	using container_front_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("front");
+	using container_back_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("back");
+	using container_resize_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("resize");
+	using container_reserve_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("reserve");
+	using container_capacity_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("capacity");
+	using container_insert_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("insert_at");
+	// when container's value type is boxed_value
+	using container_insert_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("insert_ref_at");
+	using container_erase_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("erase_at");
+	using container_push_back_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_back");
+	// when container's value type is boxed_value
+	using container_push_back_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_back_ref");
+	using container_pop_back_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("pop_back");
+	using container_push_front_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_front");
+	// when container's value type is boxed_value
+	using container_push_front_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_front_ref");
+	using container_pop_front_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("pop_front");
+	using container_find_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("find");
+
+	// combined with associative containers, it is used to quickly register pairs of associative containers
+	using pair_suffix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("_pair");
+	using pair_first_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("first");
+	using pair_second_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("second");
+
+	// a container view
+	using range_suffix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("_range");
+	using range_const_prefix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("const_");
+	using container_range_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("range");
 }
 
 #endif // GAL_LANG_LANGUAGE_NAME_HPP

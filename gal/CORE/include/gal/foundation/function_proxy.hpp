@@ -147,7 +147,7 @@ namespace gal::lang
 					call.decltype(call)::template operator()<false>(std::index_sequence_for<Params...>{});
 					return return_wrapper_detail::return_wrapper<void>::wrapper();
 				}
-				else { return return_wrapper_detail::return_wrapper<Result>::handle(call.decltype(call)::template operator()<true>(std::index_sequence_for<Params...>{})); }
+				else { return return_wrapper_detail::return_wrapper<Result>::wrapper(call.decltype(call)::template operator()<true>(std::index_sequence_for<Params...>{})); }
 			}
 		}
 

@@ -37,8 +37,9 @@ namespace gal::utils
 			  end_{end} {}
 
 		constexpr explicit(ExplicitRangeConversion) container_view(const std::ranges::range auto& r)// NOLINT(bugprone-forwarding-reference-overload)
-			: begin_{&*std::ranges::begin(r)},
-			  end_{&*std::ranges::end(r)} { }
+		// todo: there should be a simpler way to get the address here!!!
+			: begin_{&(r | std::views::transform([](const auto& data) -> decltype(auto) { return data; }))[0]},
+			  end_{&(r | std::views::transform([](const auto& data) -> decltype(auto) { return data; }))[std::ranges::size(r) - 1] + 1} { }
 
 		constexpr explicit container_view(const_reference object) noexcept
 			: begin_{&object},

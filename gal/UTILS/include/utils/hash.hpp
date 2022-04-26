@@ -7,13 +7,8 @@
 
 namespace gal::utils
 {
-	template<bool Is64Bits = true, typename Container>
-		requires requires(Container container)
-		{
-			std::begin(container);
-			std::end(container);
-		}
-	[[nodiscard]] constexpr std::conditional_t<Is64Bits, std::uint64_t, std::uint32_t> hash_fnv1a(const Container& container) noexcept
+	template<bool Is64Bits = true>
+	[[nodiscard]] constexpr std::conditional_t<Is64Bits, std::uint64_t, std::uint32_t> hash_fnv1a(const std::ranges::range auto& container) noexcept
 	{
 		// FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
 		if constexpr (Is64Bits)
@@ -48,13 +43,7 @@ namespace gal::utils
 		}
 	}
 
-	template<typename Container>
-		requires requires(Container container)
-		{
-			std::begin(container);
-			std::end(container);
-		}
-	[[nodiscard]] constexpr std::uint32_t hash_jenkins_one_at_a_time(const Container& container) noexcept
+	[[nodiscard]] constexpr std::uint32_t hash_jenkins_one_at_a_time(const std::ranges::range auto& container) noexcept
 	{
 		std::uint32_t hash = 0;
 

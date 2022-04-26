@@ -6,6 +6,7 @@
 #include <gal/foundation/string.hpp>
 #include <gal/foundation/type_info.hpp>
 #include <any>
+#include <typeindex>
 
 namespace gal::lang::foundation
 {
@@ -18,6 +19,9 @@ namespace gal::lang::foundation
 		{
 			using type = void;
 		};
+
+		// for build a internal type boxed_value
+		struct internal_flag_construction_tag { };
 
 		using internal_data_type = std::shared_ptr<internal_data>;
 
@@ -74,6 +78,16 @@ namespace gal::lang::foundation
 			{
 				return std::make_shared<internal_data>(
 						make_invalid_type_type(),
+						internal_data::data_type{},
+						nullptr,
+						false,
+						false);
+			}
+
+			static auto make(const gal_type_info::flag_type flag, internal_flag_construction_tag)
+			{
+				return std::make_shared<internal_data>(
+						make_internal_type_type(flag),
 						internal_data::data_type{},
 						nullptr,
 						false,
@@ -161,6 +175,9 @@ namespace gal::lang::foundation
 	public:
 		boxed_value()
 			: data_{internal_data_factory::make()} {}
+
+		boxed_value(const gal_type_info::flag_type flag, const internal_flag_construction_tag dummy)
+			: data_{internal_data_factory::make(flag, dummy)} {}
 
 		template<typename Any>
 			requires(not std::is_same_v<std::decay_t<Any>, boxed_value>)
@@ -271,6 +288,6 @@ namespace gal::lang::foundation
 }
 
 template<>
-struct std::hash<gal::lang::foundation::boxed_value> : std::hash<gal::lang::foundation::boxed_value::internal_data_type>{};
+struct std::hash<gal::lang::foundation::boxed_value> : std::hash<gal::lang::foundation::boxed_value::internal_data_type> {};
 
 #endif// GAL_LANG_FOUNDATION_BOXED_VALUE_HPP

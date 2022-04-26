@@ -1398,25 +1398,23 @@ namespace gal::lang
 							const std::string_view reason = "finish a call",
 							const std_source_location& location = std_source_location::current())) noexcept { stack_->finish_call(convertor_manager_state{convertor_manager_} GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, reason, location)); }
 
-			static bool is_member_function_call(
+			[[nodiscard]] bool is_member_function_call(
 					const function_proxies_view_type functions,
 					const parameters_view_type params,
-					const bool has_param,
-					const convertor_manager_state& state) noexcept
+					const bool has_param) const noexcept
 			{
 				if (not has_param || params.empty()) { return false; }
 
 				return std::ranges::any_of(
 						functions,
-						[&params, &state](const auto& function) { return function->is_member_function() && function->is_first_type_match(params.front(), state); });
+						[&params, cms = convertor_manager_state{convertor_manager_}](const auto& function) { return function->is_member_function() && function->is_first_type_match(params.front(), cms); });
 			}
 
-			[[nodiscard]] boxed_value call_member_function(
+			boxed_value call_member_function(
 					const string_view_type name,
 					function_cache_location_type& cache_location,
 					const parameters_view_type params,
-					const bool has_params,
-					const convertor_manager_state& conversion
+					const bool has_params
 					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
 							,
 							const std_source_location& location = std_source_location::current()))
@@ -1435,13 +1433,15 @@ namespace gal::lang
 				const auto& functions = get_function(name);
 				cache_location.emplace(functions);
 
-				const auto do_member_function_call = [this, &conversion](
+				const convertor_manager_state cms{convertor_manager_};
+
+				const auto do_member_function_call = [this, cms](
 						const function_proxy_base::arity_size_type num_params,
 						const parameters_view_type ps,
 						const auto& fs) -> boxed_value
 				{
 					const auto member_params = ps.front_sub_list(num_params);
-					auto object = dispatch(fs, member_params, conversion);
+					auto object = dispatch(fs, member_params, cms);
 					if (num_params < static_cast<function_proxy_base::arity_size_type>(ps.size()) || object.type_info().bare_equal(function_proxy_base::class_type()))
 					{
 						const dispatcher_state state{*this};
@@ -1450,7 +1450,7 @@ namespace gal::lang
 						try
 						{
 							const auto function = boxed_cast<const function_proxy_base*>(object);
-							try { return (*function)(ps.sub_list(num_params), conversion); }
+							try { return (*function)(ps.sub_list(num_params), cms); }
 							catch (const exception::bad_boxed_cast&) { }
 							catch (const exception::arity_error&) { }
 							catch (const exception::guard_error&) { }
@@ -1469,20 +1469,20 @@ namespace gal::lang
 					return object;
 				};
 
-				if (is_member_function_call(*functions, params, has_params, conversion)) { return do_member_function_call(1, params, *functions); }
+				if (is_member_function_call(*functions, params, has_params)) { return do_member_function_call(1, params, *functions); }
 
 				std::exception_ptr current_exception;
 
 				if (not functions->empty())
 				{
-					try { return dispatch(*functions, params, conversion); }
+					try { return dispatch(*functions, params, cms); }
 					catch (exception::dispatch_error&) { current_exception = std::current_exception(); }
 				}
 
 				// If we get here we know that either there was no method with that name,
 				// or there was no matching method
 
-				const auto missing_functions = [this, params, &conversion]
+				const auto missing_functions = [this, params, &cms]
 				{
 					decltype(get_method_missing_functions())::element_type ret{};
 
@@ -1490,7 +1490,7 @@ namespace gal::lang
 
 					std::ranges::for_each(
 							*mmf,
-							[&ret, params, &conversion](const auto& f) { if (f->is_first_type_match(params.front(), conversion)) { ret.push_back(f); } });
+							[&ret, params, &cms](const auto& f) { if (f->is_first_type_match(params.front(), cms)) { ret.push_back(f); } });
 
 					return ret;
 				}();
@@ -1510,7 +1510,7 @@ namespace gal::lang
 							return do_member_function_call(2, tmp_params, missing_functions);
 						}
 						const std::array tmp_params{params.front(), var(name), var(parameters_type{params.begin() + 1, params.end()})};
-						return dispatch(missing_functions, tmp_params, conversion);
+						return dispatch(missing_functions, tmp_params, cms);
 					}
 					catch (const std::exception& e)
 					{
@@ -1528,11 +1528,10 @@ namespace gal::lang
 						{functions->begin(), functions->end()}};
 			}
 
-			[[nodiscard]] boxed_value call_function(
+			boxed_value call_function(
 					const string_view_type name,
 					function_cache_location_type& cache_location,
-					const parameters_view_type params,
-					const convertor_manager_state& conversion
+					const parameters_view_type params
 					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
 							,
 							const std_source_location& location = std_source_location::current())) const
@@ -1547,12 +1546,14 @@ namespace gal::lang
 							name,
 							params.size());)
 
-				if (cache_location.has_value()) { return dispatch(**cache_location, params, conversion); }
+				const convertor_manager_state state{convertor_manager_};
+
+				if (cache_location.has_value()) { return dispatch(**cache_location, params, state); }
 
 				auto functions = get_function(name);
 				cache_location.emplace(functions);
 
-				return dispatch(*functions, params, conversion);
+				return dispatch(*functions, params, state);
 			}
 
 			[[nodiscard]] const convertor_manager& get_conversion_manager() const noexcept { return convertor_manager_; }

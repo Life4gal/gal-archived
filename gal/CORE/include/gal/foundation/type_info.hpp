@@ -48,6 +48,8 @@ namespace gal::lang::foundation
 	private:
 		struct unknown_type { };
 
+		struct internal_type {};
+
 		type_info_wrapper_type type_;
 		type_info_wrapper_type bare_type_;
 		flag_type flag_;
@@ -93,12 +95,25 @@ namespace gal::lang::foundation
 					)
 		}
 
+		// for register internal unique type_info
+		GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) explicit gal_type_info(const flag_type flag) noexcept
+			: type_{typeid(internal_type)},
+			  bare_type_{typeid(internal_type)},
+			  flag_{flag_undefined | flag}
+		{
+			GAL_LANG_TYPE_INFO_DEBUG_DO(
+					type_name = get_typename(type_);
+					bare_type_name = get_typename(bare_type_);)
+		}
+
 		[[nodiscard]] constexpr bool is_void() const noexcept { return flag_ & flag_void; }
 		[[nodiscard]] constexpr bool is_arithmetic() const noexcept { return flag_ & flag_arithmetic; }
 		[[nodiscard]] constexpr bool is_const() const noexcept { return flag_ & flag_const; }
 		[[nodiscard]] constexpr bool is_reference() const noexcept { return flag_ & flag_reference; }
 		[[nodiscard]] constexpr bool is_pointer() const noexcept { return flag_ & flag_pointer; }
 		[[nodiscard]] constexpr bool is_undefined() const noexcept { return flag_ & flag_undefined; }
+		[[nodiscard]] constexpr bool is_internal() const noexcept { return is_undefined() && flag_ != flag_undefined; }
+		[[nodiscard]] constexpr bool is_internal(const flag_type flag) const noexcept { return flag == (flag_ & (~flag_undefined)); }
 
 		// `constexpr` requires c++23
 		[[nodiscard]] /* constexpr */ bool operator==(const gal_type_info& other) const noexcept { return type_.get() == other.type_.get(); }
@@ -281,7 +296,12 @@ namespace gal::lang::foundation
 	/**
 	 * @brief Creates a type_info object representing the invalid type.
 	 */
-	[[nodiscard]] GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,inline) auto make_invalid_type_type() noexcept { return gal_type_info{}; }
+	[[nodiscard]] GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr, inline) gal_type_info make_invalid_type_type() noexcept { return gal_type_info{}; }
+
+	/**
+	 * @brief Creates a type_info object representing the internal type.
+	 */
+	[[nodiscard]] GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr, inline) gal_type_info make_internal_type_type(const gal_type_info::flag_type flag) noexcept { return gal_type_info{flag}; }
 
 	/**
 	 * @brief Creates a type_info object representing the templated type.
@@ -289,7 +309,7 @@ namespace gal::lang::foundation
 	 * @return type_info for T
 	 */
 	template<typename T>
-	[[nodiscard]] GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) auto make_type_info() noexcept { return type_info_detail::type_info_factory<T>::make(); }
+	[[nodiscard]] GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) gal_type_info make_type_info() noexcept { return type_info_detail::type_info_factory<T>::make(); }
 }
 
 #endif// GAL_LANG_FOUNDATION_TYPE_INFO_HPP
