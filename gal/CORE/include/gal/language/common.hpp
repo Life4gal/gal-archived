@@ -551,7 +551,7 @@ namespace gal::lang
 
 					std::ranges::for_each(
 							static_cast<const T&>(*this).view(),
-							[&target, prepend](const auto& child) { child->to_string_to(target, prepend); });
+							[&target, prepend](const auto& child) { child.to_string_to(target, prepend); });
 				}
 
 				/**
@@ -602,6 +602,10 @@ namespace gal::lang
 
 		public:
 			foundation::boxed_value eval(const foundation::dispatcher_state& state, ast_visitor& visitor);
+
+			template<typename NodeType, typename... Args>
+				requires std::is_base_of_v<ast_node, NodeType>
+			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) && { return lang::make_node<NodeType>(identifier_, location_, std::move(children_), std::forward<Args>(extra_args)...); }
 
 			/**
 			 * @throw eval_error

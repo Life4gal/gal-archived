@@ -71,6 +71,10 @@ namespace gal::lang::lang
 	// Not actually keywords below :)
 	// every block begin
 	using keyword_block_begin_name = GAL_UTILS_TEMPLATE_STRING_TYPE(":");
+	// every block end
+	// todo: we currently lack a means to determine the end of a block, which would cause the following keyword (such as 'else') to be considered a variable name.
+	// todo: fix the build_statement/build_block
+	using keyword_block_end_name = GAL_UTILS_TEMPLATE_STRING_TYPE("/");
 	// a_class::a_attr
 	using keyword_class_accessor_name = GAL_UTILS_TEMPLATE_STRING_TYPE("::");
 	// lambda lambda_with_argument -> [](arguments) -> [capture_variable](arguments) / lambda_without_argument -> [] -> [capture_variable]
@@ -108,6 +112,39 @@ namespace gal::lang::lang
 	using object_self_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("__this");
 	using object_self_name = GAL_UTILS_TEMPLATE_STRING_TYPE("this");
 	using object_clone_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("clone");
+
+	//*********************************************
+	// number type & interface
+	//*********************************************
+	using number_type_name							 = GAL_UTILS_TEMPLATE_STRING_TYPE("Number");
+
+	using number_cast_interface_prefix				 = GAL_UTILS_TEMPLATE_STRING_TYPE("to_");
+	using number_int8_type_name						 = GAL_UTILS_TEMPLATE_STRING_TYPE("i8");
+	using number_uint8_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("u8");
+	using number_int16_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("i16");
+	using number_uint16_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("u16");
+	using number_int32_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("i32");
+	using number_uint32_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("u32");
+	using number_int64_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("i64");
+	using number_uint64_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("u64");
+	using number_float_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("float");
+	using number_double_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("double");
+	using number_long_double_type_name				 = GAL_UTILS_TEMPLATE_STRING_TYPE("long_double");
+
+	using number_char_type_name						 = GAL_UTILS_TEMPLATE_STRING_TYPE("char");
+	using number_unsigned_char_type_name			 = GAL_UTILS_TEMPLATE_STRING_TYPE("uchar");
+	using number_wchar_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("wchar");
+	using number_char8_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("c8");
+	using number_char16_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("c16");
+	using number_char32_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("c32");
+	using number_short_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("short");
+	using number_unsigned_short_type_name			 = GAL_UTILS_TEMPLATE_STRING_TYPE("ushort");
+	using number_int_type_name						 = GAL_UTILS_TEMPLATE_STRING_TYPE("int");
+	using number_unsigned_int_type_name				 = GAL_UTILS_TEMPLATE_STRING_TYPE("uint");
+	using number_long_type_name						 = GAL_UTILS_TEMPLATE_STRING_TYPE("long");
+	using number_unsigned_long_type_name			 = GAL_UTILS_TEMPLATE_STRING_TYPE("ulong");
+	using number_long_long_type_name				 = GAL_UTILS_TEMPLATE_STRING_TYPE("long_long");
+	using number_unsigned_long_long_type_name		 = GAL_UTILS_TEMPLATE_STRING_TYPE("ulong_long");
 
 	//*********************************************
 	// dynamic object & interface

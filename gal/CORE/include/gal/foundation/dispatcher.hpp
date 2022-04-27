@@ -251,34 +251,146 @@ namespace gal::lang
 				return *this;
 			}
 
+		private:
+			template<bool Takeover, typename Engine, typename Dispatcher>
+			void do_load_module(Engine& engine, Dispatcher& dispatcher)
+			{
+				//*********************
+				//****  TYPE_INFO  ****
+				//*********************
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						string_type type_info_detail{};
+						std::ranges::for_each(
+							types_ | std::views::keys,
+							[&type_info_detail](const auto& key)
+							{
+							type_info_detail.append(key).push_back('\n');
+							});
+						utils::logger::debug("There are currently {} type_info(s), details:\n\t{}", types_.size(), type_info_detail);)
+
+				std::ranges::for_each(
+						types_,
+						[&dispatcher](const auto& type)
+						{
+							try { dispatcher.add_type_info(type.first, type.second); }
+							catch (const exception::name_conflict_error&)
+							{
+								// todo: Should we throw an error if there's a name conflict while applying a module?
+							}
+						});
+
+				//*********************
+				//****  FUNCTION  ****
+				//*********************
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						string_type function_detail{};
+						std::ranges::for_each(
+							functions_ | std::views::keys,
+							[&function_detail](const auto& key)
+							{
+							function_detail.append(key).push_back('\n');
+							});
+						utils::logger::debug("There are currently {} function(s), details:\n\t{}", functions_.size(), function_detail);)
+
+				std::ranges::for_each(
+						functions_,
+						[&dispatcher](auto&& function)
+						{
+							try
+							{
+								if constexpr (Takeover) { dispatcher.add_function(function.first, std::move(function.second)); }
+								else { dispatcher.add_function(function.first, function.second); }
+							}
+							catch (const exception::name_conflict_error&)
+							{
+								// todo: Should we throw an error if there's a name conflict while applying a module?
+							}
+						});
+
+				//*******************
+				//****  OBJECT  ****
+				//*******************
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						string_type object_detail{};
+						std::ranges::for_each(
+							objects_ | std::views::keys,
+							[&object_detail](const auto& key)
+							{
+							object_detail.append(key).push_back('\n');
+							});
+						utils::logger::debug("There are currently {} object(s), details:\n\t{}", objects_.size(), object_detail);)
+
+				std::ranges::for_each(
+						objects_,
+						[&dispatcher](auto&& object)
+						{
+							if constexpr (Takeover) { dispatcher.add_global(object.first, std::move(object.second)); }
+							else { dispatcher.add_global(object.first, object.second); }
+						});
+
+				//************************
+				//****  EVALUATION  ****
+				//************************
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						string_type evaluation_detail{};
+						std::ranges::for_each(
+							evaluations_,
+							[&evaluation_detail](const auto& key)
+							{
+							evaluation_detail.append(key).push_back('\n');
+							});
+						utils::logger::debug("There are currently {} evaluation(s), details:\n\t{}", evaluations_.size(), evaluation_detail);)
+
+				std::ranges::for_each(
+						evaluations_,
+						[&engine](auto&& evaluation) { (void)engine.eval(evaluation); });
+
+				//************************
+				//****  CONVERTOR  ****
+				//************************
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::debug("There are currently {} convertors(s)", convertors_.size());)
+
+				std::ranges::for_each(
+						convertors_,
+						[&dispatcher](auto&& convertor)
+						{
+							if constexpr (Takeover) { dispatcher.add_convertor(std::move(convertor)); }
+							else { dispatcher.add_convertor(convertor); }
+						});
+
+				if constexpr (Takeover) { dispatcher.takeover_pool(std::move(pool_)); }
+				else {}
+			}
+
+		public:
 			/**
 			 * @brief Load a module, copy all type_info, function, object, evaluation, converter, shared their name.
 			 *
 			 * @note All names of the modules' type_info, function, object, evaluation, converter will be invalid if module been destroyed.
 			 */
 			template<typename Engine, typename Dispatcher>
-			void load_module(Engine& engine, Dispatcher& dispatcher)
-			{
-				// todo
-				(void)this;
-				(void)engine;
-				(void)dispatcher;
-			}
+			void borrow(Engine& engine, Dispatcher& dispatcher) { this->do_load_module<false>(engine, dispatcher); }
 
 			/**
 			 * @brief Load a module, move away all type_info, function, object, evaluation, converter, also take over the module string_pool, then the module can be safely destroyed.
+			 *
+			 * @note DO NOT USE THE MODULE AFTER IT BEEN TAKEN
 			 */
 			template<typename Engine, typename Dispatcher>
-			void takeover_module(Engine& engine, Dispatcher& dispatcher)
-			{
-				// todo
-				(void)this;
-				(void)engine;
-				(void)dispatcher;
-			}
+			void take(Engine& engine, Dispatcher& dispatcher) && { this->do_load_module<true>(engine, dispatcher); }
 		};
 
 		using engine_module_type = std::shared_ptr<engine_module>;
+		/**
+		 * @brief Signature of module entry point that all binary loadable modules must implement.
+		 */
+		using engine_module_maker = engine_module_type(*)();
 		[[nodiscard]] inline engine_module_type make_engine_module() { return std::make_shared<engine_module>(); }
 
 		/**
@@ -841,14 +953,21 @@ namespace gal::lang
 			using function_cache_location_type = std::optional<std::shared_ptr<function_proxies_type>>;
 
 			using type_infos_type = engine_module::type_infos_type;
-			using overloaded_functions_type = std::map<string_view_type, std::shared_ptr<dispatch_function::functions_type>, std::less<>>;
-			using functions_type = engine_module::functions_type;
+
+			struct function_pack
+			{
+				std::shared_ptr<dispatch_function::functions_type> overloaded;
+				function_proxy_type dispatched;
+				boxed_value boxed;
+			};
+
+			using functions_type = std::map<string_view_type, function_pack, std::less<>>;
+
 			using objects_type = engine_module::objects_type;
 
 			struct state_type
 			{
 				type_infos_type types;
-				overloaded_functions_type overloaded_functions;
 				functions_type functions;
 				objects_type global_objects;
 			};
@@ -927,6 +1046,8 @@ namespace gal::lang
 				: borrowed_pool_{pool},
 				  parser_{p} { stack_.construct(pool); }
 
+			void takeover_pool(string_pool_type&& pool) const { borrowed_pool_.get().takeover(std::move(pool)); }
+
 			/**
 			 * @brief casts an object while applying any dynamic_conversion available.
 			 * @throw bad_boxed_cast(std::bad_cast)
@@ -987,27 +1108,27 @@ namespace gal::lang
 							location.line(),
 							location.column(),
 							name,
-							state_.overloaded_functions.contains(name) ? "but it was already exist" : "add successed");)
+							state_.functions.contains(name) ? "but it was already exist" : "add successed");)
 
 				string_view_type pool_name = name;
 
 				auto function_object = [&pool_name, this]<typename Fun>(Fun&& func) -> function_proxy_type
 				{
-					auto& functions = state_.overloaded_functions;
+					auto& functions = state_.functions;
 
 					if (const auto it = functions.find(pool_name);
 						it != functions.end())
 					{
 						// name already registered
-						if (std::ranges::any_of(*it->second, [&func](const auto& f) { return *func == *f; })) { throw exception::name_conflict_error{pool_name}; }
+						if (std::ranges::any_of(*it->second.overloaded, [&func](const auto& f) { return *func == *f; })) { throw exception::name_conflict_error{pool_name}; }
 
-						auto copy_fs = *it->second;
+						auto copy_fs = *it->second.overloaded;
 						// tightly control vec growth
 						copy_fs.reserve(1 + copy_fs.size());
 						copy_fs.emplace_back(std::forward<Fun>(func));
 						std::ranges::stable_sort(copy_fs, function_comparator{});
 
-						it->second = std::make_shared<std::decay_t<decltype(copy_fs)>>(copy_fs);
+						it->second.overloaded = std::make_shared<std::decay_t<decltype(copy_fs)>>(copy_fs);
 						return std::make_shared<dispatch_function>(std::move(copy_fs));
 					}
 					else
@@ -1020,20 +1141,22 @@ namespace gal::lang
 							// if the function is the only function, but it also contains
 							// arithmetic operators, we must wrap it in a dispatch function
 							// to allow for automatic arithmetic type conversions
-							std::decay_t<decltype(*it->second)> fs;
+							std::decay_t<decltype(*it->second.overloaded)> fs;
 							fs.reserve(1);
 							fs.emplace_back(std::forward<Fun>(func));
 							functions.emplace(pool_name, std::make_shared<std::decay_t<decltype(fs)>>(fs));
 							return std::make_shared<dispatch_function>(std::move(fs));
 						}
-						auto fs = std::make_shared<std::decay_t<decltype(*it->second)>>();
+						auto fs = std::make_shared<std::decay_t<decltype(*it->second.overloaded)>>();
 						fs->emplace_back(func);
 						functions.emplace(pool_name, fs);
 						return func;
 					}
 				}(std::move(function));
 
-				state_.functions.insert_or_assign(pool_name, std::move(function_object));
+				auto& [_, dispatched, boxed] = state_.functions[pool_name];
+				boxed = const_var(function_object);
+				dispatched = std::move(function_object);
 			}
 
 			/**
@@ -1281,9 +1404,30 @@ namespace gal::lang
 					return it->second;
 				}
 
+				// no? is it a function object?
+				return get_function_object(name, cache_location);
+			}
+
+		private:
+			/**
+			 * @return a function object (boxed_value wrapper) if it exists.
+			 * @throw std::range_error if it does not.
+			 * @warning does not obtain a mutex lock.
+			 */
+			[[nodiscard]] boxed_value& get_function_object(const string_view_type name, object_cache_location_type& cache_location)
+			{
+				auto& functions = state_.functions;
+
+				if (const auto it = functions.find(name);
+					it != functions.end())
+				{
+					cache_location.emplace(std::ref(it->second.boxed));
+					return it->second.boxed;
+				}
 				throw std::range_error{"object not found"};
 			}
 
+		public:
 			/**
 			 * @brief Return true if a function exists.
 			 */
@@ -1291,7 +1435,7 @@ namespace gal::lang
 			{
 				utils::threading::shared_lock lock{mutex_};
 
-				return state_.overloaded_functions.contains(name);
+				return state_.functions.contains(name);
 			}
 
 			/**
@@ -1317,11 +1461,11 @@ namespace gal::lang
 							location.line(),
 							location.column(),
 							name,
-							not state_.overloaded_functions.contains(name) ? "but it was not exist" : "found it");)
+							not state_.functions.contains(name) ? "but it was not exist" : "found it");)
 
-				const auto& functions = state_.overloaded_functions;
-				if (const auto it = functions.find(name); it != functions.end()) { return it->second; }
-				else { return std::make_shared<std::decay_t<decltype(it->second)>::element_type>(); }
+				const auto& functions = state_.functions;
+				if (const auto it = functions.find(name); it != functions.end()) { return it->second.overloaded; }
+				else { return std::make_shared<std::decay_t<decltype(it->second.overloaded)>::element_type>(); }
 			}
 
 			[[nodiscard]] auto get_method_missing_functions() const

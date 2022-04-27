@@ -116,7 +116,7 @@ namespace gal::utils
 
 			[[nodiscard]] constexpr size_type available_space() const noexcept { return capacity_ - size_; }
 
-			[[nodiscard]] constexpr bool more_available_space_than(const string_block& other) { return available_space() > other.available_space(); }
+			[[nodiscard]] constexpr bool more_available_space_than(const string_block& other) const noexcept { return available_space() > other.available_space(); }
 
 			friend constexpr void swap(string_block& lhs, string_block& rhs) noexcept
 			{
@@ -317,13 +317,24 @@ namespace gal::utils
 		constexpr explicit string_pool(Pools&&... pools) { this->append(std::forward<Pools>(pools)...); }
 
 		template<std::same_as<string_pool>... Pools>
-		constexpr void append(Pools&&... pools)
+		constexpr void takeover(Pools&&... pools)
 		{
 			pool_.reserve(pool_.size() + (pools.pool_.size() + ...));
 
 			block_iterator iterator;
 			(((iterator = pool_.insert(pool_.end(), std::make_move_iterator(pools.pool_.begin()), std::make_move_iterator(pools.pool_.end()))),
 			  pools.pool_.clear(),
+			  std::ranges::inplace_merge(pool_.begin(), iterator, pool_.end(), [](const auto& a, const auto& b) { return not a.more_available_space_than(b); })),
+				...);
+		}
+
+		template<std::same_as<string_pool>... Pools>
+		constexpr void copy(const Pools&... pools)
+		{
+			pool_.reserve(pool_.size() + (pools.pool_.size() + ...));
+
+			block_iterator iterator;
+			(((iterator = pool_.insert(pool_.end(), pools.pool_.begin(), pools.pool_.end())),
 			  std::ranges::inplace_merge(pool_.begin(), iterator, pool_.end(), [](const auto& a, const auto& b) { return not a.more_available_space_than(b); })),
 				...);
 		}

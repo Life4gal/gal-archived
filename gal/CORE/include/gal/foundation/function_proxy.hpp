@@ -306,7 +306,7 @@ namespace gal::lang
 		public:
 			static const gal_type_info& class_type() noexcept
 			{
-				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr, ) static gal_type_info type = make_type_info<function_proxy_base>();
+				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) static gal_type_info type = make_type_info<function_proxy_base>();
 				return type;
 			}
 
@@ -644,7 +644,7 @@ namespace gal::lang
 		{
 			static const gal_type_info& class_type() noexcept
 			{
-				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)static gal_type_info type = make_type_info<function_argument_placeholder>();
+				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) static gal_type_info type = make_type_info<function_argument_placeholder>();
 				return type;
 			}
 		};
@@ -745,7 +745,7 @@ namespace gal::lang
 		 * @brief For any callable object
 		 */
 		template<typename FunctionSignature, typename Callable>
-		class callable_function_proxy : public extra_function_proxy_base
+		class callable_function_proxy final : public extra_function_proxy_base
 		{
 		public:
 			using function_signature_type = FunctionSignature;

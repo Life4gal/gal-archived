@@ -5,9 +5,20 @@
 
 #define GAL_LANG_ARITHMETIC_DIVIDE_ZERO_PROTECT
 
+#ifndef GAL_LANG_NDEBUG
+
+#ifndef GAL_LANG_NO_TYPE_INFO_DEBUG
 #ifndef NDEBUG
 #define GAL_LANG_TYPE_INFO_DEBUG
-#define GAL_LANG_RECODE_CALL_LOCATION_DEBUG
+#endif
+#endif
+
+#ifndef GAL_LANG_NO_RECODE_CALL_LOCATION_DEBUG
+#ifndef NDEBUG
+				#define GAL_LANG_RECODE_CALL_LOCATION_DEBUG
+#endif
+#endif
+
 #endif
 
 #ifdef GAL_LANG_TYPE_INFO_DEBUG
@@ -28,7 +39,5 @@
 #endif
 
 #include <utils/macro.hpp>
-
-namespace gal::lang { }
 
 #endif // GAL_LANG_DEFINES_HPP

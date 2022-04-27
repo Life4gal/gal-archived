@@ -1,23 +1,35 @@
-#include<string>
 #include<utils/format.hpp>
 #include<iostream>
 
-#include<gal/foundation/type_info.hpp>
-#include <gal/foundation/boxed_value.hpp>
-#include <gal/boxed_cast.hpp>
-#include <gal/foundation/boxed_number.hpp>
-#include <gal/boxed_value.hpp>
-#include <gal/foundation/dynamic_object.hpp>
-#include <gal/foundation/return_wrapper.hpp>
-#include <gal/foundation/function_proxy.hpp>
-#include <gal/foundation/dynamic_function.hpp>
-#include <gal/foundation/dispatcher.hpp>
-#include <gal/language/common.hpp>
-#include <gal/language/eval.hpp>
-#include <gal/foundation/function_register.hpp>
-#include <gal/language/parser.hpp>
+// #define GAL_LANG_NO_RECODE_CALL_LOCATION_DEBUG
+#include <gal/gal.hpp>
 
-// note: we currently only registered string (not registered string_view)
-void hello_cpp(const std::string& string, double d, bool b) { std::cout << std_format::format("hello '{}', double: {}, bool: {}\n", string, d, b); }
+void hello_cpp(double d) { std::cout << std_format::format("value: {}\n", d); }
 
-int main() {}
+int main()
+{
+	using namespace gal;
+
+	lang::engine engine{};
+
+	engine.add_function(
+			"hello_cpp",
+			lang::fun(&hello_cpp));
+
+	try
+	{
+		auto result = engine.eval(
+				R"(
+							if var i = 21 * 2; i == 42:
+								hello_cpp(3.1415926)
+							/
+							else:
+								hello_cpp(2.7182818)
+							/
+						)");
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << e.what() << '\n';
+	}
+}

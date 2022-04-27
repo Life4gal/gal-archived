@@ -97,7 +97,6 @@ namespace gal::lang
 			{
 				try
 				{
-					// todo: how to find function?
 					return state->get_object(this->identifier(), location_);
 				}
 				catch (std::exception&) { throw exception::eval_error{std_format::format("Can not find object '{}'", this->identifier())}; }

@@ -69,7 +69,7 @@ namespace gal::lang
 				setter(abs, alphabet::whitespace, ' ');
 				setter(abs, alphabet::whitespace, '\t');
 
-				for (auto i = 'a'; i < 'z'; ++i)
+				for (auto i = 'a'; i <= 'z'; ++i)
 				{
 					setter(abs, alphabet::keyword, i);
 					setter(abs, alphabet::keyword, i - ('a' - 'A'));
@@ -78,7 +78,7 @@ namespace gal::lang
 					setter(abs, alphabet::identifier, i - ('a' - 'A'));
 				}
 
-				for (auto i = '0'; i < '9'; ++i)
+				for (auto i = '0'; i <= '9'; ++i)
 				{
 					setter(abs, alphabet::keyword, i);
 
@@ -97,11 +97,11 @@ namespace gal::lang
 				setter(abs, alphabet::floating_point_suffix, 'f');
 				setter(abs, alphabet::floating_point_suffix, 'F');
 
-				for (auto i = '0'; i < '1'; ++i) { setter(abs, alphabet::bin, i); }
+				for (auto i = '0'; i <= '1'; ++i) { setter(abs, alphabet::bin, i); }
 				setter(abs, alphabet::bin_prefix, 'b');
 				setter(abs, alphabet::bin_prefix, 'B');
 
-				for (auto i = 'a'; i < 'f'; ++i)
+				for (auto i = 'a'; i <= 'f'; ++i)
 				{
 					setter(abs, alphabet::hex, i);
 					setter(abs, alphabet::hex, i - ('a' - 'A'));
@@ -141,7 +141,7 @@ namespace gal::lang
 						setter(abs, alphabet::whitespace, ' ');
 						setter(abs, alphabet::whitespace, '\t');
 
-						for (auto i = 'a'; i < 'z'; ++i)
+						for (auto i = 'a'; i <= 'z'; ++i)
 						{
 							setter(abs, alphabet::keyword, i);
 							setter(abs, alphabet::keyword, i - ('a' - 'A'));
@@ -150,7 +150,7 @@ namespace gal::lang
 							setter(abs, alphabet::identifier, i - ('a' - 'A'));
 						}
 
-						for (auto i = '0'; i < '9'; ++i)
+						for (auto i = '0'; i <= '9'; ++i)
 						{
 							setter(abs, alphabet::keyword, i);
 
@@ -400,6 +400,8 @@ namespace gal::lang
 					operator_name_type{lang::operator_unary_plus_name::value},
 					operator_name_type{lang::operator_unary_minus_name::value},
 					operator_name_type{lang::operator_unary_bitwise_complement_name::value}};
+
+			using m10_type = std::tuple<lang::operator_unary_not_name, lang::operator_unary_plus_name, lang::operator_unary_minus_name, lang::operator_unary_bitwise_complement_name>;
 
 			constexpr static std::array operators{
 					lang::operation_precedence::logical_or,
@@ -836,7 +838,11 @@ namespace gal::lang
 							if (not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::integer))
 							{
 								++point_;
-								while (not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::integer)) { ++point_; }
+								while (not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::integer))
+								{
+									++point_;
+									if (point_.finish()) {}
+								}
 
 								// After any decimal digits, support an optional exponent (3.14e42)
 								return read_exponent_and_suffix();
@@ -1676,8 +1682,6 @@ namespace gal::lang
 					}
 				}
 
-				while (build_eol()) {}
-
 				if (not build_block())
 				{
 					throw exception::eval_error{
@@ -1765,8 +1769,6 @@ namespace gal::lang
 					}
 				}
 
-				while (build_eol()) {}
-
 				if (not build_block())
 				{
 					throw exception::eval_error{
@@ -1811,16 +1813,6 @@ namespace gal::lang
 
 				const auto is_init_if = build_eol() && build_equation();
 
-				if (not build_any<keyword_block_begin_name>())
-				{
-					throw exception::eval_error{
-							"Incomplete 'if' expression, missing ':'",
-							filename_,
-							point_};
-				}
-
-				while (build_eol()) {}
-
 				if (not build_block())
 				{
 					throw exception::eval_error{
@@ -1838,8 +1830,6 @@ namespace gal::lang
 
 					// else if
 					if (build_if()) { continue; }
-
-					while (build_eol()) {}
 
 					// just else
 					if (not build_block())
@@ -1898,8 +1888,6 @@ namespace gal::lang
 							filename_,
 							point_};
 				}
-
-				while (build_eol()) {}
 
 				if (not build_block())
 				{
@@ -2551,48 +2539,64 @@ namespace gal::lang
 			[[nodiscard]] bool build_unary_expression()
 			{
 				scoped_parser p{*this};
-				const auto prev_size = match_stack_.size();
 
-				auto operator_builder = [this, prev_size]<typename Element>
+				return [this, prev_size = match_stack_.size()]<std::size_t... Index>(std::index_sequence<Index...>) -> bool
 				{
-					if (not build_operator(parser_detail::operator_matcher::operators.size() - 1))
-					{
-						throw exception::eval_error{
-								std_format::format("Incomplete unary prefix '{}' expression", Element::value),
-								filename_,
-								point_};
-					}
+					// auto operator_builder = [this, prev_size]<typename Element>()
+					// {
+					// // we always check the unary one, skip it
+					// 	if (not build_operator(parser_detail::operator_matcher::operators.size() - 2))
+					// 	{
+					// 		throw exception::eval_error{
+					// 				std_format::format("Incomplete unary prefix '{}' expression", Element::value),
+					// 				filename_,
+					// 				point_};
+					// 	}
+					//
+					// 	this->build_match<unary_operator_ast_node>(prev_size, Element::value);
+					// };
 
-					build_match<unary_operator_ast_node>(prev_size, Element::value);
-				};
+					// auto f = [this, operator_builder]<std::size_t I>()
+					// {
+					// 	using type = std::tuple_element_t<I, parser_detail::operator_matcher::m10_type>;
+					// 	if (this->build_any<type>())
+					// 	{
+					// 		operator_builder.decltype(operator_builder)::template operator()<type>();
+					// 		return true;
+					// 	}
+					// 	return false;
+					// };
+					//
+					// return (f.decltype(f)::template operator()<Index>() || ...);
+					return (test<Index>(prev_size) || ...);
+				}(std::make_index_sequence<std::tuple_size_v<parser_detail::operator_matcher::m10_type>>{});
+			}
 
-				return [this, operator_builder]<std::size_t... Index>(std::index_sequence<Index...>) -> bool
+			template<typename T>
+			void builder(const auto prev_size)
+			{
+				// we always check the unary one, skip it
+				if (not build_operator(parser_detail::operator_matcher::operators.size() - 1))
 				{
-					auto f = [this, operator_builder]<std::size_t I>
-					{
-						using type = std::tuple_element_t<I, decltype(parser_detail::operator_matcher::m10)>;
-						if constexpr (type::size_no_0 == 1)
-						{
-							if (this->build_char(type::value[0]))
-							{
-								operator_builder.decltype(operator_builder)::operator()<type>();
-								return true;
-							}
-							return false;
-						}
-						else
-						{
-							if (this->build_symbol(type::value))
-							{
-								operator_builder.decltype(operator_builder)::operator()<type>();
-								return true;
-							}
-							return false;
-						}
-					};
+					throw exception::eval_error{
+							std_format::format("Incomplete unary prefix '{}' expression", T::value),
+							filename_,
+							point_};
+				}
 
-					return (f.decltype(f)::template operator()<Index>() || ...);
-				}(std::make_index_sequence<std::tuple_size_v<decltype(parser_detail::operator_matcher::m10)>>{});
+				this->build_match<unary_operator_ast_node>(prev_size, T::value);
+			}
+
+			template<std::size_t Index>
+			bool test(const auto prev_size)
+			{
+				using type = std::tuple_element_t<Index, parser_detail::operator_matcher::m10_type>;
+				if (build_any<type>())
+				{
+					this->builder<type>(prev_size);
+					return true;
+				}
+				return false;
 			}
 
 			/**
@@ -2810,56 +2814,53 @@ namespace gal::lang
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
-				if (not build_value()) { return false; }
+				if (parser_detail::operator_matcher::operators[group_id] == operation_precedence::unary) { return build_value(); }
 
-				// skip the unary one
-				for (auto i = parser_detail::operator_matcher::group_size - 2; i >= group_id; --i)
+				if (not build_operator(group_id + 1)) { return false; }
+
+				parser_detail::operator_matcher::operator_name_type op;
+				while (read_operator(group_id, op))
 				{
-					parser_detail::operator_matcher::operator_name_type op;
-					while (read_operator(i, op))
+					while (build_eol()) {}
+
+					if (not build_operator(group_id + 1))
 					{
-						while (build_eol()) {}
+						throw exception::eval_error{
+								std_format::format("Incomplete '{}' expression", op),
+								filename_,
+								point_};
+					}
 
-						if (not build_operator(i + 1))
+					switch (parser_detail::operator_matcher::operators[group_id])
+					{
+							using enum operation_precedence;
+						case logical_or:
 						{
-							throw exception::eval_error{
-									std_format::format("Incomplete '{}' expression", op),
-									filename_,
-									point_};
+							build_match<logical_or_ast_node>(prev_size, op);
+							break;
 						}
-
-						switch (parser_detail::operator_matcher::operators[i])
+						case logical_and:
 						{
-								using enum operation_precedence;
-							case logical_or:
-							{
-								build_match<logical_or_ast_node>(prev_size, op);
-								break;
-							}
-							case logical_and:
-							{
-								build_match<logical_and_ast_node>(prev_size, op);
-								break;
-							}
-							case bitwise_or:
-							case bitwise_xor:
-							case bitwise_and:
-							case equality:
-							case comparison:
-							case bitwise_shift:
-							case plus_minus:
-							case multiply_divide:
-							{
-								build_match<binary_operator_ast_node>(prev_size, op);
-								break;
-							}
-							case unary:
-							case operation_size:
-							{
-								// cannot reach here because of if() statement at the top
-								UNREACHABLE();
-							}
-							default: ;
+							build_match<logical_and_ast_node>(prev_size, op);
+							break;
+						}
+						case bitwise_or:
+						case bitwise_xor:
+						case bitwise_and:
+						case equality:
+						case comparison:
+						case bitwise_shift:
+						case plus_minus:
+						case multiply_divide:
+						{
+							build_match<binary_operator_ast_node>(prev_size, op);
+							break;
+						}
+						case unary:
+						case operation_size:
+						{
+							// cannot reach here because of if() statement at the top
+							UNREACHABLE();
 						}
 					}
 				}
@@ -3027,7 +3028,8 @@ namespace gal::lang
 				if (build_any<keyword_block_begin_name>())
 				{
 					(void)build_statements();
-					// todo: do we need keyword_block_end_name ?
+
+					if (not build_any<keyword_block_end_name>()) { throw exception::eval_error("Incomplete block, missing '/'", filename_, point_); }
 
 					if (match_stack_.size() == prev_size) { match_stack_.emplace_back(lang::make_node<noop_ast_node>()); }
 
