@@ -32,8 +32,8 @@ namespace gal::lang::lang
 	using keyword_for_in_name = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_2("for", "in");
 	// while
 	using keyword_while_name = GAL_UTILS_TEMPLATE_STRING_TYPE("while");
-	// continue/break
-	using keyword_continue_break_name = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_2("pass", "break");
+	// continue/break/return
+	using keyword_continue_break_return_name = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_3("pass", "break", "return");
 	// match-case-default
 	using keyword_match_case_default_name = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_3("match", "=>", "_");
 	/**
@@ -85,6 +85,20 @@ namespace gal::lang::lang
 	using keyword_class_not_found_name = GAL_UTILS_TEMPLATE_STRING_TYPE("NOT_A_VALID_CLASS");
 	// default result filename of an evaluation
 	using keyword_inline_eval_filename_name = GAL_UTILS_TEMPLATE_STRING_TYPE("__EVAL__");
+
+	// comment
+	// # a single line comment here
+	using keyword_comment_single_name = GAL_UTILS_TEMPLATE_STRING_TYPE("#");
+	/**
+	 * ''' some multi
+	 * line comment
+	 * here '''
+	 */
+	using keyword_comment_multi_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("''''''");
+	/**
+	 * @(here is a piece of information you can get at runtime)
+	 */
+	using keyword_comment_annotation_name = GAL_UTILS_BILATERAL_TEMPLATE_STRING_TYPE("@(", ")");
 
 	//*********************************************
 	// object type & interface
@@ -146,11 +160,19 @@ namespace gal::lang::lang
 	//*********************************************
 	// container interface
 	//*********************************************
+	// All types that can be converted to strings should provide this interface.
+	using operator_to_string_name = GAL_UTILS_TEMPLATE_STRING_TYPE("to_string");
+
+	//*********************************************
+	// container interface
+	//*********************************************
 	using vector_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("vector");
 	using list_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("list");
 	using map_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("map");
 	using string_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("string");
 	using pair_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("pair");
+
+	using array_access_interface_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("[]");
 
 	using container_subscript_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("[]");
 	using container_size_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("size");

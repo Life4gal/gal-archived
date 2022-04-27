@@ -1751,17 +1751,6 @@ namespace gal::lang
 				: ast_node{get_rtti_index(), identifier, location, std::move(children)} {}
 		};
 
-		struct value_range_ast_node final : ast_node
-		{
-			GAL_AST_SET_RTTI(value_range_ast_node)
-
-			value_range_ast_node(
-					const identifier_type identifier,
-					const parse_location location,
-					children_type&& children)
-				: ast_node{get_rtti_index(), identifier, location, std::move(children)} {}
-		};
-
 		struct try_catch_ast_node final : ast_node
 		{
 			GAL_AST_SET_RTTI(try_catch_ast_node)

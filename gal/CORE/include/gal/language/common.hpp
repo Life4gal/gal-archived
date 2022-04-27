@@ -32,8 +32,9 @@ namespace gal::lang
 						hash_name(keyword_for_in_name::subtype<0>::value),
 						hash_name(keyword_for_in_name::subtype<1>::value),
 						hash_name(keyword_while_name::value),
-						hash_name(keyword_continue_break_name::subtype<0>::value),
-						hash_name(keyword_continue_break_name::subtype<1>::value),
+						hash_name(keyword_continue_break_return_name::subtype<0>::value),
+						hash_name(keyword_continue_break_return_name::subtype<1>::value),
+						hash_name(keyword_continue_break_return_name::subtype<2>::value),
 						hash_name(keyword_match_case_default_name::subtype<1>::value),
 						hash_name(keyword_match_case_default_name::subtype<2>::value),
 						hash_name(keyword_match_fallthrough_name::value),
@@ -64,30 +65,33 @@ namespace gal::lang
 			}
 		};
 
+		// see also parser.hpp => operator_matcher
 		enum class operation_precedence
 		{
-			logical_or,
 			// or
-			logical_and,
+			logical_or = 0,
 			// and
-			bitwise_or,
+			logical_and,
 			// |
-			bitwise_xor,
+			bitwise_or,
 			// ^
-			bitwise_and,
+			bitwise_xor,
 			// &
+			bitwise_and,
+			// == or !=
 			equality,
-			// =
+			// < or <= or > or >=
 			comparison,
-			// x=
-			bitwise_shift,
 			// << or >>
+			bitwise_shift,
+			// + or -
 			plus_minus,
-			// + -
+			// * or / or %
 			multiply_divide,
-			// * /
+			// ! or ~ or + or -
 			unary,
-			// ! ~ + -
+
+			operation_size,
 		};
 
 		/**
@@ -722,17 +726,17 @@ namespace gal::lang
 
 			[[nodiscard]] constexpr bool empty() const noexcept { return children.empty(); }
 
-			[[nodiscard]] constexpr ast_node_tracer&		 get_child(const children_type::difference_type index) noexcept { return children[index]; }
+			[[nodiscard]] constexpr ast_node_tracer& get_child(const children_type::difference_type index) noexcept { return children[index]; }
 
-			[[nodiscard]] constexpr const ast_node_tracer&	 get_child(const children_type::difference_type index) const noexcept { return const_cast<ast_node_tracer&>(*this).get_child(index); }
+			[[nodiscard]] constexpr const ast_node_tracer& get_child(const children_type::difference_type index) const noexcept { return const_cast<ast_node_tracer&>(*this).get_child(index); }
 
-			[[nodiscard]] constexpr ast_node_tracer&		 front() noexcept { return children.front(); }
+			[[nodiscard]] constexpr ast_node_tracer& front() noexcept { return children.front(); }
 
-			[[nodiscard]] constexpr const ast_node_tracer&	 front() const noexcept { return const_cast<ast_node_tracer&>(*this).front(); }
+			[[nodiscard]] constexpr const ast_node_tracer& front() const noexcept { return const_cast<ast_node_tracer&>(*this).front(); }
 
-			[[nodiscard]] constexpr ast_node_tracer&		 back() noexcept { return children.back(); }
+			[[nodiscard]] constexpr ast_node_tracer& back() noexcept { return children.back(); }
 
-			[[nodiscard]] constexpr const ast_node_tracer&	 back() const noexcept { return const_cast<ast_node_tracer&>(*this).back(); }
+			[[nodiscard]] constexpr const ast_node_tracer& back() const noexcept { return const_cast<ast_node_tracer&>(*this).back(); }
 
 			[[nodiscard]] constexpr auto view() noexcept { return children | std::views::all; }
 
