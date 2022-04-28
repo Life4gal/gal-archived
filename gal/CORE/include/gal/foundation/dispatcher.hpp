@@ -146,7 +146,7 @@ namespace gal::lang
 					)
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to add a type_info '{}', {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a type_info '{}', {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -169,7 +169,7 @@ namespace gal::lang
 							const std_source_location& location = std_source_location::current()))
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to add a function '{}', {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a function '{}', {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -192,7 +192,7 @@ namespace gal::lang
 							const std_source_location& location = std_source_location::current()))
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to add an global object '{}', {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add an global object '{}', {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -216,7 +216,7 @@ namespace gal::lang
 							const std_source_location& location = std_source_location::current()))
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to add a evaluation '{}', {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a evaluation '{}', {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -239,7 +239,7 @@ namespace gal::lang
 			{
 				[[maybe_unused]] const auto result = convertors_.emplace(std::move(convertor)).second;
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to add a convertor, {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a convertor, {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -702,7 +702,7 @@ namespace gal::lang
 						it != scope.end())
 					{
 						GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-								utils::logger::info("find object '{}' in '{}'th scope",
+								utils::logger::info("found object '{}' in '{}'th scope",
 									name,
 									scope_no);)
 
@@ -782,7 +782,7 @@ namespace gal::lang
 				++depth;
 
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}', current depth: '{}'",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})) because '{}', current depth: '{}'",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -805,7 +805,7 @@ namespace gal::lang
 				gal_assert(depth >= 0);
 
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}', current depth: '{}'",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})) because '{}', current depth: '{}'",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -858,7 +858,7 @@ namespace gal::lang
 				: scoped_base{s}
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), create a scoped_scope because '{}'",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), create a scoped_scope because '{}'",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -1072,7 +1072,7 @@ namespace gal::lang
 				utils::threading::unique_lock lock{mutex_};
 
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), try to add type_info '{}', {}",
+						utils::logger::debug("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add type_info '{}', {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -1101,7 +1101,7 @@ namespace gal::lang
 				utils::threading::unique_lock lock{mutex_};
 
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to add a function '{}', {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a function '{}', {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -1172,7 +1172,7 @@ namespace gal::lang
 							const std_source_location& location = std_source_location::current()))
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to add an global object '{}', {}.",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add an global object '{}', {}.",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -1208,7 +1208,7 @@ namespace gal::lang
 				utils::threading::unique_lock lock{mutex_};
 
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to add an global {} object '{}', {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add an global {} object '{}', {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -1237,7 +1237,7 @@ namespace gal::lang
 				utils::threading::unique_lock lock{mutex_};
 
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to add an global {} object '{}', {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add an global {} object '{}', {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -1375,7 +1375,7 @@ namespace gal::lang
 						it != scope.end())
 					{
 						GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-								utils::logger::info("find object '{}' in '{}'th scope",
+								utils::logger::info("found object '{}' in '{}'th scope",
 									name,
 									scope_no);)
 
@@ -1454,7 +1454,7 @@ namespace gal::lang
 				utils::threading::shared_lock lock{mutex_};
 
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to get function '{}', {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to get function '{}', {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -1564,7 +1564,7 @@ namespace gal::lang
 							const std_source_location& location = std_source_location::current()))
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to call member function '{}' with '{}' params",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to call member function '{}' with '{}' params",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -1681,7 +1681,7 @@ namespace gal::lang
 							const std_source_location& location = std_source_location::current())) const
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to call function '{}' with '{}' params",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to call function '{}' with '{}' params",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -1712,7 +1712,7 @@ namespace gal::lang
 		inline engine_stack& dispatcher_state::stack(GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(const std_source_location& location)) const noexcept
 		{
 			GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-					utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), gained control of stack.",
+					utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), gained control of stack.",
 						__func__,
 						location.file_name(),
 						location.function_name(),

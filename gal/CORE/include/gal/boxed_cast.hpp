@@ -149,7 +149,7 @@ namespace gal::lang
 				
 				std_format::format_to(
 					std::back_inserter(detail.message),
-					"{} from (file: '{}' function: '{}' position: ({}:{})).\n\tobject type is '{}({})', required type is '{}({})'",
+					"'{}' from (file: '{}' function: '{}' position: ({}:{})).\n\tobject type is '{}({})', required type is '{}({})'",
 					__func__,
 					location.file_name(),
 					location.function_name(),

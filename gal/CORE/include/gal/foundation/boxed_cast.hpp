@@ -640,7 +640,7 @@ namespace gal::lang
 					)
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -702,7 +702,7 @@ namespace gal::lang
 					) const
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{}))",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -750,7 +750,7 @@ namespace gal::lang
 							const std_source_location& location = std_source_location::current())) const
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{}))",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -793,7 +793,7 @@ namespace gal::lang
 					) const
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{}))",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -811,7 +811,7 @@ namespace gal::lang
 					) const
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{}))",
 							__func__,
 							location.file_name(),
 							location.function_name(),

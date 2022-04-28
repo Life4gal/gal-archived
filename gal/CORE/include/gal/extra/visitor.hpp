@@ -24,14 +24,20 @@ namespace gal::lang::extra
 
 		struct print_visitor
 		{
-			void operator()(const lang::ast_node& node) const { tools::logger::debug("visiting node: \n{}\n", node.to_string()); }
+			void operator()(const lang::ast_node& node) const
+			{
+				tools::logger::info(
+					"\n=====print_visitor starts printing ast_node====\n"
+					"{}\n"
+					"=====print_visitor ends printing ast_node====\n", node.to_string());
+			}
 		};
 
 		// todo: more visitor
 	}
 
 	using default_visitor = visitor_detail::default_visitor<
-		// visitor_detail::print_visitor
+		visitor_detail::print_visitor
 	>;
 }
 

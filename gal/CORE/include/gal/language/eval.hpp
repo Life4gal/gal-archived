@@ -95,10 +95,7 @@ namespace gal::lang
 
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor&) override
 			{
-				try
-				{
-					return state->get_object(this->identifier(), location_);
-				}
+				try { return state->get_object(this->identifier(), location_); }
 				catch (std::exception&) { throw exception::eval_error{std_format::format("Can not find object '{}'", this->identifier())}; }
 			}
 
@@ -274,7 +271,7 @@ namespace gal::lang
 					const algebraic_operation_name_type operation,
 					const parse_location location,
 					children_type&& children,
-					foundation::boxed_value&& rhs)
+					foundation::boxed_value rhs)
 				: ast_node{get_rtti_index(), operation, location, std::move(children)},
 				  operation_{algebraic_operation(operation)},
 				  params_{{{}, std::move(rhs)}} {}
@@ -1090,7 +1087,7 @@ namespace gal::lang
 			static foundation::boxed_value do_eval(ast_node& node, const foundation::dispatcher_state& state, ast_visitor& visitor)
 			{
 				std::ranges::for_each(
-						node.view(),
+						node.front_view(node.size() - 1),
 						[&state, &visitor](auto& c) { c.eval(state, visitor); });
 
 				return node.back().eval(state, visitor);
@@ -1869,6 +1866,23 @@ namespace gal::lang
 					children_type&& children)
 				: ast_node{get_rtti_index(), identifier, location, std::move(children)} {}
 		};
+
+		inline foundation::boxed_value ast_node::eval(const foundation::dispatcher_state& state, ast_visitor& visitor)
+		{
+			visitor.visit(*this);
+
+			// todo
+
+			try
+			{
+				return do_eval(state, visitor);
+			}
+			catch (exception::eval_error& e)
+			{
+				e.stack_traces.emplace_back(*this);
+				throw;
+			}
+		}
 	}
 
 	namespace exception

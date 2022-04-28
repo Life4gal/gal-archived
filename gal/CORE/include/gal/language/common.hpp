@@ -366,7 +366,6 @@ namespace gal::lang
 			requires std::derived_from<NodeType, ast_node>
 		[[nodiscard]] ast_node_ptr make_node(Args&&... args) { return std::make_unique<NodeType>(std::forward<Args>(args)...); }
 
-
 		class ast_visitor
 		{
 		public:
@@ -411,11 +410,23 @@ namespace gal::lang
 			template<typename T>
 			const ast_rtti_index_type ast_rtti<T>::value = ++ast_rtti_index_counter::index;
 
-			#define GAL_AST_SET_RTTI(class_name)                       \
-			constexpr static auto get_rtti_index() noexcept        \
-			{                                                      \
-				return common_detail::ast_rtti<class_name>::value; \
-			}
+			struct ast_rtti_manager
+			{
+			private:
+				inline static std::map<ast_rtti_index_type, foundation::string_type> ast_rtti_info_{};
+
+			public:
+				static foundation::string_view_type register_ast_rtti_name(const ast_rtti_index_type index, const foundation::string_view_type name) { return ast_rtti_info_.emplace(index, name).first->second; }
+
+				[[nodiscard]] static foundation::string_view_type nameof(const ast_rtti_index_type index) { return ast_rtti_info_[index]; }
+			};
+
+			#define GAL_AST_SET_RTTI(class_name)						\
+			constexpr static auto get_rtti_index() noexcept				\
+			{																					\
+				return common_detail::ast_rtti<class_name>::value;	\
+			}																					\
+			inline static auto ast_register_name = common_detail::ast_rtti_manager::register_ast_rtti_name(common_detail::ast_rtti<class_name>::value, #class_name);
 
 			template<typename T>
 			concept has_rtti_index = requires(T t)
@@ -542,12 +553,17 @@ namespace gal::lang
 				{
 					std_format::format_to(
 							std::back_inserter(target),
-							"{}(class index: {}) identifier: {} at:\n ",
+							"{} {}(class index: {}) identifier: '{}' at:\n\t",
 							prepend,
+							ast_rtti_manager::nameof(class_index_),
 							class_index_,
 							identifier_);
 					pretty_format_position_to(target);
-					target.push_back('\n');
+
+					std_format::format_to(
+							std::back_inserter(target),
+							"\n\twith {}(s) child node: \n\n",
+							static_cast<const T&>(*this).size());
 
 					std::ranges::for_each(
 							static_cast<const T&>(*this).view(),
@@ -605,7 +621,24 @@ namespace gal::lang
 
 			template<typename NodeType, typename... Args>
 				requires std::is_base_of_v<ast_node, NodeType>
-			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) && { return lang::make_node<NodeType>(identifier_, location_, std::move(children_), std::forward<Args>(extra_args)...); }
+			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) &&
+			{
+				if constexpr (std::is_constructible_v<NodeType, identifier_type, parse_location, Args...>)
+				{
+					// there are some ast_nodes that have no children
+					return lang::make_node<NodeType>(identifier_, location_, std::forward<Args>(extra_args)...);
+				}
+				else if (std::is_constructible_v<NodeType, identifier_type, parse_location, children_type&&, Args...>)
+				{
+					// construct node with children
+					return lang::make_node<NodeType>(identifier_, location_, std::move(children_), std::forward<Args>(extra_args)...);
+				}
+				else
+				{
+					gal_assert(false, "unknown ast_node constructor");
+					UNREACHABLE();
+				}
+			}
 
 			/**
 			 * @throw eval_error
@@ -666,6 +699,26 @@ namespace gal::lang
 			[[nodiscard]] constexpr ast_node_ptr& back_ptr() noexcept { return children_.back(); }
 
 			[[nodiscard]] constexpr const ast_node_ptr& back_ptr() const noexcept { return children_.back(); }
+
+			[[nodiscard]] constexpr auto view_ptr() noexcept { return children_ | std::views::all; }
+
+			[[nodiscard]] constexpr auto view_ptr() const noexcept { return children_ | std::views::all; }
+
+			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin, const children_type::difference_type count) noexcept { return view_ptr() | std::views::drop(begin) | std::views::take(count); }
+
+			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin, const children_type::difference_type count) const noexcept { return view_ptr() | std::views::drop(begin) | std::views::take(count); }
+
+			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin) noexcept { return view_ptr() | std::views::drop(begin); }
+
+			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin) const noexcept { return view_ptr() | std::views::drop(begin); }
+
+			[[nodiscard]] constexpr auto front_view_ptr(const children_type::difference_type count) noexcept { return sub_view_ptr(0, count); }
+
+			[[nodiscard]] constexpr auto front_view_ptr(const children_type::difference_type count) const noexcept { return sub_view_ptr(0, count); }
+
+			[[nodiscard]] constexpr auto back_view_ptr(const children_type::difference_type count) noexcept { return view_ptr() | std::views::reverse | std::views::take(count) | std::views::reverse; }
+
+			[[nodiscard]] constexpr auto back_view_ptr(const children_type::difference_type count) const noexcept { return view_ptr() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 
 			[[nodiscard]] constexpr ast_node& get_child(const children_type::difference_type index) noexcept { return get_unwrapped_children().operator[](index); }
 
@@ -763,16 +816,16 @@ namespace gal::lang
 			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) const noexcept { return view() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 		};
 
-		inline foundation::boxed_value ast_node::eval(const foundation::dispatcher_state& state, ast_visitor& visitor)
-		{
-			visitor.visit(*this);
-			try { return do_eval(state, visitor); }
-			catch (exception::eval_error& e)
-			{
-				e.stack_traces.emplace_back(*this);
-				throw;
-			}
-		}
+		// inline foundation::boxed_value ast_node::eval(const foundation::dispatcher_state& state, ast_visitor& visitor)
+		// {
+		// 	visitor.visit(*this);
+		// 	try { return do_eval(state, visitor); }
+		// 	catch (exception::eval_error& e)
+		// 	{
+		// 		e.stack_traces.emplace_back(*this);
+		// 		throw;
+		// 	}
+		// }
 	}
 
 	namespace exception

@@ -93,7 +93,7 @@ namespace gal::lang
 					) noexcept
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), with {} params.",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), with {} params.",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -128,7 +128,7 @@ namespace gal::lang
 					)
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), with {} params.",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), with {} params.",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -182,7 +182,7 @@ namespace gal::lang
 							const std_source_location& location = std_source_location::current())) const
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), with {} params.",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), with {} params.",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -376,7 +376,7 @@ namespace gal::lang
 					) const
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to invoke a function_proxy(arity = '{}') with '{}' params.",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to invoke a function_proxy(arity = '{}') with '{}' params.",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -399,7 +399,7 @@ namespace gal::lang
 				if (arity_ < 0 || static_cast<decltype(params.size())>(arity_) == params.size()) { return do_invoke(params, state); }
 
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), invoke a function_proxy(arity = '{}') with '{}' params failed.",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), invoke a function_proxy(arity = '{}') with '{}' params failed.",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -880,7 +880,7 @@ namespace gal::lang
 					)
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to match a function_proxy(arity = '{}') with '{}' params.",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to match a function_proxy(arity = '{}') with '{}' params.",
 							__func__,
 							location.file_name(),
 							location.function_name(),
@@ -916,7 +916,7 @@ namespace gal::lang
 					)
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), try to dispatch a bunch of functions(size: '{}') with '{}' params.",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to dispatch a bunch of functions(size: '{}') with '{}' params.",
 							__func__,
 							location.file_name(),
 							location.function_name(),

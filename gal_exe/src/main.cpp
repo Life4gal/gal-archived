@@ -18,18 +18,16 @@ int main()
 
 	try
 	{
-		auto result = engine.eval(
-				R"(
-							if var i = 21 * 2; i == 42:
-								hello_cpp(3.1415926)
-							/
-							else:
-								hello_cpp(2.7182818)
-							/
-						)");
+		// auto result = engine.eval(
+		// 		R"(
+		// 					if var i = 21 * 2; i == 42:
+		// 						hello_cpp(3.1415926)
+		// 					/
+		// 					else:
+		// 						hello_cpp(2.7182818)
+		// 					/
+		// 				)");
+		auto result = engine.eval_file("test.gal");
 	}
-	catch (const std::exception& e)
-	{
-		std::cerr << e.what() << '\n';
-	}
+	catch (const std::exception& e) { std::cerr << e.what() << '\n'; }
 }
