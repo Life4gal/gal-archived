@@ -923,72 +923,74 @@ namespace gal::lang
 		};
 	}// namespace parser_detail
 
+	// see gal/foundation/boxed_exception.hpp
 	namespace interrupt_type
 	{
 		/**
 		 * @brief Special type for returned values
 		 */
-		struct return_value
-		{
-			constexpr static foundation::gal_type_info::flag_type return_value_flag = utils::hash_fnv1a<false>("@@internal_return_value_flag@@");
+		// struct return_value
+		// {
+		// 	constexpr static foundation::gal_type_info::flag_type return_value_flag = utils::hash_fnv1a<false>("@@internal_return_value_flag@@");
+		//
+		// 	foundation::boxed_value value;
+		// 	foundation::boxed_value type;
+		//
+		// 	[[nodiscard]] static return_value& instance(foundation::boxed_value value)
+		// 	{
+		// 		static return_value ins{.type = {return_value_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
+		//
+		// 		ins.value = std::move(value);
+		// 		return ins;
+		// 	}
+		// };
 
-			foundation::boxed_value value;
-			foundation::boxed_value type;
-
-			[[nodiscard]] static return_value& instance(foundation::boxed_value value)
-			{
-				static return_value ins{.type = {return_value_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
-
-				ins.value = std::move(value);
-				return ins;
-			}
-		};
 
 		/**
 		 * @brief Special type indicating a call to 'break'
 		 */
-		struct break_loop
-		{
-			constexpr static foundation::gal_type_info::flag_type break_loop_flag = utils::hash_fnv1a<false>("@@internal_break_loop_flag@@");
-
-			foundation::boxed_value type;
-
-			// ReSharper disable once CppNonExplicitConversionOperator
-			[[nodiscard]] operator foundation::boxed_value&() noexcept { return type; }
-
-			// ReSharper disable once CppNonExplicitConversionOperator
-			[[nodiscard]] operator const foundation::boxed_value&() const noexcept { return type; }
-
-			[[nodiscard]] static break_loop& instance()
-			{
-				static break_loop ins{.type = {break_loop_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
-
-				return ins;
-			}
-		};
+		// struct break_loop
+		// {
+		// 	constexpr static foundation::gal_type_info::flag_type break_loop_flag = utils::hash_fnv1a<false>("@@internal_break_loop_flag@@");
+		//
+		// 	foundation::boxed_value type;
+		//
+		// 	// ReSharper disable once CppNonExplicitConversionOperator
+		// 	[[nodiscard]] operator foundation::boxed_value&() noexcept { return type; }
+		//
+		// 	// ReSharper disable once CppNonExplicitConversionOperator
+		// 	[[nodiscard]] operator const foundation::boxed_value&() const noexcept { return type; }
+		//
+		// 	[[nodiscard]] static break_loop& instance()
+		// 	{
+		// 		static break_loop ins{.type = {break_loop_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
+		//
+		// 		return ins;
+		// 	}
+		// };
 
 		/**
 		 * @brief Special type indicating a call to 'continue'
 		 */
-		struct continue_loop
-		{
-			constexpr static foundation::gal_type_info::flag_type continue_loop_flag = utils::hash_fnv1a<false>("@@internal_continue_loop_flag@@");
-
-			foundation::boxed_value type;
-
-			// ReSharper disable once CppNonExplicitConversionOperator
-			[[nodiscard]] operator foundation::boxed_value&() noexcept { return type; }
-
-			// ReSharper disable once CppNonExplicitConversionOperator
-			[[nodiscard]] operator const foundation::boxed_value&() const noexcept { return type; }
-
-			[[nodiscard]] static continue_loop& instance()
-			{
-				static continue_loop ins{.type = {continue_loop_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
-
-				return ins;
-			}
-		};
+		// struct continue_loop
+		// {
+		// 	constexpr static foundation::gal_type_info::flag_type continue_loop_flag = utils::hash_fnv1a<false>("@@internal_continue_loop_flag@@");
+		//
+		// 	foundation::boxed_value type;
+		//
+		// 	// ReSharper disable once CppNonExplicitConversionOperator
+		// 	[[nodiscard]] operator foundation::boxed_value&() noexcept { return type; }
+		//
+		// 	// ReSharper disable once CppNonExplicitConversionOperator
+		// 	[[nodiscard]] operator const foundation::boxed_value&() const noexcept { return type; }
+		//
+		// 	[[nodiscard]] static continue_loop& instance()
+		// 	{
+		// 		static continue_loop ins{.type = {continue_loop_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
+		//
+		// 		return ins;
+		// 	}
+		// };
 	}
 }
 

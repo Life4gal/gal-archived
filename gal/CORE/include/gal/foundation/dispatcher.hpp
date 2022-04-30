@@ -521,6 +521,8 @@ namespace gal::lang
 			{
 				// add a new stack with 1 element
 				stacks.emplace_back(1);
+				// todo: if a variable is in the scope of the global variable but the user declares the variable directly with 'var' instead of 'global', it will result in the absence of borrowed_block_ to register the variable, and then the vector goes out of bounds (there is no back), how to resolve the conflict?
+				borrowed_block_.emplace_back(borrowed_pool_.get());
 			}
 
 			void finish_stack() noexcept { stacks.pop_back(); }

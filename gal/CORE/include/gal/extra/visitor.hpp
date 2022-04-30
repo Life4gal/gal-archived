@@ -5,6 +5,7 @@
 
 #include <gal/language/common.hpp>
 #include <gal/tools/logger.hpp>
+#include <gal/defines.hpp>
 
 namespace gal::lang::extra
 {
@@ -24,12 +25,13 @@ namespace gal::lang::extra
 
 		struct print_visitor
 		{
-			void operator()(const lang::ast_node& node) const
+			void operator()([[maybe_unused]] const lang::ast_node& node) const
 			{
-				tools::logger::info(
-					"\n=====print_visitor starts printing ast_node====\n"
-					"{}\n"
-					"=====print_visitor ends printing ast_node====\n", node.to_string());
+				GAL_LANG_AST_VISIT_PRINT_DO(
+						tools::logger::info(
+							"\n=====print_visitor starts printing ast_node====\n"
+							"{}\n"
+							"=====print_visitor ends printing ast_node====\n", node.to_string());)
 			}
 		};
 

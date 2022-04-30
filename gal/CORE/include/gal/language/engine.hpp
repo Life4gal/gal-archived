@@ -93,7 +93,7 @@ namespace gal::lang::lang
 				const foundation::string_view_type filename)
 		{
 			try { return parser_->parse(input, filename)->eval(foundation::dispatcher_state{dispatcher_}, parser_->get_visitor()); }
-			catch (interrupt_type::return_value& ret) { return std::move(ret.value); }
+			catch (interrupt_type::interrupt_return& ret) { return std::move(ret.value); }
 		}
 
 		/**
@@ -112,11 +112,7 @@ namespace gal::lang::lang
 				{
 					// failed to load, try the next path
 				}
-				catch (const exception::eval_error& e)
-				{
-					// todo
-					throw var(e);
-				}
+				catch (const exception::eval_error& e) { throw foundation::boxed_return_exception{var(e)}; }
 			}
 
 			throw exception::file_not_found_error{filename};
@@ -128,11 +124,7 @@ namespace gal::lang::lang
 		[[nodiscard]] foundation::boxed_value internal_eval(const foundation::string_view_type input)
 		{
 			try { return do_internal_eval(input, keyword_inline_eval_filename_name::value); }
-			catch (const exception::eval_error& e)
-			{
-				// todo
-				throw var(e);
-			}
+			catch (const exception::eval_error& e) { throw foundation::boxed_return_exception{var(e)}; }
 		}
 
 		/**
@@ -157,7 +149,7 @@ namespace gal::lang::lang
 				preloaded_paths_type preloaded_paths)
 			: preloaded_paths_{std::move(preloaded_paths)},
 			  parser_{std::move(parser)},
-			  dispatcher_{string_pool_, *parser} { build_system(std::move(library)); }
+			  dispatcher_{string_pool_, *parser_} { build_system(std::move(library)); }
 
 		[[nodiscard]] foundation::boxed_value eval(ast_node& node)
 		{
@@ -176,9 +168,9 @@ namespace gal::lang::lang
 				const foundation::string_view_type filename = keyword_inline_eval_filename_name::value)
 		{
 			try { return do_internal_eval(input, filename); }
-			catch (foundation::boxed_value& v)
+			catch (foundation::boxed_return_exception& e)
 			{
-				if (handler) { handler->handle(v, dispatcher_); }
+				if (handler) { handler->handle(e, dispatcher_); }
 				throw;
 			}
 		}

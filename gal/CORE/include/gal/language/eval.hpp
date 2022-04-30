@@ -8,6 +8,7 @@
 #include <gal/language/common.hpp>
 #include <gal/foundation/dynamic_function.hpp>
 #include <gal/function_register.hpp>
+#include <gal/foundation/boxed_exception.hpp>
 
 namespace gal::lang
 {
@@ -51,7 +52,7 @@ namespace gal::lang
 					params.begin());
 
 			try { return node.eval(state, visitor); }
-			catch (interrupt_type::return_value& ret) { return std::move(ret.value); }
+			catch (interrupt_type::interrupt_return& ret) { return std::move(ret.value); }
 		}
 
 		[[nodiscard]] inline foundation::boxed_value clone_if_necessary(
@@ -380,7 +381,7 @@ namespace gal::lang
 					throw exception::eval_error{
 							std_format::format("{} with function '{}' called", e.what(), node.front().identifier())};
 				}
-				catch (interrupt_type::return_value& ret) { return std::move(ret.value); }
+				catch (interrupt_type::interrupt_return& ret) { return std::move(ret.value); }
 			}
 
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override { return do_eval<true>(*this, state, visitor); }
@@ -475,7 +476,7 @@ namespace gal::lang
 					if (e.functions.empty()) { throw exception::eval_error{std_format::format("'{}' is not a function", function_name_)}; }
 					throw exception::eval_error{std_format::format("{} for function '{}' called", e.what(), function_name_), e.parameters, e.functions, true, *state};
 				}
-				catch (interrupt_type::return_value& r) { ret = std::move(r.value); }
+				catch (interrupt_type::interrupt_return& r) { ret = std::move(r.value); }
 
 				if (auto& c = this->get_child(1);
 					c.is<array_access_ast_node>())
@@ -1087,7 +1088,7 @@ namespace gal::lang
 			static foundation::boxed_value do_eval(ast_node& node, const foundation::dispatcher_state& state, ast_visitor& visitor)
 			{
 				std::ranges::for_each(
-						node.front_view(node.size() - 1),
+						node.front_view(static_cast<children_type::difference_type>(node.size()) - 1),
 						[&state, &visitor](auto& c) { c.eval(state, visitor); });
 
 				return node.back().eval(state, visitor);
@@ -1150,29 +1151,22 @@ namespace gal::lang
 			{
 				foundation::scoped_scope scoped_scope{state};
 
-				// try
-				// {
-				// 	while (get_scoped_bool_condition(this->get_child(0), state, visitor))
-				// 	{
-				// 		try { this->get_child(1).eval(state, visitor); }
-				// 		catch (interrupt_type::continue_loop&)
-				// 		{
-				// 			// we got a continued exception, which means all the remaining
-				// 			// loop implementation is skipped, and we just need to continue to
-				// 			// the next condition test
-				// 		}
-				// 	}
-				// }
-				// catch (interrupt_type::break_loop&)
-				// {
-				// 	// loop was broken intentionally
-				// }
-
-				while (get_scoped_bool_condition(this->get_child(0), state, visitor))
+				try
 				{
-					if (const auto type = this->get_child(1).eval(state, visitor).type_info();
-						type.is_internal(interrupt_type::continue_loop::continue_loop_flag)) {}
-					else if (type.is_internal(interrupt_type::break_loop::break_loop_flag)) { break; }
+					while (get_scoped_bool_condition(this->get_child(0), state, visitor))
+					{
+						try { this->get_child(1).eval(state, visitor); }
+						catch (const interrupt_type::interrupt_continue&)
+						{
+							// we got a continued exception, which means all the remaining
+							// loop implementation is skipped, and we just need to continue to
+							// the next condition test
+						}
+					}
+				}
+				catch (const interrupt_type::interrupt_break&)
+				{
+					// loop was broken intentionally
 				}
 
 				return void_var();
@@ -1216,47 +1210,25 @@ namespace gal::lang
 
 				const auto do_loop = [&loop_var_name, this, &state, &visitor](const auto& ranged)
 				{
-					// try
-					// {
-					// 	std::ranges::for_each(
-					// 			ranged,
-					// 			[&loop_var_name, this, &state, &visitor]<typename Var>(Var&& var)
-					// 			{
-					// 				// This scope push and pop might not be the best thing for perf,
-					// 				// but we know it's 100% correct
-					// 				foundation::scoped_scope scoped_scope{state};
-					// 				if constexpr (std::is_same_v<Var, foundation::boxed_value>)
-					// 				{
-					// 					state->add_local_or_throw(loop_var_name, std::forward<Var>(var));
-					// 				}
-					// 				else
-					// 				{
-					// 					state->add_local_or_throw(loop_var_name, foundation::boxed_value{std::ref(var)});
-					// 				}
-					//
-					// 				try
-					// 				{
-					// 					(void)this->get_child(2).eval(state, visitor);
-					// 				}
-					// 				catch (interrupt_type::continue_loop&)
-					// 				{
-					// 				}
-					// 			});
-					// }
-					// catch (interrupt_type::break_loop&)
-					// {
-					// 	// loop broken
-					// }
-
-					for (auto it = ranged.begin(); it != ranged.end(); ++it)
+					try
 					{
-						foundation::scoped_scope scoped_scope{state};
-						if constexpr (std::is_same_v<std::decay_t<decltype(*it)>, foundation::boxed_value>) { state->add_local_or_throw(loop_var_name, *it); }
-						else { state->add_local_or_throw(loop_var_name, foundation::boxed_value{std::ref(*it)}); }
+						std::ranges::for_each(
+								ranged,
+								[&loop_var_name, this, &state, &visitor]<typename Var>(Var&& var)
+								{
+									// This scope push and pop might not be the best thing for perf,
+									// but we know it's 100% correct
+									foundation::scoped_scope scoped_scope{state};
+									if constexpr (std::is_same_v<Var, foundation::boxed_value>) { state->add_local_or_throw(loop_var_name, std::forward<Var>(var)); }
+									else { state->add_local_or_throw(loop_var_name, foundation::boxed_value{std::ref(var)}); }
 
-						if (const auto type = this->get_child(2).eval(state, visitor).type_info();
-							type.is_internal(interrupt_type::continue_loop::continue_loop_flag)) {}
-						else if (type.is_internal(interrupt_type::break_loop::break_loop_flag)) { break; }
+									try { (void)this->get_child(2).eval(state, visitor); }
+									catch (const interrupt_type::interrupt_continue&) { }
+								});
+					}
+					catch (const interrupt_type::interrupt_break&)
+					{
+						// loop broken
 					}
 
 					return void_var();
@@ -1275,39 +1247,25 @@ namespace gal::lang
 				const auto front_function = get_function(container_front_interface_name::value, front_location_);
 				const auto pop_front_function = get_function(container_pop_front_interface_name::value, pop_front_location_);
 
-				// try
-				// {
-				// 	const auto ranged = call_function(range_function, range_expression_result);
-				// 	while (not boxed_cast<bool>(call_function(empty_function, ranged)))
-				// 	{
-				// 		foundation::scoped_scope scoped_scope{state};
-				//
-				// 		state->add_local_or_throw(loop_var_name, call_function(front_function, ranged));
-				// 		try { this->get_child(2).eval(state, visitor); }
-				// 		catch (interrupt_type::continue_loop&)
-				// 		{
-				// 			// continue statement hit
-				// 		}
-				// 		(void)call_function(pop_front_function, ranged);
-				// 	}
-				// }
-				// catch (interrupt_type::break_loop&)
-				// {
-				// 	// loop broken
-				// }
-
-				for (const auto ranged = call_function(range_function, range_expression_result);
-				     not boxed_cast<bool>(call_function(empty_function, ranged));
-				)
+				try
 				{
-					foundation::scoped_scope scoped_scope{state};
+					const auto ranged = call_function(range_function, range_expression_result);
+					while (not boxed_cast<bool>(call_function(empty_function, ranged)))
+					{
+						foundation::scoped_scope scoped_scope{state};
 
-					state->add_local_or_throw(loop_var_name, call_function(front_function, ranged));
-					if (const auto type = this->get_child(2).eval(state, visitor).type_info();
-						type.is_internal(interrupt_type::continue_loop::continue_loop_flag)) {}
-					else if (type.is_internal(interrupt_type::break_loop::break_loop_flag)) { break; }
-
-					(void)call_function(pop_front_function, ranged);
+						state->add_local_or_throw(loop_var_name, call_function(front_function, ranged));
+						try { this->get_child(2).eval(state, visitor); }
+						catch (const interrupt_type::interrupt_continue&)
+						{
+							// continue statement hit
+						}
+						(void)call_function(pop_front_function, ranged);
+					}
+				}
+				catch (const interrupt_type::interrupt_break&)
+				{
+					// loop broken
 				}
 
 				return void_var();
@@ -1329,8 +1287,7 @@ namespace gal::lang
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor&) override
 			{
 				// todo: better way
-				// throw interrupt_type::break_loop{};
-				return interrupt_type::break_loop::instance();
+				throw interrupt_type::interrupt_break{};
 			}
 
 		public:
@@ -1349,8 +1306,7 @@ namespace gal::lang
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor&) override
 			{
 				// todo: better way
-				// throw interrupt_type::continue_loop{};
-				return interrupt_type::continue_loop::instance();
+				throw interrupt_type::interrupt_continue{};
 			}
 
 		public:
@@ -1369,8 +1325,8 @@ namespace gal::lang
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
 			{
 				// todo: better way
-				if (not this->empty()) { throw interrupt_type::return_value{this->front().eval(state, visitor)}; }
-				throw interrupt_type::return_value{void_var()};
+				if (not this->empty()) { throw interrupt_type::interrupt_return{this->front().eval(state, visitor)}; }
+				throw interrupt_type::interrupt_return{void_var()};
 			}
 
 		public:
@@ -1388,42 +1344,20 @@ namespace gal::lang
 		private:
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
 			{
-				// try
-				// {
-				// 	if (const auto size = this->size(); size > 0)
-				// 	{
-				// 		std::ranges::for_each(
-				// 				this->front_view(static_cast<children_type::difference_type>(size) - 1),
-				// 				[&state, &visitor](auto& child)
-				// 				{ child.eval(state, visitor); });
-				// 		return this->back().eval(state, visitor);
-				// 	}
-				// 	return void_var();
-				// }
-				// catch (const interrupt_type::continue_loop&)
-				// {
-				// 	throw exception::eval_error{"Unexpected 'continue' statement outside of a loop"};
-				// }
-				// catch (const interrupt_type::break_loop&)
-				// {
-				// 	throw exception::eval_error{"Unexpected 'break' statement outside of a loop"};
-				// }
-
-				if (const auto size = this->size(); size > 0)
+				try
 				{
-					std::ranges::for_each(
-							this->front_view(static_cast<children_type::difference_type>(size) - 1),
-							[&state, &visitor](auto& child)
-							{
-								if (const auto& type = child.eval(state, visitor).type_info();
-									type.is_internal(interrupt_type::continue_loop::continue_loop_flag)) { throw exception::eval_error{"Unexpected 'continue' statement outside of a loop"}; }
-								else if (type.is_internal(interrupt_type::break_loop::break_loop_flag)) { throw exception::eval_error{"Unexpected 'break' statement outside of a loop"}; }
-							});
+					if (const auto size = this->size(); size > 0)
+					{
+						std::ranges::for_each(
+								this->front_view(static_cast<children_type::difference_type>(size) - 1),
+								[&state, &visitor](auto& child) { child.eval(state, visitor); });
+						return this->back().eval(state, visitor);
+					}
 
-					return this->back().eval(state, visitor);
+					return void_var();
 				}
-
-				return void_var();
+				catch (const interrupt_type::interrupt_continue&) { throw exception::eval_error{"Unexpected 'continue' statement outside of a loop"}; }
+				catch (const interrupt_type::interrupt_break&) { throw exception::eval_error{"Unexpected 'break' statement outside of a loop"}; }
 			}
 
 		public:
@@ -1486,8 +1420,7 @@ namespace gal::lang
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor&) override
 			{
 				// todo: better way
-				// throw interrupt_type::continue_loop{};
-				return interrupt_type::continue_loop::instance();
+				throw interrupt_type::interrupt_continue{};
 			}
 
 		public:
@@ -1533,12 +1466,12 @@ namespace gal::lang
 							{
 								has_matched = true;
 
-								if (const auto& type = current.eval(state, visitor).type_info();
-									type.is_internal(interrupt_type::continue_loop::continue_loop_flag))
+								try { (void)current.eval(state, visitor); }
+								catch (const interrupt_type::interrupt_continue&)
 								{
 									// fallthrough
 								}
-								else
+								catch (const interrupt_type::interrupt_break&)
 								{
 									// break
 									breaking = true;
@@ -1873,10 +1806,7 @@ namespace gal::lang
 
 			// todo
 
-			try
-			{
-				return do_eval(state, visitor);
-			}
+			try { return do_eval(state, visitor); }
 			catch (exception::eval_error& e)
 			{
 				e.stack_traces.emplace_back(*this);

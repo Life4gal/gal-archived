@@ -1881,14 +1881,6 @@ namespace gal::lang
 							point_};
 				}
 
-				if (not build_any<keyword_block_begin_name>())
-				{
-					throw exception::eval_error{
-							"Incomplete 'while' expression, missing ':'",
-							filename_,
-							point_};
-				}
-
 				if (not build_block())
 				{
 					throw exception::eval_error{
@@ -2781,6 +2773,7 @@ namespace gal::lang
 
 				if (build_keyword(keyword_global_name::value))
 				{
+					// todo: global var i = 42 or global i = 42?
 					if (not(build_reference() || build_identifier(true))) { throw exception::eval_error{"Incomplete global declaration", filename_, point_}; }
 
 					build_match<global_decl_ast_node>(prev_size);
@@ -2934,7 +2927,7 @@ namespace gal::lang
 					const auto begin = point_;
 					// todo: Although these branches do not have no side effects on the `state` of the parser, misjudgment can have a significant effect on the `efficiency` of the parser.
 					// We need to be careful about the order of these branches.
-					if (build_block() || build_eol())
+					if (build_eol()  || build_block())
 					{
 						has_more = true;
 						result = true;
@@ -2953,12 +2946,14 @@ namespace gal::lang
 						result = true;
 						saw_eol = true;
 					}
-					else if (build_equation() || build_return() || build_break() || build_continue())
+					// note: build_equation must come after build_return/break/continue, otherwise these keywords will be used as identifiers.
+					// todo: solve it!
+					else if (build_return() || build_break() || build_continue() || build_equation())
 					{
 						if (not saw_eol)
 						{
 							throw exception::eval_error{
-									"Two function definitions missing line separator",
+									"Two expression definitions missing line separator",
 									filename_,
 									begin};
 						}

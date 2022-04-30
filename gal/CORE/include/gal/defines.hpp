@@ -19,6 +19,12 @@
 #endif
 #endif
 
+#ifndef GAL_LANG_NO_AST_VISIT_PRINT
+#ifndef NDEBUG
+#define GAL_LANG_AST_VISIT_PRINT
+#endif
+#endif
+
 #endif
 
 #ifdef GAL_LANG_TYPE_INFO_DEBUG
@@ -36,6 +42,12 @@
 #include <gal/tools/logger.hpp>
 #else
 #define GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(...)
+#endif
+
+#ifdef GAL_LANG_AST_VISIT_PRINT
+#define GAL_LANG_AST_VISIT_PRINT_DO(...) __VA_ARGS__
+#else
+		#define GAL_LANG_AST_VISIT_PRINT_DO(...)
 #endif
 
 #include <utils/macro.hpp>
