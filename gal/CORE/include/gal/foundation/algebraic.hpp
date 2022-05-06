@@ -1,14 +1,14 @@
 #pragma once
 
-#ifndef GAL_LANG_LANGUAGE_ALGEBRAIC_HPP
-#define GAL_LANG_LANGUAGE_ALGEBRAIC_HPP
+#ifndef GAL_LANG_FOUNDATION_ALGEBRAIC_HPP
+#define GAL_LANG_FOUNDATION_ALGEBRAIC_HPP
 
 #include <utils/assert.hpp>
 #include <utils/hash.hpp>
 #include <gal/foundation/string.hpp>
-#include <gal/language/name.hpp>
+#include <gal/foundation/name.hpp>
 
-namespace gal::lang::lang
+namespace gal::lang::foundation
 {
 	enum class algebraic_operations
 	{
@@ -193,4 +193,4 @@ namespace gal::lang::lang
 	}
 }
 
-#endif // GAL_LANG_LANGUAGE_ALGEBRAIC_HPP
+#endif // GAL_LANG_FOUNDATION_ALGEBRAIC_HPP

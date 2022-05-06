@@ -12,8 +12,7 @@ namespace gal::lang::foundation
 	class dynamic_object
 	{
 	public:
-		constexpr static string_view_type unknown_type_name = "unknown_type";
-		constexpr static string_view_type missing_method_name = "missing_method";
+		constexpr static string_view_type missing_method_name = GAL_LANG_FUNCTION_METHOD_MISSING_NAME;
 
 		// todo: transparent!
 		// using members_type = std::unordered_map<string_type, boxed_value, std::hash<string_type>, std::equal_to<>>;
@@ -31,10 +30,7 @@ namespace gal::lang::foundation
 		members_type members_;
 
 	public:
-		explicit dynamic_object(const string_type& name)
-			: type_name_{name} {}
-
-		explicit dynamic_object(const string_view_type name = unknown_type_name)
+		explicit dynamic_object(const string_view_type name)
 			: type_name_{name} {}
 
 		//************************************************************************

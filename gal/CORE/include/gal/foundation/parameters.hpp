@@ -5,6 +5,7 @@
 
 #include <gal/foundation/boxed_value.hpp>
 #include <gal/foundation/type_info.hpp>
+#include <gal/foundation/string.hpp>
 #include <utils/container_view.hpp>
 #include <vector>
 

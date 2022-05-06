@@ -5,7 +5,7 @@
 
 #include <gal/boxed_cast.hpp>
 #include <gal/foundation/dispatcher.hpp>
-#include <gal/language/common.hpp>
+#include <gal/foundation/ast.hpp>
 #include <gal/foundation/dynamic_function.hpp>
 #include <gal/function_register.hpp>
 #include <gal/foundation/boxed_exception.hpp>
@@ -19,8 +19,8 @@ namespace gal::lang
 	{
 		[[nodiscard]] inline foundation::boxed_value eval_function(
 				foundation::dispatcher& dispatcher,
-				lang::ast_node& node,
-				lang::ast_visitor& visitor,
+				ast::ast_node& node,
+				ast::ast_visitor_base& visitor,
 				const foundation::parameters_view_type params,
 				const foundation::name_views_view_type param_names,
 				const foundation::engine_stack::scope_type& locals = {},
@@ -33,21 +33,21 @@ namespace gal::lang
 			const auto* object_this = [params, &state]() -> const foundation::boxed_value*
 			{
 				auto& scope = state.stack().recent_scope();
-				if (const auto it = scope.find(lang::object_self_type_name::value);
+				if (const auto it = scope.find(foundation::object_self_type_name::value);
 					it != scope.end()) { return &it->second; }
 				if (not params.empty()) { return &params.front(); }
 				return nullptr;
 			}();
 
 			foundation::scoped_stack_scope scoped_stack{state};
-			if (object_this && not is_this_capture) { state->add_local_or_throw(lang::object_self_name::value, *object_this); }
+			if (object_this && not is_this_capture) { state->add_local_or_throw(foundation::object_self_name::value, *object_this); }
 
 			std::ranges::for_each(
 					locals,
 					[&state](const auto& pair) { state->add_local_or_throw(pair.first, pair.second); });
 
 			utils::zip_invoke(
-					[&state](const auto& name, const auto& object) { if (name != lang::object_self_name::value) { state->add_local_or_throw(name, object); } },
+					[&state](const auto& name, const auto& object) { if (name != foundation::object_self_name::value) { state->add_local_or_throw(name, object); } },
 					param_names,
 					params.begin());
 
@@ -62,25 +62,25 @@ namespace gal::lang
 		{
 			if (not incoming.is_xvalue())
 			{
-				if (const auto& ti = incoming.type_info(); ti.is_arithmetic()) { return foundation::boxed_number::clone(incoming); }
+				if (const auto& ti = incoming.type_info(); ti.is_arithmetic()) { return types::number_type::clone(incoming); }
 				else
 				{
 					if (ti.bare_equal(typeid(bool))) { return foundation::boxed_value{*static_cast<const bool*>(incoming.get_const_raw())}; }
 					if (ti.bare_equal(typeid(foundation::string_type))) { return foundation::boxed_value{*static_cast<const foundation::string_type*>(incoming.get_const_raw())}; }
 				}
-				return state->call_function(lang::object_clone_interface_name::value, location, foundation::parameters_view_type{incoming});
+				return state->call_function(foundation::object_clone_interface_name::value, location, foundation::parameters_view_type{incoming});
 			}
 			incoming.to_lvalue();
 			return incoming;
 		}
 	}// namespace eval_detail
 
-	namespace lang
+	namespace ast
 	{
 		struct noop_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor&) override { return void_var(); }
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor_base&) override { return void_var(); }
 
 		public:
 			GAL_AST_SET_RTTI(noop_ast_node)
@@ -94,7 +94,7 @@ namespace gal::lang
 		private:
 			mutable foundation::dispatcher::object_cache_location_type location_{};
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor&) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base&) override
 			{
 				try { return state->get_object(this->identifier(), location_); }
 				catch (std::exception&) { throw exception::eval_error{std_format::format("Can not find object '{}'", this->identifier())}; }
@@ -112,7 +112,7 @@ namespace gal::lang
 			foundation::boxed_value value;
 
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor&) override { return value; }
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor_base&) override { return value; }
 
 		public:
 			GAL_AST_SET_RTTI(constant_ast_node)
@@ -131,7 +131,7 @@ namespace gal::lang
 		struct reference_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor&) override { return state->add_local_or_throw(this->front().identifier(), foundation::boxed_value{}); }
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base&) override { return state->add_local_or_throw(this->front().identifier(), foundation::boxed_value{}); }
 
 		public:
 			GAL_AST_SET_RTTI(reference_ast_node)
@@ -152,7 +152,7 @@ namespace gal::lang
 			function_type function;
 
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor&) override { return function(this->children_, state); }
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base&) override { return function(this->children_, state); }
 
 		public:
 			GAL_AST_SET_RTTI(compiled_ast_node)
@@ -172,19 +172,19 @@ namespace gal::lang
 		struct unary_operator_ast_node final : ast_node
 		{
 		private:
-			algebraic_operations operation_;
+			foundation::algebraic_operations operation_;
 
 			mutable foundation::dispatcher::function_cache_location_type location_{};
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				const foundation::boxed_value object{this->front().eval(state, visitor)};
 
 				try
 				{
 					// short circuit arithmetic operations
-					if (operation_ != algebraic_operations::unknown && operation_ != algebraic_operations::bitwise_and &&
-					    object.type_info().is_arithmetic()) { return foundation::boxed_number::unary_invoke(object, operation_); }
+					if (operation_ != foundation::algebraic_operations::unknown && operation_ != foundation::algebraic_operations::bitwise_and &&
+					    object.type_info().is_arithmetic()) { return types::number_type::unary_invoke(object, operation_); }
 
 					const foundation::scoped_function_scope scoped_function{state};
 
@@ -210,24 +210,24 @@ namespace gal::lang
 			GAL_AST_SET_RTTI(unary_operator_ast_node)
 
 			unary_operator_ast_node(
-					const algebraic_operation_name_type operation,
+					const foundation::algebraic_operation_name_type operation,
 					const parse_location location,
 					children_type&& children)
 				: ast_node{get_rtti_index(), operation, location, std::move(children)},
-				  operation_{algebraic_operation(operation, true)} {}
+				  operation_{foundation::algebraic_operation(operation, true)} {}
 		};
 
 		struct fold_right_binary_operator_ast_node final : ast_node
 		{
 		private:
-			algebraic_operations operation_;
+			foundation::algebraic_operations operation_;
 			std::array<foundation::boxed_value, 2> params_;
 
 			mutable foundation::dispatcher::function_cache_location_type location_{};
 
 			foundation::boxed_value do_operation(
 					const foundation::dispatcher_state& state,
-					const algebraic_operation_name_type operation,
+					const foundation::algebraic_operation_name_type operation,
 					const foundation::boxed_value& lhs)
 			{
 				try
@@ -236,7 +236,7 @@ namespace gal::lang
 						// If it's an arithmetic operation we want to short circuit dispatch
 						try
 						{
-							return foundation::boxed_number::binary_invoke(
+							return types::number_type::binary_invoke(
 									operation_,
 									lhs,
 									params_[1]);
@@ -263,41 +263,41 @@ namespace gal::lang
 				}
 			}
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override { return do_operation(state, this->identifier(), this->front().eval(state, visitor)); }
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override { return do_operation(state, this->identifier(), this->front().eval(state, visitor)); }
 
 		public:
 			GAL_AST_SET_RTTI(fold_right_binary_operator_ast_node)
 
 			fold_right_binary_operator_ast_node(
-					const algebraic_operation_name_type operation,
+					const foundation::algebraic_operation_name_type operation,
 					const parse_location location,
 					children_type&& children,
 					foundation::boxed_value rhs)
 				: ast_node{get_rtti_index(), operation, location, std::move(children)},
-				  operation_{algebraic_operation(operation)},
+				  operation_{foundation::algebraic_operation(operation)},
 				  params_{{{}, std::move(rhs)}} {}
 		};
 
 		struct binary_operator_ast_node final : ast_node
 		{
 		private:
-			algebraic_operations operation_;
+			foundation::algebraic_operations operation_;
 
 			mutable foundation::dispatcher::function_cache_location_type location_{};
 
 			foundation::boxed_value do_operation(
 					const foundation::dispatcher_state& state,
-					const algebraic_operations operation,
-					const algebraic_operation_name_type operation_string,
+					const foundation::algebraic_operations operation,
+					const foundation::algebraic_operation_name_type operation_string,
 					const foundation::boxed_value& lhs,
 					const foundation::boxed_value& rhs) const
 			{
 				try
 				{
-					if (operation != algebraic_operations::unknown && lhs.type_info().is_arithmetic() && rhs.type_info().is_arithmetic())
+					if (operation != foundation::algebraic_operations::unknown && lhs.type_info().is_arithmetic() && rhs.type_info().is_arithmetic())
 					{
 						// If it's an arithmetic operation we want to short circuit dispatch
-						try { return foundation::boxed_number::binary_invoke(operation, lhs, rhs); }
+						try { return types::number_type::binary_invoke(operation, lhs, rhs); }
 						catch (const exception::arithmetic_error&) { throw; }
 						catch (...) { throw exception::eval_error{std_format::format("Error with numeric operator '{}' called", operation_string)}; }
 					}
@@ -312,17 +312,17 @@ namespace gal::lang
 				catch (const exception::dispatch_error& e) { throw exception::eval_error{std_format::format("Can not find appropriate '{}' operator", operation_string), e.parameters, e.functions, false, *state}; }
 			}
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override { return do_operation(state, operation_, this->identifier(), this->get_child(0).eval(state, visitor), this->get_child(1).eval(state, visitor)); }
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override { return do_operation(state, operation_, this->identifier(), this->get_child(0).eval(state, visitor), this->get_child(1).eval(state, visitor)); }
 
 		public:
 			GAL_AST_SET_RTTI(binary_operator_ast_node)
 
 			binary_operator_ast_node(
-					const algebraic_operation_name_type operation,
+					const foundation::algebraic_operation_name_type operation,
 					const parse_location location,
 					children_type&& children)
 				: ast_node{get_rtti_index(), operation, location, std::move(children)},
-				  operation_{algebraic_operation(operation)} {}
+				  operation_{foundation::algebraic_operation(operation)} {}
 		};
 
 		struct fun_call_ast_node final : ast_node
@@ -331,7 +331,7 @@ namespace gal::lang
 
 		private:
 			template<bool SaveParams>
-			[[nodiscard]] static foundation::boxed_value do_eval(ast_node& node, const foundation::dispatcher_state& state, ast_visitor& visitor)
+			[[nodiscard]] static foundation::boxed_value do_eval(ast_node& node, const foundation::dispatcher_state& state, ast_visitor_base& visitor)
 			{
 				const foundation::scoped_function_scope function_scope{state};
 
@@ -384,7 +384,7 @@ namespace gal::lang
 				catch (interrupt_type::interrupt_return& ret) { return std::move(ret.value); }
 			}
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override { return do_eval<true>(*this, state, visitor); }
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override { return do_eval<true>(*this, state, visitor); }
 
 		public:
 			GAL_AST_SET_RTTI(fun_call_ast_node)
@@ -399,7 +399,7 @@ namespace gal::lang
 		struct unused_return_fun_call_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override { return fun_call_ast_node::do_eval<false>(*this, state, visitor); }
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override { return fun_call_ast_node::do_eval<false>(*this, state, visitor); }
 
 		public:
 			GAL_AST_SET_RTTI(unused_return_fun_call_ast_node)
@@ -416,7 +416,7 @@ namespace gal::lang
 		private:
 			mutable foundation::dispatcher::function_cache_location_type location_{};
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				const foundation::scoped_function_scope scoped_function{state};
 
@@ -425,9 +425,9 @@ namespace gal::lang
 				try
 				{
 					state.stack().push_params(params);
-					return state->call_function(container_subscript_interface_name::value, location_, params);
+					return state->call_function(foundation::container_subscript_interface_name::value, location_, params);
 				}
-				catch (const exception::dispatch_error& e) { throw exception::eval_error{std_format::format("Can not find appropriate array lookup operator '{}'", container_subscript_interface_name::value), e.parameters, e.functions, false, *state}; }
+				catch (const exception::dispatch_error& e) { throw exception::eval_error{std_format::format("Can not find appropriate array lookup operator '{}'", foundation::container_subscript_interface_name::value), e.parameters, e.functions, false, *state}; }
 			}
 
 		public:
@@ -448,7 +448,7 @@ namespace gal::lang
 			mutable foundation::dispatcher::function_cache_location_type location_{};
 			mutable foundation::dispatcher::function_cache_location_type array_location_{};
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				const foundation::scoped_function_scope scoped_function{state};
 
@@ -484,9 +484,9 @@ namespace gal::lang
 					try
 					{
 						const foundation::parameters_type p{ret, c.get_child(1).eval(state, visitor)};
-						ret = state->call_function(container_subscript_interface_name::value, array_location_, p);
+						ret = state->call_function(foundation::container_subscript_interface_name::value, array_location_, p);
 					}
-					catch (const exception::dispatch_error& e) { throw exception::eval_error{std_format::format("Can not find appropriate array lookup operator '{}'", container_subscript_interface_name::value), e.parameters, e.functions, false, *state}; }
+					catch (const exception::dispatch_error& e) { throw exception::eval_error{std_format::format("Can not find appropriate array lookup operator '{}'", foundation::container_subscript_interface_name::value), e.parameters, e.functions, false, *state}; }
 				}
 
 				return ret;
@@ -571,12 +571,12 @@ namespace gal::lang
 		struct equation_ast_node final : ast_node
 		{
 		private:
-			algebraic_operations operation_;
+			foundation::algebraic_operations operation_;
 
 			mutable foundation::dispatcher::function_cache_location_type location_{};
 			mutable foundation::dispatcher::function_cache_location_type clone_location_{};
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				foundation::scoped_function_scope function_scope{state};
 
@@ -594,12 +594,12 @@ namespace gal::lang
 				if (params[0].is_xvalue()) { throw exception::eval_error{"Error, can not assign to a temporary value"}; }
 				if (params[0].is_const()) { throw exception::eval_error{"Error, can not assign to a immutable value"}; }
 
-				if (operation_ != algebraic_operations::unknown && params[0].type_info().is_arithmetic() && params[1].type_info().is_arithmetic())
+				if (operation_ != foundation::algebraic_operations::unknown && params[0].type_info().is_arithmetic() && params[1].type_info().is_arithmetic())
 				{
-					try { return foundation::boxed_number::binary_invoke(operation_, params[0], params[1]); }
+					try { return types::number_type::binary_invoke(operation_, params[0], params[1]); }
 					catch (const std::exception&) { throw exception::eval_error{"Error with unsupported arithmetic assignment operation"}; }
 				}
-				if (operation_ == algebraic_operations::assign)
+				if (operation_ == foundation::algebraic_operations::assign)
 				{
 					try
 					{
@@ -637,7 +637,7 @@ namespace gal::lang
 								*state};
 					}
 				}
-				if (this->identifier() == operator_reference_assign_name::value)
+				if (this->identifier() == foundation::operator_reference_assign_name::value)
 				{
 					if (params[0].is_undefined() || params[0].type_match(params[1]))
 					{
@@ -667,13 +667,13 @@ namespace gal::lang
 					const parse_location location,
 					children_type&& children)
 				: ast_node{get_rtti_index(), identifier, location, std::move(children)},
-				  operation_{algebraic_operation(this->identifier())} { gal_assert(this->size() == 2); }
+				  operation_{foundation::algebraic_operation(this->identifier())} { gal_assert(this->size() == 2); }
 		};
 
 		struct global_decl_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor&) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base&) override
 			{
 				const auto name = [&]() -> foundation::string_view_type
 				{
@@ -697,7 +697,7 @@ namespace gal::lang
 		struct var_decl_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor&) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base&) override
 			{
 				const auto& name = this->front().identifier();
 
@@ -720,7 +720,7 @@ namespace gal::lang
 		private:
 			mutable foundation::dispatcher::function_cache_location_type location_{};
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				const auto& name = this->front().identifier();
 
@@ -747,7 +747,7 @@ namespace gal::lang
 		struct class_decl_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				foundation::scoped_scope scoped_scope{state};
 
@@ -774,7 +774,7 @@ namespace gal::lang
 		struct member_decl_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor&) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base&) override
 			{
 				const auto& class_name = this->get_child(0).identifier();
 
@@ -829,7 +829,7 @@ namespace gal::lang
 			}
 
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				auto [num_params, param_names, param_types] = [this, &state]
 				{
@@ -916,10 +916,10 @@ namespace gal::lang
 			shared_node_type guard_node;
 
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				// The first param of a method is always the implied this ptr.
-				std::vector<std::string_view> param_names{object_self_name::value};
+				std::vector<std::string_view> param_names{foundation::object_self_name::value};
 
 				// we maybe need modify param_types
 				// auto [param_types] = [this, &state, &param_names]
@@ -1023,7 +1023,7 @@ namespace gal::lang
 			decltype(arg_list_ast_node::get_arg_names(std::declval<ast_node>().get_child(1))) param_names_;
 			shared_node_type lambda_node_;
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				const auto& [captures, is_capture_this] = [&]
 				{
@@ -1036,7 +1036,7 @@ namespace gal::lang
 							{
 								auto& cf = c.front();
 								named_captures.emplace(cf.identifier(), cf.eval(state, visitor));
-								capture_this = cf.identifier() == object_self_name::value;
+								capture_this = cf.identifier() == foundation::object_self_name::value;
 							});
 
 					return std::make_pair(std::move(named_captures), capture_this);
@@ -1085,7 +1085,7 @@ namespace gal::lang
 			friend struct block_ast_node;
 
 		private:
-			static foundation::boxed_value do_eval(ast_node& node, const foundation::dispatcher_state& state, ast_visitor& visitor)
+			static foundation::boxed_value do_eval(ast_node& node, const foundation::dispatcher_state& state, ast_visitor_base& visitor)
 			{
 				std::ranges::for_each(
 						node.front_view(static_cast<children_type::difference_type>(node.size()) - 1),
@@ -1094,7 +1094,7 @@ namespace gal::lang
 				return node.back().eval(state, visitor);
 			}
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override { return do_eval(*this, state, visitor); }
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override { return do_eval(*this, state, visitor); }
 
 		public:
 			GAL_AST_SET_RTTI(no_scope_block_ast_node)
@@ -1109,7 +1109,7 @@ namespace gal::lang
 		struct block_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				foundation::scoped_scope scoped_scope{state};
 				return no_scope_block_ast_node::do_eval(*this, state, visitor);
@@ -1128,7 +1128,7 @@ namespace gal::lang
 		struct if_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				if (get_bool_condition(this->get_child(0).eval(state, visitor), state)) { return this->get_child(1).eval(state, visitor); }
 				return this->get_child(2).eval(state, visitor);
@@ -1147,7 +1147,7 @@ namespace gal::lang
 		struct while_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				foundation::scoped_scope scoped_scope{state};
 
@@ -1192,7 +1192,7 @@ namespace gal::lang
 			mutable location_type front_location_{};
 			mutable location_type pop_front_location_{};
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				const auto get_function = [&state](const foundation::string_view_type name, location_type& location)
 				{
@@ -1242,10 +1242,10 @@ namespace gal::lang
 				if (range_expression_result.type_info().bare_equal(typeid(foundation::engine_stack::scope_type))) { return do_loop(boxed_cast<const foundation::engine_stack::scope_type&>(range_expression_result)); }
 
 				// other container type
-				const auto range_function = get_function(container_range_interface_name::value, range_location_);
-				const auto empty_function = get_function(container_empty_interface_name::value, empty_location_);
-				const auto front_function = get_function(container_front_interface_name::value, front_location_);
-				const auto pop_front_function = get_function(container_pop_front_interface_name::value, pop_front_location_);
+				const auto range_function = get_function(foundation::container_range_interface_name::value, range_location_);
+				const auto empty_function = get_function(foundation::container_empty_interface_name::value, empty_location_);
+				const auto front_function = get_function(foundation::container_front_interface_name::value, front_location_);
+				const auto pop_front_function = get_function(foundation::container_pop_front_interface_name::value, pop_front_location_);
 
 				try
 				{
@@ -1284,7 +1284,7 @@ namespace gal::lang
 		struct break_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor&) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor_base&) override
 			{
 				// todo: better way
 				throw interrupt_type::interrupt_break{};
@@ -1303,7 +1303,7 @@ namespace gal::lang
 		struct continue_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor&) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor_base&) override
 			{
 				// todo: better way
 				throw interrupt_type::interrupt_continue{};
@@ -1322,7 +1322,7 @@ namespace gal::lang
 		struct return_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				// todo: better way
 				if (not this->empty()) { throw interrupt_type::interrupt_return{this->front().eval(state, visitor)}; }
@@ -1342,7 +1342,7 @@ namespace gal::lang
 		struct file_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				try
 				{
@@ -1373,7 +1373,7 @@ namespace gal::lang
 		struct match_default_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				foundation::scoped_scope scoped_scope{state};
 
@@ -1395,7 +1395,7 @@ namespace gal::lang
 		struct match_case_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				foundation::scoped_scope scoped_scope{state};
 
@@ -1417,7 +1417,7 @@ namespace gal::lang
 		struct match_fallthrough_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor&) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state&, ast_visitor_base&) override
 			{
 				// todo: better way
 				throw interrupt_type::interrupt_continue{};
@@ -1438,7 +1438,7 @@ namespace gal::lang
 		private:
 			mutable foundation::dispatcher::function_cache_location_type location_;
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				foundation::scoped_scope scoped_scope{state};
 
@@ -1459,7 +1459,7 @@ namespace gal::lang
 								    match_value[1] = current.front().eval(state, visitor);
 								    return boxed_cast<bool>(
 										    state->call_function(
-												    operator_equal_name::value,
+												    foundation::operator_equal_name::value,
 												    location_,
 												    match_value));
 							    }())
@@ -1504,7 +1504,7 @@ namespace gal::lang
 		struct logical_and_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				return const_var(
 						get_bool_condition(this->get_child(0).eval(state, visitor), state) &&
@@ -1524,7 +1524,7 @@ namespace gal::lang
 		struct logical_or_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				return const_var(
 						get_bool_condition(this->get_child(0).eval(state, visitor), state) ||
@@ -1546,7 +1546,7 @@ namespace gal::lang
 		private:
 			mutable foundation::dispatcher::function_cache_location_type location_{};
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				try
 				{
@@ -1555,11 +1555,11 @@ namespace gal::lang
 					gal_assert(cs.size() == 2 || cs.size() == 3);
 					// range(begin,end,step=1), step is optional
 					return state->call_function(
-							keyword_inline_range_gen_name::value,
+							foundation::keyword_inline_range_gen_name::value,
 							location_,
 							cs.view() | std::views::transform([&state, &visitor](auto& child) { return child.eval(state, visitor); }));
 				}
-				catch (const exception::dispatch_error& e) { throw exception::eval_error{std_format::format("Can not generate range vector while calling '{}'", keyword_inline_range_gen_name::value), e.parameters, e.functions, false, *state}; }
+				catch (const exception::dispatch_error& e) { throw exception::eval_error{std_format::format("Can not generate range vector while calling '{}'", foundation::keyword_inline_range_gen_name::value), e.parameters, e.functions, false, *state}; }
 			}
 
 		public:
@@ -1577,7 +1577,7 @@ namespace gal::lang
 		private:
 			mutable foundation::dispatcher::function_cache_location_type location_{};
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				return const_var(
 						[this, &state, &visitor]
@@ -1601,7 +1601,7 @@ namespace gal::lang
 							catch (const exception::dispatch_error& e)
 							{
 								throw exception::eval_error{
-										std_format::format("Can not find appropriate '{}' or copy constructor while insert elements into vector", object_clone_interface_name::value),
+										std_format::format("Can not find appropriate '{}' or copy constructor while insert elements into vector", foundation::object_clone_interface_name::value),
 										e.parameters,
 										e.functions,
 										false,
@@ -1625,7 +1625,7 @@ namespace gal::lang
 		private:
 			mutable foundation::dispatcher::function_cache_location_type location_{};
 
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				return const_var(
 						[this, &state, &visitor]
@@ -1650,7 +1650,7 @@ namespace gal::lang
 							catch (const exception::dispatch_error& e)
 							{
 								throw exception::eval_error{
-										std_format::format("Can not find appropriate '{}' or copy constructor while insert elements into map", object_clone_interface_name::value),
+										std_format::format("Can not find appropriate '{}' or copy constructor while insert elements into map", foundation::object_clone_interface_name::value),
 										e.parameters,
 										e.functions,
 										false,
@@ -1705,7 +1705,7 @@ namespace gal::lang
 		struct try_ast_node final : ast_node
 		{
 		private:
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor& visitor) override
+			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
 				auto finalize = [this, &state, &visitor]
 				{
@@ -1800,7 +1800,7 @@ namespace gal::lang
 				: ast_node{get_rtti_index(), identifier, location, std::move(children)} {}
 		};
 
-		inline foundation::boxed_value ast_node::eval(const foundation::dispatcher_state& state, ast_visitor& visitor)
+		inline foundation::boxed_value ast_node::eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor)
 		{
 			visitor.visit(*this);
 
@@ -1834,7 +1834,7 @@ namespace gal::lang
 						stack_traces | std::views::drop(1),
 						[&dest](const auto& trace)
 						{
-							if (not trace.template is_any<lang::block_ast_node, lang::file_ast_node>())
+							if (not trace.template is_any<ast::block_ast_node, ast::file_ast_node>())
 							{
 								std_format::format_to(
 										std::back_inserter(dest),

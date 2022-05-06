@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_EXTRA_BINARY_MODULE_WINDOWS_HPP
-#define GAL_LANG_EXTRA_BINARY_MODULE_WINDOWS_HPP
+#ifndef GAL_LANG_PLUGIN_BINARY_MODULE_WINDOWS_HPP
+	#define GAL_LANG_PLUGIN_BINARY_MODULE_WINDOWS_HPP
 
 #ifndef GAL_LANG_WINDOWS
 #error "This file should not be used before macro GAL_LANG_WINDOWS is defined"
@@ -15,9 +15,9 @@
 #define NOMINMAX
 #include <Windows.h>
 
-#include "gal/foundation/dispatcher.hpp"
+#include <gal/foundation/dispatcher.hpp>
 
-namespace gal::lang::extra
+namespace gal::lang::plugin
 {
 	struct binary_module
 	{
@@ -100,4 +100,4 @@ namespace gal::lang::extra
 	};
 }
 
-#endif // GAL_LANG_EXTRA_BINARY_MODULE_WINDOWS_HPP
+#endif // GAL_LANG_PLUGIN_BINARY_MODULE_WINDOWS_HPP

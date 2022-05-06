@@ -25,7 +25,7 @@ namespace gal::lang::foundation
 		constexpr static flag_type flag_pointer = 1 << 4;
 
 		constexpr static flag_type flag_undefined = 1 << 5;
-		constexpr static const char* undefined_type_name = "unknown-type";
+		constexpr static const char* undefined_type_name = GAL_LANG_TYPE_INFO_UNKNOWN_NAME;
 
 		struct info_builder
 		{

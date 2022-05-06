@@ -17,10 +17,7 @@ int main()
 			"hello_cpp",
 			lang::fun(&hello_cpp));
 
-	try
-	{
-		auto result = engine.eval_file("test.gal");
-	}
+	try { auto result = engine.eval_file("test.gal"); }
 	catch (const std::exception& e) { std::cerr << e.what() << '\n'; }
 }
 
