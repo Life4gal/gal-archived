@@ -3,7 +3,7 @@
 #ifndef GAL_LANG_BOXED_CAST_HPP
 #define GAL_LANG_BOXED_CAST_HPP
 
-#include <gal/foundation/boxed_cast.hpp>
+#include<gal/foundation/boxed_cast.hpp>
 
 namespace gal::lang
 {
@@ -15,23 +15,25 @@ namespace gal::lang
 	 * GAL engine.
 	 */
 	template<typename Base, typename Derived>
-	[[nodiscard]] foundation::type_conversion_type make_base_conversion()
+		requires std::is_base_of_v<Base, Derived>
+	[[nodiscard]] foundation::convertor_type make_base_convertor()
 	{
 		// Can only be used with related polymorphic types
 		// may be expanded some day to support conversions other than child -> parent
 		static_assert(std::is_base_of_v<Base, Derived>, "Classes are not related by inheritance");
 
-		if constexpr (std::is_polymorphic_v<Base> && std::is_polymorphic_v<Derived>) { return foundation::make_type_conversion<foundation::boxed_cast_detail::dynamic_conversion<Base, Derived>>(); }
-		else { return foundation::make_type_conversion<foundation::boxed_cast_detail::static_conversion<Base, Derived>>(); }
+		if constexpr (std::is_polymorphic_v<Base> && std::is_polymorphic_v<Derived>) { return foundation::make_convertor<foundation::boxed_cast_detail::dynamic_convertor<Base, Derived>>(); }
+		else { return foundation::make_convertor<foundation::boxed_cast_detail::static_convertor<Base, Derived>>(); }
 	}
 
 	template<typename Callable>
-	[[nodiscard]] foundation::type_conversion_type make_convert_function(const foundation::gal_type_info& from, const foundation::gal_type_info& to, const Callable& function) { return foundation::make_type_conversion<foundation::boxed_cast_detail::type_conversion<Callable>>(from, to, function); }
+		requires std::is_invocable_r_v<foundation::boxed_value, Callable, const foundation::boxed_value&>
+	[[nodiscard]] foundation::convertor_type make_explicit_convertor(const foundation::gal_type_info& from, const foundation::gal_type_info& to, const Callable& function) { return foundation::make_convertor<foundation::boxed_cast_detail::explicit_convertor<Callable>>(from, to, function); }
 
 	template<typename From, typename To, typename Callable>
-	[[nodiscard]] foundation::type_conversion_type make_convert_function(const Callable& function)
+	[[nodiscard]] foundation::convertor_type make_explicit_convertor(const Callable& function)
 	{
-		return make_convert_function(
+		return lang::make_explicit_convertor(
 				foundation::make_type_info<From>(),
 				foundation::make_type_info<To>(),
 				[function](const foundation::boxed_value& object)
@@ -43,9 +45,9 @@ namespace gal::lang
 
 	template<typename From, typename To>
 		requires std::is_convertible_v<From, To>
-	[[nodiscard]] foundation::type_conversion_type make_convert_function()
+	[[nodiscard]] foundation::convertor_type make_explicit_convertor()
 	{
-		return make_convert_function<From, To>(
+		return lang::make_explicit_convertor<From, To>(
 				[](const foundation::boxed_value& object)
 				{
 					// not even attempting to call boxed_cast so that we don't get caught in some call recursion
@@ -61,13 +63,14 @@ namespace gal::lang
 		         (std::is_member_function_pointer_v<PushFunction> && requires(Container<ValueType, AnyOther...>& container, PushFunction push_function)
 		         {
 			         (container.*push_function)(std::declval<ValueType&&>());
-		         }) or (not std::is_member_function_pointer_v<PushFunction> && requires(Container<ValueType, AnyOther...>& container, PushFunction push_function)
+		         }) or
+		         (not std::is_member_function_pointer_v<PushFunction> && requires(Container<ValueType, AnyOther...>& container, PushFunction push_function)
 		         {
 			         push_function(container, std::declval<ValueType&&>());
 		         })
-	[[nodiscard]] foundation::type_conversion_type make_container_convert_function(PushFunction push_function)
+	[[nodiscard]] foundation::convertor_type make_container_explicit_convertor(PushFunction push_function)
 	{
-		return make_convert_function(
+		return lang::make_explicit_convertor(
 				foundation::make_type_info<Container<ValueType, AnyOther...>>(),
 				foundation::make_type_info<ValueType>(),
 				[push_function](const foundation::boxed_value& data)
@@ -99,9 +102,9 @@ namespace gal::lang
 		         {
 			         push_function(container, std::declval<std::pair<KeyType, MappedType>&&>());
 		         })
-	[[nodiscard]] foundation::type_conversion_type make_container_convert_function(PushFunction push_function)
+	[[nodiscard]] foundation::convertor_type make_container_explicit_convertor(PushFunction push_function)
 	{
-		return make_convert_function(
+		return lang::make_explicit_convertor(
 				foundation::make_type_info<Container<KeyType, MappedType, AnyOther...>>(),
 				foundation::make_type_info<MappedType>(),
 				[push_function](const foundation::boxed_value& data)
@@ -123,45 +126,82 @@ namespace gal::lang
 	}
 
 	/**
-	 * @throw bad_boxed_cast(std::bad_cast)
+	 * @throw exception::bad_boxed_cast (std::bad_cast)
 	 */
 	template<typename T>
-	[[nodiscard]] decltype(auto) boxed_cast(const foundation::boxed_value& object, const foundation::type_conversion_state* conversion = nullptr)
+	[[nodiscard]] decltype(auto) boxed_cast(
+			const foundation::boxed_value& object,
+			const foundation::convertor_manager_state* state = nullptr
+			GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+					,
+					const std_source_location& location = std_source_location::current())
+			)
 	{
-		if (not conversion ||
+		GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+				struct scoped_logger
+				{
+				foundation::string_type message;
+
+				~scoped_logger() { tools::logger::info(message); }
+				};
+		
+				scoped_logger detail{};
+				
+				std_format::format_to(
+					std::back_inserter(detail.message),
+					"'{}' from (file: '{}' function: '{}' position: ({}:{})).\n\tobject type is '{}({})', required type is '{}({})'",
+					__func__,
+					location.file_name(),
+					location.function_name(),
+					location.line(),
+					location.column(),
+					object.type_info().type_name,
+					object.type_info().bare_type_name,
+					foundation::make_type_info<T>().type_name,
+					foundation::make_type_info<T>().bare_type_name);
+				)
+
+
+		if (not state ||
 		    object.type_info().bare_equal(foundation::make_type_info<T>()) ||
-		    (not conversion->operator*().is_convertible_type<T>()))
+		    (not state->operator*().is_convertible<T>()))
 		{
-			try
-			{
-				return foundation::boxed_cast_detail::cast_invoker<T>::cast(object, conversion);
-			}
-			catch (const std::bad_any_cast&) { }
+			try { return foundation::boxed_cast_detail::cast_invoker<T>::cast(object, state); }
+			catch (const std::bad_any_cast&) { GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(detail.message.append("\n-->\t\tcast_invoker<T>::cast(object, state) failed.");) }
 		}
 
-		if (conversion && conversion->operator*().is_convertible_type<T>())
+		if (state && state->operator*().is_convertible<T>())
 		{
 			try
 			{
 				// We will not catch any bad_boxed_dynamic_cast that is thrown, let the user get it
 				// either way, we are not responsible if it doesn't work
-				return foundation::boxed_cast_detail::cast_helper<T>::cast(conversion->operator*().boxed_type_conversion<T>(conversion->saves(), object), conversion);
+				return foundation::boxed_cast_detail::cast_helper<T>::cast(state->operator*().boxed_convert<T>(object), state);
 			}
 			catch (...)
 			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(detail.message.append("\n-->\t\tcast_helper<T>::castcast(state->operator*().boxed_convert<T>(object), state) failed.");)
+
 				try
 				{
 					// try going the other way
-					return foundation::boxed_cast_detail::cast_helper<T>::cast(conversion->operator*().boxed_type_down_conversion<T>(conversion->saves(), object), conversion);
+					return foundation::boxed_cast_detail::cast_helper<T>::cast(state->operator*().boxed_convert_down<T>(object), state);
 				}
-				catch (const std::bad_any_cast&) { throw exception::bad_boxed_cast{object.type_info(), typeid(T)}; }
+				catch (const std::bad_any_cast&)
+				{
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(detail.message.append("\n-->\t\tcast_helper<T>::castcast(state->operator*().boxed_convert_down<T>(object), state) failed.");)
+
+					throw exception::bad_boxed_cast{object.type_info(), typeid(T)};
+				}
 			}
 		}
+
+		GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(detail.message.append("\n-->\t\tAll cast failed, it's not convertible.");)
 
 		// If it's not convertible, just throw the error, don't waste the time on the
 		// attempted dynamic_cast
 		throw exception::bad_boxed_cast{object.type_info(), typeid(T)};
 	}
-}
+}// namespace gal::lang
 
 #endif // GAL_LANG_BOXED_CAST_HPP

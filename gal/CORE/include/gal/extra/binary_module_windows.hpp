@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_LANGUAGE_BINARY_MODULE_WINDOWS_HPP
-#define GAL_LANG_LANGUAGE_BINARY_MODULE_WINDOWS_HPP
+#ifndef GAL_LANG_EXTRA_BINARY_MODULE_WINDOWS_HPP
+#define GAL_LANG_EXTRA_BINARY_MODULE_WINDOWS_HPP
 
 #ifndef GAL_LANG_WINDOWS
 #error "This file should not be used before macro GAL_LANG_WINDOWS is defined"
@@ -15,7 +15,9 @@
 #define NOMINMAX
 #include <Windows.h>
 
-namespace gal::lang::lang::binary_module_detail
+#include "gal/foundation/dispatcher.hpp"
+
+namespace gal::lang::extra
 {
 	struct binary_module
 	{
@@ -88,8 +90,8 @@ namespace gal::lang::lang::binary_module_detail
 		inline static std::string module_load_function_prefix = "create_module_";
 
 		dynamic_load_module dlm;
-		dynamic_load_symbol<core_maker_signature> function;
-		foundation::shared_engine_core module_ptr;
+		dynamic_load_symbol<foundation::engine_module_maker> function;
+		foundation::engine_module_type module_ptr;
 
 		binary_module(const std::string_view module_name, const std::string_view filename)
 			: dlm{filename},
@@ -98,4 +100,4 @@ namespace gal::lang::lang::binary_module_detail
 	};
 }
 
-#endif // GAL_LANG_LANGUAGE_BINARY_MODULE_WINDOWS_HPP
+#endif // GAL_LANG_EXTRA_BINARY_MODULE_WINDOWS_HPP

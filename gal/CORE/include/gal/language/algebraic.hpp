@@ -5,6 +5,7 @@
 
 #include <utils/assert.hpp>
 #include <utils/hash.hpp>
+#include <gal/foundation/string.hpp>
 #include <gal/language/name.hpp>
 
 namespace gal::lang::lang
@@ -85,7 +86,7 @@ namespace gal::lang::lang
 		operations_size
 	};
 
-	using algebraic_operation_name_type = std::basic_string_view<operator_assign_name::value_type>;
+	using algebraic_operation_name_type = foundation::string_view_type;
 
 	constexpr algebraic_operation_name_type algebraic_name(algebraic_operations operation) noexcept
 	{

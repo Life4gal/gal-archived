@@ -74,8 +74,9 @@ namespace gal::lang
 	 */
 	using exception_handler_type = std::shared_ptr<foundation::exception_handler_base>;
 
-	template<typename... T>
-	[[nodiscard]] exception_handler_type make_exception_handler() { return std::make_shared<foundation::exception_handler<T...>>(); }
+	template<typename... T, typename HandlerType = foundation::default_exception_handler<T...>>
+		requires std::is_base_of_v<foundation::exception_handler_base, HandlerType>
+	[[nodiscard]] exception_handler_type make_exception_handler() { return std::make_shared<HandlerType>(); }
 }// namespace gal::lang
 
 #endif//GAL_LANG_EXCEPTION_HANDLER_HPP

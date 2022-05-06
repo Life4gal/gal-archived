@@ -3,12 +3,18 @@
 #ifndef GAL_UTILS_INITIALIZER_LIST_HPP
 #define GAL_UTILS_INITIALIZER_LIST_HPP
 
-#include <initializer_list>
+// #include <initializer_list>
 #include <ranges>
 
 namespace gal::utils
 {
-	template<typename T>
+	template<
+		typename T,
+		bool ExplicitRangeConversion = false,
+		// bool ExplicitStdInitializerConversion = false,
+		bool ExplicitSequenceConversion = false,
+		bool ExplicitArrayConversion = false
+	>
 	class container_view
 	{
 	public:
@@ -30,16 +36,19 @@ namespace gal::utils
 			: begin_{begin},
 			  end_{end} {}
 
+		constexpr explicit(ExplicitRangeConversion) container_view(const std::ranges::range auto& r)// NOLINT(bugprone-forwarding-reference-overload)
+		// todo: there should be a simpler way to get the address here!!!
+			: begin_{&(r | std::views::transform([](const auto& data) -> decltype(auto) { return data; }))[0]},
+			  end_{&(r | std::views::transform([](const auto& data) -> decltype(auto) { return data; }))[std::ranges::size(r) - 1] + 1} { }
+
 		constexpr explicit container_view(const_reference object) noexcept
 			: begin_{&object},
 			  end_{begin_ + 1} {}
 
-		// todo: explicit?
-		constexpr /* explicit */ container_view(const std::initializer_list<value_type>& list) noexcept
-			: begin_{list.begin()},
-			  end_{list.end()} {}
+		// constexpr explicit(ExplicitStdInitializerConversion) container_view(const std::initializer_list<value_type>& list) noexcept
+		// 	: begin_{list.begin()},
+		// 	  end_{list.end()} {}
 
-		// todo: explicit?
 		template<template<typename...> typename Container, typename... AnyOther>
 			requires requires(const Container<value_type, AnyOther...>& container)
 			{
@@ -49,12 +58,10 @@ namespace gal::utils
 					container.data()
 				} -> std::convertible_to<const_iterator>;
 			}
-		// ReSharper disable once CppNonExplicitConvertingConstructor
-		constexpr /* explicit */ container_view(const Container<value_type, AnyOther...>& container) noexcept
+		constexpr explicit(ExplicitSequenceConversion) container_view(const Container<value_type, AnyOther...>& container) noexcept
 			: begin_{container.empty() ? nullptr : container.data()},
 			  end_{container.empty() ? nullptr : container.data() + container.size()} {}
 
-		// todo: explicit?
 		template<size_type Size, template<typename, size_type> typename Container>
 			requires(Size != 0) && requires(Container<value_type, Size> container)
 			{
@@ -62,14 +69,13 @@ namespace gal::utils
 					container.data()
 				} -> std::convertible_to<const_iterator>;
 			}
-		// ReSharper disable once CppNonExplicitConvertingConstructor
-		constexpr /* explicit */ container_view(const Container<value_type, Size>& container) noexcept
+		constexpr explicit(ExplicitArrayConversion) container_view(const Container<value_type, Size>& container) noexcept
 			: begin_{container.data()},
 			  end_{container.data() + Size} {}
 
 		template<size_type Size, template<typename, size_type> typename Container>
 			requires(Size == 0)
-		constexpr explicit container_view(const Container<value_type, Size>&) noexcept
+		constexpr explicit(ExplicitArrayConversion) container_view(const Container<value_type, Size>&) noexcept
 			: begin_{nullptr},
 			  end_{nullptr} {}
 

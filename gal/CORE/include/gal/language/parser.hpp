@@ -6,7 +6,7 @@
 #include <gal/language/eval.hpp>
 #include <gal/language/common.hpp>
 #include <utils/string_utils.hpp>
-#include <utils/utility_base.hpp>
+#include <utils/enum_utils.hpp>
 
 namespace gal::lang
 {
@@ -69,7 +69,7 @@ namespace gal::lang
 				setter(abs, alphabet::whitespace, ' ');
 				setter(abs, alphabet::whitespace, '\t');
 
-				for (auto i = 'a'; i < 'z'; ++i)
+				for (auto i = 'a'; i <= 'z'; ++i)
 				{
 					setter(abs, alphabet::keyword, i);
 					setter(abs, alphabet::keyword, i - ('a' - 'A'));
@@ -78,7 +78,7 @@ namespace gal::lang
 					setter(abs, alphabet::identifier, i - ('a' - 'A'));
 				}
 
-				for (auto i = '0'; i < '9'; ++i)
+				for (auto i = '0'; i <= '9'; ++i)
 				{
 					setter(abs, alphabet::keyword, i);
 
@@ -97,11 +97,11 @@ namespace gal::lang
 				setter(abs, alphabet::floating_point_suffix, 'f');
 				setter(abs, alphabet::floating_point_suffix, 'F');
 
-				for (auto i = '0'; i < '1'; ++i) { setter(abs, alphabet::bin, i); }
+				for (auto i = '0'; i <= '1'; ++i) { setter(abs, alphabet::bin, i); }
 				setter(abs, alphabet::bin_prefix, 'b');
 				setter(abs, alphabet::bin_prefix, 'B');
 
-				for (auto i = 'a'; i < 'f'; ++i)
+				for (auto i = 'a'; i <= 'f'; ++i)
 				{
 					setter(abs, alphabet::hex, i);
 					setter(abs, alphabet::hex, i - ('a' - 'A'));
@@ -113,76 +113,77 @@ namespace gal::lang
 			}
 
 			constexpr static auto alphabets = []() constexpr noexcept
-			{
-				matrix_type abs{};
+					{
+						matrix_type abs{};
 
-				constexpr auto setter = [](matrix_type& a, alphabet which_kind, const int what) constexpr noexcept { a[static_cast<std::size_t>(which_kind)][static_cast<std::size_t>(what)] = true; };
+						constexpr auto setter = [](matrix_type& a, alphabet which_kind, const int what) constexpr noexcept { a[static_cast<std::size_t>(which_kind)][static_cast<std::size_t>(what)] = true; };
 
-				setter(abs, alphabet::symbol, lang::operator_assign_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_assign_name::value[0]);
 
-				setter(abs, alphabet::symbol, lang::operator_less_than_name::value[0]);
-				setter(abs, alphabet::symbol, lang::operator_greater_than_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_less_than_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_greater_than_name::value[0]);
 
-				setter(abs, alphabet::symbol, lang::operator_plus_name::value[0]);
-				setter(abs, alphabet::symbol, lang::operator_minus_name::value[0]);
-				setter(abs, alphabet::symbol, lang::operator_multiply_name::value[0]);
-				setter(abs, alphabet::symbol, lang::operator_divide_name::value[0]);
-				setter(abs, alphabet::symbol, lang::operator_remainder_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_plus_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_minus_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_multiply_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_divide_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_remainder_name::value[0]);
 
-				setter(abs, alphabet::symbol, lang::operator_bitwise_and_name::value[0]);
-				setter(abs, alphabet::symbol, lang::operator_bitwise_or_name::value[0]);
-				setter(abs, alphabet::symbol, lang::operator_bitwise_xor_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_bitwise_and_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_bitwise_or_name::value[0]);
+						setter(abs, alphabet::symbol, lang::operator_bitwise_xor_name::value[0]);
 
-				setter(abs, alphabet::symbol, '.');
-				setter(abs, alphabet::floating_point, '.');
-				setter(abs, alphabet::keyword, '_');
-				setter(abs, alphabet::identifier, '_');
+						setter(abs, alphabet::symbol, '.');
+						setter(abs, alphabet::floating_point, '.');
+						setter(abs, alphabet::keyword, '_');
+						setter(abs, alphabet::identifier, '_');
 
-				setter(abs, alphabet::whitespace, ' ');
-				setter(abs, alphabet::whitespace, '\t');
+						setter(abs, alphabet::whitespace, ' ');
+						setter(abs, alphabet::whitespace, '\t');
 
-				for (auto i = 'a'; i < 'z'; ++i)
-				{
-					setter(abs, alphabet::keyword, i);
-					setter(abs, alphabet::keyword, i - ('a' - 'A'));
+						for (auto i = 'a'; i <= 'z'; ++i)
+						{
+							setter(abs, alphabet::keyword, i);
+							setter(abs, alphabet::keyword, i - ('a' - 'A'));
 
-					setter(abs, alphabet::identifier, i);
-					setter(abs, alphabet::identifier, i - ('a' - 'A'));
-				}
+							setter(abs, alphabet::identifier, i);
+							setter(abs, alphabet::identifier, i - ('a' - 'A'));
+						}
 
-				for (auto i = '0'; i < '9'; ++i)
-				{
-					setter(abs, alphabet::keyword, i);
+						for (auto i = '0'; i <= '9'; ++i)
+						{
+							setter(abs, alphabet::keyword, i);
 
-					setter(abs, alphabet::integer, i);
-					setter(abs, alphabet::floating_point, i);
-					setter(abs, alphabet::hex, i);
-				}
+							setter(abs, alphabet::integer, i);
+							setter(abs, alphabet::floating_point, i);
+							setter(abs, alphabet::hex, i);
+						}
 
-				// see also suffix_matcher::check
-				setter(abs, alphabet::integer_suffix, 'l');
-				setter(abs, alphabet::integer_suffix, 'L');
-				setter(abs, alphabet::integer_suffix, 'u');
-				setter(abs, alphabet::integer_suffix, 'U');
-				setter(abs, alphabet::floating_point_suffix, 'l');
-				setter(abs, alphabet::floating_point_suffix, 'L');
-				setter(abs, alphabet::floating_point_suffix, 'f');
-				setter(abs, alphabet::floating_point_suffix, 'F');
+						// see also suffix_matcher::check
+						setter(abs, alphabet::integer_suffix, 'l');
+						setter(abs, alphabet::integer_suffix, 'L');
+						setter(abs, alphabet::integer_suffix, 'u');
+						setter(abs, alphabet::integer_suffix, 'U');
+						setter(abs, alphabet::floating_point_suffix, 'l');
+						setter(abs, alphabet::floating_point_suffix, 'L');
+						setter(abs, alphabet::floating_point_suffix, 'f');
+						setter(abs, alphabet::floating_point_suffix, 'F');
 
-				for (auto i = '0'; i < '1'; ++i) { setter(abs, alphabet::bin, i); }
-				setter(abs, alphabet::bin_prefix, 'b');
-				setter(abs, alphabet::bin_prefix, 'B');
+						for (auto i = '0'; i < '1'; ++i) { setter(abs, alphabet::bin, i); }
+						setter(abs, alphabet::bin_prefix, 'b');
+						setter(abs, alphabet::bin_prefix, 'B');
 
-				for (auto i = 'a'; i < 'f'; ++i)
-				{
-					setter(abs, alphabet::hex, i);
-					setter(abs, alphabet::hex, i - ('a' - 'A'));
-				}
-				setter(abs, alphabet::hex_prefix, 'x');
-				setter(abs, alphabet::hex_prefix, 'X');
+						for (auto i = 'a'; i < 'f'; ++i)
+						{
+							setter(abs, alphabet::hex, i);
+							setter(abs, alphabet::hex, i - ('a' - 'A'));
+						}
+						setter(abs, alphabet::hex_prefix, 'x');
+						setter(abs, alphabet::hex_prefix, 'X');
 
-				return abs;
-			}();
+						return abs;
+					}
+					();
 			// todo: calling build fails to generate constant expressions?
 			//build();
 
@@ -206,7 +207,7 @@ namespace gal::lang
 			};
 
 			// see also alphabet_matcher::build
-			[[nodiscard]] constexpr static suffix_type check(const std::string_view string)
+			[[nodiscard]] constexpr static suffix_type check(const foundation::string_view_type string)
 			{
 				auto ret{suffix_type::default_type};
 
@@ -359,15 +360,16 @@ namespace gal::lang
 
 		struct operator_matcher
 		{
-			using operator_name_type = std::string_view;
+			using operator_name_type = foundation::string_view_type;
 			using group_id_type = std::size_t;
 
-			constexpr static group_id_type group_ids[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+			constexpr static std::array group_ids{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+			constexpr static auto group_size = std::tuple_size_v<decltype(group_ids)>;
 
 			constexpr static std::array m0{
-					operator_name_type{lang::operator_logical_and_name::value}};
-			constexpr static std::array m1{
 					operator_name_type{lang::operator_logical_or_name::value}};
+			constexpr static std::array m1{
+					operator_name_type{lang::operator_logical_and_name::value}};
 			constexpr static std::array m2{
 					operator_name_type{lang::operator_bitwise_or_name::value}};
 			constexpr static std::array m3{
@@ -399,19 +401,24 @@ namespace gal::lang
 					operator_name_type{lang::operator_unary_minus_name::value},
 					operator_name_type{lang::operator_unary_bitwise_complement_name::value}};
 
+			using m10_type = std::tuple<lang::operator_unary_not_name, lang::operator_unary_plus_name, lang::operator_unary_minus_name, lang::operator_unary_bitwise_complement_name>;
+
 			constexpr static std::array operators{
-					lang::operator_precedence::logical_or,
-					lang::operator_precedence::logical_and,
-					lang::operator_precedence::bitwise_or,
-					lang::operator_precedence::bitwise_xor,
-					lang::operator_precedence::bitwise_and,
-					lang::operator_precedence::equality,
-					lang::operator_precedence::comparison,
-					lang::operator_precedence::bitwise_shift,
-					lang::operator_precedence::plus,
-					lang::operator_precedence::multiply,
-					lang::operator_precedence::unary,
+					lang::operation_precedence::logical_or,
+					lang::operation_precedence::logical_and,
+					lang::operation_precedence::bitwise_or,
+					lang::operation_precedence::bitwise_xor,
+					lang::operation_precedence::bitwise_and,
+					lang::operation_precedence::equality,
+					lang::operation_precedence::comparison,
+					lang::operation_precedence::bitwise_shift,
+					lang::operation_precedence::plus_minus,
+					lang::operation_precedence::multiply_divide,
+					lang::operation_precedence::unary
 			};
+
+			static_assert(std::tuple_size_v<decltype(operators)> == static_cast<std::size_t>(lang::operation_precedence::operation_size));
+			static_assert(std::tuple_size_v<decltype(operators)> == group_size);
 
 			template<typename Predicate>
 			[[nodiscard]] constexpr static bool any_of(const group_id_type group_id, Predicate&& predicate) noexcept
@@ -503,12 +510,15 @@ namespace gal::lang
 			gal_assert(suffix == suffix_matcher::suffix_type::default_type);
 			return packer.decltype(packer)::operator()<int>();
 		}
-	}
+	}// namespace parser_detail
 
 	namespace lang
 	{
 		class parser final : public parser_detail::parser_base
 		{
+		public:
+			using parse_depth_type = std::size_t;
+
 		private:
 			struct scoped_parser : utils::scoped_base<scoped_parser, std::reference_wrapper<parser>>
 			{
@@ -526,8 +536,7 @@ namespace gal::lang
 						throw exception::eval_error{
 								std_format::format("Maximum parse depth '{}' exceeded", data().get().max_parse_depth_),
 								data().get().filename_,
-								data().get().point_
-						};
+								data().get().point_};
 					}
 					else { ++depth; }
 				}
@@ -540,9 +549,9 @@ namespace gal::lang
 			std::reference_wrapper<ast_visitor> visitor_;
 			std::reference_wrapper<ast_optimizer> optimizer_;
 
-			const std::size_t max_parse_depth_;
+			const parse_depth_type max_parse_depth_;
 
-			std::size_t current_parse_depth_;
+			parse_depth_type current_parse_depth_;
 
 			foundation::string_view_type filename_;
 			ast_node::children_type match_stack_;
@@ -550,12 +559,12 @@ namespace gal::lang
 			/**
 			 * @throw exception::eval_error if is not a valid object name
 			 */
-			void check_object_name(const name_validator::name_type name) const
+			void check_object_name(const foundation::string_view_type name) const
 			{
 				if (not name_validator::is_valid_object_name(name))
 				{
 					throw exception::eval_error{
-							std_format::format("Object name '{}' is an invalid name!", name),
+							std_format::format("Object name '{}' is an invalid name", name),
 							filename_,
 							point_};
 				}
@@ -578,7 +587,10 @@ namespace gal::lang
 						node.identifier(),
 						node.location_begin().line,
 						node.location_begin().column);
-				node.apply([this, &dest, prepend](const auto& child_node) { this->debug_print_to(dest, child_node, prepend); });
+
+				std::ranges::for_each(
+						node.view(),
+						[this, &dest, prepend](const auto& child_node) { this->debug_print_to(dest, child_node, prepend); });
 			}
 
 			/**
@@ -641,24 +653,6 @@ namespace gal::lang
 			[[nodiscard]] bool read_char(const char c) noexcept { return point_.read_char(c); }
 
 			/**
-			 * @brief Reads an end-of-line group from input, without skipping initial whitespace
-			 */
-			[[nodiscard]] bool read_eol(const bool eos = false) noexcept
-			{
-				if (point_.finish()) { return false; }
-
-				if (read_symbol("\r\n") || read_char('\n'))
-				{
-					point_.point.column = 1;
-					return true;
-				}
-
-				if (not eos && read_symbol(end_of_line_name::value)) { return true; }
-
-				return false;
-			}
-
-			/**
 			 * @brief Reads a symbol group from input if it matches the parameter, without skipping initial whitespace
 			 */
 			[[nodiscard]] bool read_symbol(const foundation::string_view_type symbol) noexcept
@@ -673,22 +667,48 @@ namespace gal::lang
 				return false;
 			}
 
+			template<typename T>
+			[[nodiscard]] bool read_any() noexcept
+			{
+				if constexpr (T::size_no_0 == 1) { return this->read_char(T::value[0]); }
+				else { return this->read_symbol(T::value); }
+			}
+
+			/**
+			 * @brief Reads an end-of-line group from input, without skipping initial whitespace
+			 */
+			[[nodiscard]] bool read_eol(const bool end_of_statement = false) noexcept
+			{
+				if (point_.finish()) { return false; }
+
+				if (read_symbol("\r\n") || read_char('\n'))
+				{
+					point_.point.column = 1;
+					return true;
+				}
+
+				// optional ';'
+				if (not end_of_statement && read_char(';')) { return true; }
+
+				return false;
+			}
+
 			/**
 			 * @brief Skips any multi-line or single-line comment
 			 */
 			[[nodiscard]] bool skip_comment()
 			{
-				if (read_symbol(comment_multi_line_name::left_type::value))
+				if (read_any<keyword_comment_multi_name::left_type>())
 				{
 					while (not point_.finish())
 					{
-						if (read_symbol(comment_multi_line_name::right_type::value)) { break; }
+						if (read_any<keyword_comment_multi_name::right_type>()) { break; }
 						if (not read_eol()) { ++point_; }
 					}
 					return true;
 				}
 
-				if (read_symbol(comment_single_line_name::value))
+				if (read_any<keyword_comment_single_name>())
 				{
 					while (not point_.finish())
 					{
@@ -707,10 +727,11 @@ namespace gal::lang
 					return true;
 				}
 
-				if (read_symbol(comment_annotation_name::value))
+				if (read_any<keyword_comment_annotation_name::left_type>())
 				{
 					while (not point_.finish())
 					{
+						if (read_any<keyword_comment_annotation_name::right_type>()) { break; }
 						if (read_symbol("\r\n"))
 						{
 							point_ -= 2;
@@ -817,7 +838,11 @@ namespace gal::lang
 							if (not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::integer))
 							{
 								++point_;
-								while (not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::integer)) { ++point_; }
+								while (not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::integer))
+								{
+									++point_;
+									if (point_.finish()) {}
+								}
 
 								// After any decimal digits, support an optional exponent (3.14e42)
 								return read_exponent_and_suffix();
@@ -897,7 +922,6 @@ namespace gal::lang
 			{
 				if (point_.finish()) { return false; }
 
-				// identifier
 				if (parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::identifier))
 				{
 					++point_;
@@ -905,45 +929,55 @@ namespace gal::lang
 					return true;
 				}
 
-				// operator
-				// todo: better support
-				if (point_.peek() == keyword_operator_name::left_type::value[0])
-				{
-					++point_;
-					const auto begin = point_;
-
-					while (not point_.finish() && point_.peek() != keyword_operator_name::right_type::value[0])
-					{
-						if (read_eol())
-						{
-							throw exception::eval_error{
-									"Carriage return in identifier literal",
-									filename_,
-									point_};
-						}
-						++point_;
-					}
-
-					if (begin == point_)
-					{
-						throw exception::eval_error{
-								"Missing contents of identifier literal",
-								filename_,
-								point_};
-					}
-					if (point_.finish())
-					{
-						throw exception::eval_error{
-								"Incomplete identifier literal",
-								filename_,
-								point_};
-					}
-					++point_;
-					return true;
-				}
 				return false;
 			}
 
+			/**
+			 * @brief Reads an operator from input which conforms to identifier naming conventions, without skipping initial whitespace
+			 *
+			 * @note Called only after read_identifier has read the operator keyword.
+			 *  
+			 * @throw exception::eval_error Carriage return in identifier literal
+			 * @throw exception::eval_error Missing contents of identifier literal
+			 * @throw exception::eval_error Incomplete identifier literal
+			 */
+			[[nodiscard]] bool read_operator()
+			{
+				if (point_.finish()) { return false; }
+
+				const auto begin = point_;
+				// todo: check is valid operator?
+				while (not point_.finish() && parser_detail::alphabet_matcher::belong(point_.peek(), parser_detail::alphabet::symbol))
+				{
+					if (read_eol())
+					{
+						throw exception::eval_error{
+								"Carriage return in identifier literal",
+								filename_,
+								point_};
+					}
+					++point_;
+				}
+
+				if (begin == point_)
+				{
+					throw exception::eval_error{
+							"Missing contents of identifier literal",
+							filename_,
+							point_};
+				}
+				if (point_.finish())
+				{
+					throw exception::eval_error{
+							"Incomplete identifier literal",
+							filename_,
+							point_};
+				}
+				++point_;
+				return true;
+			}
+
+			// todo: better char parser
 			template<typename StringType>
 			struct char_parser
 			{
@@ -1148,8 +1182,7 @@ namespace gal::lang
 			 */
 			[[nodiscard]] bool read_quoted_string()
 			{
-				// todo: format character?
-
+				// todo: string format?
 				if (point_.finish() || point_.peek() != '\"') { return false; }
 
 				auto prev_char = '\"';
@@ -1349,45 +1382,55 @@ namespace gal::lang
 				if (need_validate_name) { check_object_name(text); }
 
 				switch (
-					const auto text_hash = name_validator::name_hasher(text);
+					const auto text_hash = name_validator::hash_name(text);
 					text_hash)
 				{
-					case name_validator::name_hasher(keyword_true_name::value):
+					case name_validator::hash_name(keyword_true_name::value):
 					{
 						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(true)));
 						break;
 					}
-					case name_validator::name_hasher(keyword_false_name::value):
+					case name_validator::hash_name(keyword_false_name::value):
 					{
 						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(false)));
 						break;
 					}
-					case name_validator::name_hasher(keyword_number_infinity::value):
+					case name_validator::hash_name(keyword_operator_declare_name::value):
+					{
+						// since our operators are not keyword/identifiers, read_identifier will stop when they are read, so we can safely read them again.
+						const auto operator_begin = point_;
+						[[maybe_unused]] const auto result = read_operator();
+						gal_assert(result);
+						text = operator_begin.str(point_);
+						match_stack_.emplace_back(this->make_node<id_ast_node>(text, begin));
+						break;
+					}
+					case name_validator::hash_name(keyword_number_inf_nan_name::subtype<0>::value):
 					{
 						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(std::numeric_limits<double>::infinity())));
 						break;
 					}
-					case name_validator::name_hasher(keyword_number_nan::value):
-					{
-						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(std::numeric_limits<double>::quiet_NaN())));
-						break;
-					}
-					case name_validator::name_hasher(keyword_placeholder_name::value):
+					case name_validator::hash_name(keyword_function_argument_placeholder_name::value):
 					{
 						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(std::make_shared<foundation::function_argument_placeholder>())));
 						break;
 					}
-					case name_validator::name_hasher(keyword_magic_line_name::value):
+					case name_validator::hash_name(keyword_number_inf_nan_name::subtype<1>::value):
+					{
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(std::numeric_limits<double>::quiet_NaN())));
+						break;
+					}
+					case name_validator::hash_name(keyword_magic_line_name::value):
 					{
 						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(begin.point.line)));
 						break;
 					}
-					case name_validator::name_hasher(keyword_magic_file_name::value):
+					case name_validator::hash_name(keyword_magic_file_name::value):
 					{
 						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(filename_)));
 						break;
 					}
-					case name_validator::name_hasher(keyword_magic_function_name::value):
+					case name_validator::hash_name(keyword_magic_function_name::value):
 					{
 						for (bool find_arg = false; const auto& node: match_stack_ | std::views::reverse)
 						{
@@ -1400,10 +1443,10 @@ namespace gal::lang
 							else { find_arg = false; }
 						}
 
-						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(decltype(std::declval<ast_node::children_type::value_type>()->identifier()){function_not_found_name::value})));
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(decltype(std::declval<ast_node::children_type::value_type>()->identifier()){keyword_function_not_found_name::value})));
 						break;
 					}
-					case name_validator::name_hasher(keyword_magic_class_name::value):
+					case name_validator::hash_name(keyword_magic_class_name::value):
 					{
 						for (bool find_arg = false, find_id = false; const auto& node: match_stack_ | std::views::reverse)
 						{
@@ -1424,18 +1467,12 @@ namespace gal::lang
 							}
 						}
 
-						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(decltype(std::declval<ast_node::children_type::value_type>()->identifier()){class_not_found_name::value})));
+						match_stack_.emplace_back(this->make_node<constant_ast_node>(text, begin, const_var(decltype(std::declval<ast_node::children_type::value_type>()->identifier()){keyword_class_not_found_name::value})));
 						break;
 					}
 					// todo: other internal magic name?
 					default:
 					{
-						// todo: better support
-						if (begin.peek() == keyword_operator_name::right_type::value[0])
-						{
-							// 'escaped' literal, like an operator name
-							text = (begin + 1).str(point_ - 1);
-						}
 						match_stack_.emplace_back(this->make_node<id_ast_node>(text, begin));
 						break;
 					}
@@ -1458,6 +1495,7 @@ namespace gal::lang
 
 				skip_whitespace();
 
+				// todo: split?
 				if (allow_set_type) { (void)build_identifier(true); }
 
 				build_match<arg_ast_node>(prev_size);
@@ -1479,7 +1517,7 @@ namespace gal::lang
 					{
 						while (build_eol()) {}
 
-						while (build_any<keyword_comma_name>())
+						while (build_char(','))
 						{
 							while (build_eol()) {}
 							if (not f())
@@ -1551,18 +1589,11 @@ namespace gal::lang
 
 				skip_whitespace(true);
 
-				if (build_value_range())
-				{
-					build_match<arg_list_ast_node>(prev_size);
-					skip_whitespace(true);
-					return true;
-				}
-
 				if (build_map_pair())
 				{
 					while (build_eol()) {}
 
-					while (build_any<keyword_comma_name>())
+					while (build_char(','))
 					{
 						while (build_eol()) {}
 
@@ -1584,7 +1615,7 @@ namespace gal::lang
 				{
 					while (build_eol()) {}
 
-					while (build_any<keyword_comma_name>())
+					while (build_char(','))
 					{
 						while (build_eol()) {}
 
@@ -1606,6 +1637,7 @@ namespace gal::lang
 				return false;
 			}
 
+
 			/**
 			 * @brief Reads a lambda (anonymous function) from input
 			 *
@@ -1621,51 +1653,39 @@ namespace gal::lang
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
-				if (not build_keyword(keyword_function_name::value)) { return false; }
+				// '['
+				if (not build_any<keyword_lambda_name::left_type>()) { return false; }
 
-				if (build_any<keyword_lambda_capture_list_name::left_type>())
-				{
-					(void)build_identifier_argument_list();
-					if (not build_any<keyword_lambda_capture_list_name::right_type>())
-					{
-						throw exception::eval_error{
-								"Incomplete anonymous function bind",
-								filename_,
-								point_};
-					}
-				}
-				else
-				{
-					// make sure we always have the same number of nodes
-					build_match<arg_list_ast_node>(prev_size);
-				}
+				// capture argument list is optional
+				(void)build_identifier_argument_list();
 
-				if (build_any<keyword_function_parameter_bracket_name::left_type>())
+				// ']'
+				if (not build_any<keyword_lambda_name::right_type>())
 				{
-					(void)build_decl_argument_list();
-					if (not build_any<keyword_function_parameter_bracket_name::right_type>())
-					{
-						throw exception::eval_error{
-								"Incomplete anonymous function",
-								filename_,
-								point_};
-					}
-				}
-				else
-				{
-					// todo: lambda argument list is really necessary?
 					throw exception::eval_error{
-							"Incomplete anonymous function",
+							"Incomplete anonymous function, missing ']'",
 							filename_,
 							point_};
 				}
 
-				while (build_eol()) {}
+				// argument list is optional
+				if (build_char('('))
+				{
+					(void)build_decl_argument_list();
+
+					if (not build_char(')'))
+					{
+						throw exception::eval_error{
+								"Incomplete anonymous function, missing ')'",
+								filename_,
+								point_};
+					}
+				}
 
 				if (not build_block())
 				{
 					throw exception::eval_error{
-							"Incomplete anonymous function",
+							"Incomplete anonymous function, missing block",
 							filename_,
 							point_};
 				}
@@ -1705,6 +1725,7 @@ namespace gal::lang
 							point_};
 				}
 
+				// todo: Do we really need to support something like 'def class_name::function_name(argument_list): block' ?
 				const auto is_member_method = [this]
 				{
 					if (build_any<keyword_class_accessor_name>())
@@ -1722,13 +1743,14 @@ namespace gal::lang
 					return false;
 				}();
 
-				if (build_any<keyword_function_parameter_bracket_name::left_type>())
+				if (build_char('('))
 				{
 					(void)build_decl_argument_list();
-					if (not build_any<keyword_function_parameter_bracket_name::right_type>())
+
+					if (not build_char(')'))
 					{
 						throw exception::eval_error{
-								"Incomplete function definition",
+								"Incomplete function definition, missing ')'",
 								filename_,
 								point_};
 					}
@@ -1736,7 +1758,7 @@ namespace gal::lang
 
 				while (build_eos()) {}
 
-				if (build_any<keyword_set_guard_name>())
+				if (build_any<keyword_function_guard_name>())
 				{
 					if (not build_operator())
 					{
@@ -1747,12 +1769,10 @@ namespace gal::lang
 					}
 				}
 
-				while (build_eol()) {}
-
 				if (not build_block())
 				{
 					throw exception::eval_error{
-							"Incomplete function definition",
+							"Incomplete function definition, missing block",
 							filename_,
 							point_};
 				}
@@ -1783,7 +1803,6 @@ namespace gal::lang
 
 				if (not build_keyword(keyword_if_name::value)) { return false; }
 
-				// todo: really no bracket '('?
 				if (not build_equation())
 				{
 					throw exception::eval_error{
@@ -1793,17 +1812,6 @@ namespace gal::lang
 				}
 
 				const auto is_init_if = build_eol() && build_equation();
-
-				// todo: really no bracket ')'?
-				if (not build_any<keyword_block_begin_name>())
-				{
-					throw exception::eval_error{
-							"Incomplete 'if' expression, missing ':'",
-							filename_,
-							point_};
-				}
-
-				while (build_eol()) {}
 
 				if (not build_block())
 				{
@@ -1822,8 +1830,6 @@ namespace gal::lang
 
 					// else if
 					if (build_if()) { continue; }
-
-					while (build_eol()) {}
 
 					// just else
 					if (not build_block())
@@ -1867,7 +1873,6 @@ namespace gal::lang
 
 				if (not build_keyword(keyword_while_name::value)) { return false; }
 
-				// todo: really no bracket '('?
 				if (not build_equation())
 				{
 					throw exception::eval_error{
@@ -1875,17 +1880,6 @@ namespace gal::lang
 							filename_,
 							point_};
 				}
-
-				// todo: really no bracket ')'?
-				if (not build_any<keyword_block_begin_name>())
-				{
-					throw exception::eval_error{
-							"Incomplete 'while' expression, missing ':'",
-							filename_,
-							point_};
-				}
-
-				while (build_eol()) {}
 
 				if (not build_block())
 				{
@@ -1913,56 +1907,34 @@ namespace gal::lang
 			 */
 			[[nodiscard]] bool build_for()
 			{
-				/**
-				 * @brief Reads the ranged `for` conditions from input
-				 */
-				auto range_expression = [this]
-				{
-					scoped_parser re_p{*this};
-					// the first element will have already been captured by the for_guards() call that proceeds it
-					return build_any<keyword_ranged_for_split_name>() && build_equation();
-				};
-				/**
-				 * @brief Reads the `for` conditions from input
-				 */
-				auto for_guards = [this]
-				{
-					scoped_parser fg_p{*this};
-
-					if (not(build_equation() && build_eol()))
-					{
-						if (not build_any<keyword_for_loop_variable_delimiter_name>()) { return false; }
-						match_stack_.emplace_back(lang::make_node<noop_ast_node>());
-					}
-
-					if (not(build_equation() && build_eol()))
-					{
-						if (not build_any<keyword_for_loop_variable_delimiter_name>()) { return false; }
-						match_stack_.emplace_back(lang::make_node<constant_ast_node>(const_var(true)));
-					}
-
-					if (not build_equation()) { match_stack_.emplace_back(lang::make_node<noop_ast_node>()); }
-
-					return true;
-				};
-
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
-				if (not build_keyword(keyword_for_name::value)) { return false; }
+				if (not build_keyword(keyword_for_in_name::subtype<0>::value)) { return false; }
 
-				// todo: really no bracket '('?
-				// todo: really no bracket ')'?
-				const auto is_classic_for = for_guards();
-				if (not is_classic_for && not range_expression())
+				if (not build_equation())
 				{
 					throw exception::eval_error{
-							"Incomplete 'ranged-for' expression",
+							"Incomplete 'ranged-for' expression, missing iteration value",
 							filename_,
 							point_};
 				}
 
-				while (build_eol()) {}
+				if (not build_keyword(keyword_for_in_name::subtype<1>::value))
+				{
+					throw exception::eval_error{
+							"Incomplete 'ranged-for' expression, missing 'in'",
+							filename_,
+							point_};
+				}
+
+				if (not build_equation())
+				{
+					throw exception::eval_error{
+							"Incomplete 'ranged-for' expression, missing iteration range",
+							filename_,
+							point_};
+				}
 
 				if (not build_block())
 				{
@@ -1972,49 +1944,34 @@ namespace gal::lang
 							point_};
 				}
 
-				const auto children_size = match_stack_.size() - prev_size;
-				if (is_classic_for)
+				if (match_stack_.size() - prev_size != 3)
 				{
-					if (children_size != 4)
-					{
-						throw exception::eval_error{
-								"Incomplete 'for' expression",
-								filename_,
-								point_};
-					}
-					build_match<for_ast_node>(prev_size);
+					throw exception::eval_error{
+							"Incomplete 'ranged-for' expression",
+							filename_,
+							point_};
 				}
-				else
-				{
-					if (children_size != 3)
-					{
-						throw exception::eval_error{
-								"Incomplete 'ranged-for' expression",
-								filename_,
-								point_};
-					}
-					build_match<ranged_for_ast_node>(prev_size);
-				}
+				build_match<ranged_for_ast_node>(prev_size);
 				return true;
 			}
 
 			/**
-			 * @brief Reads a switch statement from input
+			 * @brief Reads a match statement from input
 			 *
 			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
 			 * @throw exception::eval_error throw from build_eol()
 			 * @throw exception::eval_error throw from build_keyword(" ")
 			 * @throw exception::eval_error throw from build_equation()
 			 * @throw exception::eval_error throw from build_block()
-			 * @throw exception::eval_error Incomplete 'switch' expression
-			 * @throw exception::eval_error Incomplete 'switch' expression, missing ':'
-			 * @throw exception::eval_error Incomplete 'switch-case' expression
-			 * @throw exception::eval_error Incomplete 'switch-case' expression, missing ':'
-			 * @throw exception::eval_error Incomplete 'switch-case' expression, missing block
-			 * @throw exception::eval_error Incomplete 'switch-default' expression, missing ':'
-			 * @throw exception::eval_error Incomplete 'switch-default' expression, missing block
+			 * @throw exception::eval_error Incomplete match' expression
+			 * @throw exception::eval_error Incomplete match' expression, missing ':'
+			 * @throw exception::eval_error Incomplete match-case' expression
+			 * @throw exception::eval_error Incomplete match-case' expression, missing ':'
+			 * @throw exception::eval_error Incomplete match-case' expression, missing block
+			 * @throw exception::eval_error Incomplete match-default' expression, missing ':'
+			 * @throw exception::eval_error Incomplete match-default' expression, missing block
 			 */
-			[[nodiscard]] bool build_switch()
+			[[nodiscard]] bool build_match()
 			{
 				/**
 				 * @brief Reads a case block from input
@@ -2024,59 +1981,39 @@ namespace gal::lang
 					scoped_parser c_p{*this};
 					const auto c_prev_size = match_stack_.size();
 
-					if (build_keyword(keyword_switch_case_name::value))
+					if (build_any<keyword_match_case_default_name::subtype<1>>())
 					{
 						if (not build_operator())
 						{
 							throw exception::eval_error{
-									"Incomplete 'switch-case' expression",
+									"Incomplete 'match-case' expression",
 									filename_,
 									point_};
 						}
-
-						if (not build_any<keyword_block_begin_name>())
-						{
-							throw exception::eval_error{
-									"Incomplete 'switch-case' expression, missing ':'",
-									filename_,
-									point_};
-						}
-
-						while (build_eol()) {}
 
 						if (not build_block())
 						{
 							throw exception::eval_error{
-									"Incomplete 'switch-case' expression, missing block",
+									"Incomplete 'match-case' expression, missing block",
 									filename_,
 									point_};
 						}
 
-						build_match<case_ast_node>(c_prev_size);
+						build_match<match_case_ast_node>(c_prev_size);
 						return true;
 					}
 
-					if (build_keyword(keyword_switch_default_name::value))
+					if (build_any<keyword_match_case_default_name::subtype<2>>())
 					{
-						if (not build_any<keyword_block_begin_name>())
-						{
-							throw exception::eval_error{
-									"Incomplete 'switch-default' expression, missing ':'",
-									filename_,
-									point_};
-						}
-
-						while (build_eol()) {}
-
 						if (not build_block())
 						{
 							throw exception::eval_error{
-									"Incomplete 'switch-default' expression, missing block",
+									"Incomplete 'match-default' expression, missing block",
 									filename_,
 									point_};
 						}
 
-						build_match<default_ast_node>(c_prev_size);
+						build_match<match_default_ast_node>(c_prev_size);
 						return true;
 					}
 
@@ -2086,22 +2023,21 @@ namespace gal::lang
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
-				if (not build_keyword(keyword_switch_name::value)) { return false; }
+				if (not build_any<keyword_match_case_default_name::subtype<0>>()) { return false; }
 
-				// todo: really no bracket '('?
 				if (not build_operator())
 				{
 					throw exception::eval_error{
-							"Incomplete 'switch' expression",
+							"Incomplete 'match' expression",
 							filename_,
 							point_};
 				}
-				// todo: really no bracket ')'?
 
+				// inline build_block, but this block is composed of case+default.
 				if (not build_any<keyword_block_begin_name>())
 				{
 					throw exception::eval_error{
-							"Incomplete 'switch' expression, missing ':'",
+							"Incomplete 'match' expression, missing ':'",
 							filename_,
 							point_};
 				}
@@ -2114,7 +2050,7 @@ namespace gal::lang
 					while (build_eol()) {}
 				}
 
-				build_match<switch_ast_node>(prev_size);
+				build_match<match_ast_node>(prev_size);
 				return true;
 			}
 
@@ -2136,20 +2072,20 @@ namespace gal::lang
 
 		public:
 			/**
-			 * @brief Reads a break statement from input
-			 *
-			 * @throw exception::eval_error throw from build_keyword(" ")
-			 * @throw exception::eval_error throw from build_operator()
-			 */
-			[[nodiscard]] bool build_break() { return do_build_keyword_statement<break_ast_node, keyword_break_name>(); }
-
-			/**
 			 * @brief Reads a continue statement from input
 			 *
 			 * @throw exception::eval_error throw from build_keyword(" ")
 			 * @throw exception::eval_error throw from build_operator()
 			 */
-			[[nodiscard]] bool build_continue() { return do_build_keyword_statement<continue_ast_node, keyword_continue_name>(); }
+			[[nodiscard]] bool build_continue() { return do_build_keyword_statement<continue_ast_node, keyword_continue_break_return_name::subtype<0>>(); }
+
+			/**
+			 * @brief Reads a break statement from input
+			 *
+			 * @throw exception::eval_error throw from build_keyword(" ")
+			 * @throw exception::eval_error throw from build_operator()
+			 */
+			[[nodiscard]] bool build_break() { return do_build_keyword_statement<break_ast_node, keyword_continue_break_return_name::subtype<1>>(); }
 
 			/**
 			 * @brief Reads a return statement from input
@@ -2157,7 +2093,7 @@ namespace gal::lang
 			 * @throw exception::eval_error throw from build_keyword(" ")
 			 * @throw exception::eval_error throw from build_operator()
 			 */
-			[[nodiscard]] bool build_return() { return do_build_keyword_statement<return_ast_node, keyword_return_name>(); }
+			[[nodiscard]] bool build_return() { return do_build_keyword_statement<return_ast_node, keyword_continue_break_return_name::subtype<2>>(); }
 
 			/**
 			 * @brief Reads a function definition from input
@@ -2179,17 +2115,7 @@ namespace gal::lang
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
-				if (not build_keyword(keyword_try_name::value)) { return false; }
-
-				while (build_eol()) {}
-
-				if (not build_any<keyword_block_begin_name>())
-				{
-					throw exception::eval_error{
-							"Incomplete 'try' block, missing ':'",
-							filename_,
-							point_};
-				}
+				if (not build_keyword(keyword_try_catch_finally_name::subtype<0>::value)) { return false; }
 
 				if (not build_block())
 				{
@@ -2203,11 +2129,10 @@ namespace gal::lang
 				{
 					while (build_eol()) {}
 
-					if (not build_keyword(keyword_try_catch_name::value)) { break; }
+					if (not build_keyword(keyword_try_catch_finally_name::subtype<1>::value)) { break; }
 
 					const auto catch_prev_size = match_stack_.size();
 
-					// todo: really no bracket '('?
 					if (not build_argument())
 					{
 						throw exception::eval_error{
@@ -2215,16 +2140,6 @@ namespace gal::lang
 								filename_,
 								point_};
 					}
-					// todo: really no bracket ')'?
-					if (not build_any<keyword_block_begin_name>())
-					{
-						throw exception::eval_error{
-								"Incomplete 'try-catch' expression, missing ':'",
-								filename_,
-								point_};
-					}
-
-					while (build_eol()) {}
 
 					if (not build_block())
 					{
@@ -2234,24 +2149,14 @@ namespace gal::lang
 								point_};
 					}
 
-					build_match<catch_ast_node>(catch_prev_size);
+					build_match<try_catch_ast_node>(catch_prev_size);
 				}
 
 				while (build_eol()) {}
 
-				if (build_keyword(keyword_try_finally_name::value))
+				if (build_keyword(keyword_try_catch_finally_name::subtype<2>::value))
 				{
 					const auto finally_prev_size = match_stack_.size();
-
-					if (not build_any<keyword_block_begin_name>())
-					{
-						throw exception::eval_error{
-								"Incomplete 'try-finally' expression, missing ':'",
-								filename_,
-								point_};
-					}
-
-					while (build_eol()) {}
 
 					if (not build_block())
 					{
@@ -2261,7 +2166,7 @@ namespace gal::lang
 								point_};
 					}
 
-					build_match<finally_ast_node>(finally_prev_size);
+					build_match<try_finally_ast_node>(finally_prev_size);
 				}
 
 				build_match<try_ast_node>(prev_size);
@@ -2322,6 +2227,9 @@ namespace gal::lang
 			 * @brief Reads (and potentially captures) a quoted string from input.
 			 * Translates escaped sequences.
 			 *
+			 * @todo Need to be optimized
+			 * @todo format?
+			 *
 			 * @throw exception::eval_error throw from skip_whitespace()
 			 * @throw exception::eval_error Unclosed in-string eval
 			 */
@@ -2333,7 +2241,7 @@ namespace gal::lang
 				const auto begin = point_;
 				if (read_quoted_string())
 				{
-					std::string match{};
+					foundation::string_type match{};
 					const auto prev_size = match_stack_.size();
 					const auto is_interpolated = [&match, &begin, prev_size, this]
 					{
@@ -2356,16 +2264,10 @@ namespace gal::lang
 									// We've finished with the part of the string up to this point, so clear it
 									match.clear();
 
-									// todo: optimize it
-									// todo: the input content should exist in string_pool, so that we can safely use its content without using dynamic memory allocate
-									std::string eval_match{};
-
+									const auto eval_begin = b;
 									++b;
-									while (b != e && b.peek() != '}')
-									{
-										eval_match.push_back(b.peek());
-										++b;
-									}
+									while (b != e && b.peek() != '}') { ++b; }
+									const auto eval_string = eval_begin.str(b);
 
 									if (b.peek() == '}')
 									{
@@ -2376,7 +2278,7 @@ namespace gal::lang
 										match_stack_.emplace_back(this->make_node<id_ast_node>(operator_to_string_name::value, begin));
 
 										const auto eval_size = match_stack_.size();
-										try { match_stack_.emplace_back(parse_instruct_eval(eval_match)); }
+										try { match_stack_.emplace_back(parse_instruct_eval(eval_string)); }
 										catch (const exception::eval_error& ex)
 										{
 											throw exception::eval_error{
@@ -2509,6 +2411,8 @@ namespace gal::lang
 			/**
 			 * @brief Parses a variable specified with a & aka reference
 			 *
+			 * @todo reference format?
+			 *
 			 * @throw exception::eval_error throw from build_symbol("&")
 			 * @throw exception::eval_error throw from build_identifier(true)
 			 * @throw exception::eval_error Incomplete '&'(aka reference) expression
@@ -2539,10 +2443,12 @@ namespace gal::lang
 			[[nodiscard]] bool build_paren_expression()
 			{
 				scoped_parser p{*this};
-				if (build_any<keyword_function_parameter_bracket_name::left_type>())
+
+				if (build_char('('))
 				{
 					if (not build_operator()) { throw exception::eval_error{"Incomplete expression", filename_, point_}; }
-					if (not build_any<keyword_function_parameter_bracket_name::right_type>()) { throw exception::eval_error{"Missing closing parenthesis", filename_, point_}; }
+
+					if (not build_char(')')) { throw exception::eval_error{"Missing closing parenthesis", filename_, point_}; }
 
 					return true;
 				}
@@ -2561,33 +2467,32 @@ namespace gal::lang
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
-				if (not build_any<keyword_inline_container_name::left_type>()) { return false; }
+				if (not build_any<keyword_inline_container_gen_name::left_type>()) { return false; }
 
 				(void)build_container_argument_list();
 
-				if (not build_any<keyword_inline_container_name::right_type>())
+				if (not build_any<keyword_inline_container_gen_name::right_type>())
 				{
 					throw exception::eval_error{
-							"Incomplete inline container initializer, missing closing bracket",
+							"Incomplete inline container initializer, missing closing bracket ']'",
 							filename_,
 							point_};
 				}
 
-				if (prev_size != match_stack_.size() && not match_stack_.back()->empty())
-				{
-					if (const auto& front = match_stack_.back()->front();
-						front.is<value_range_ast_node>()) { build_match<inline_range_ast_node>(prev_size); }
-					else if (front.is<map_pair_ast_node>()) { build_match<inline_map_ast_node>(prev_size); }
-					else { build_match<inline_array_ast_node>(prev_size); }
-				}
+				if (prev_size != match_stack_.size() && not match_stack_.back()->empty() && match_stack_.back()->front().is<map_pair_ast_node>()) { build_match<inline_map_ast_node>(prev_size); }
 				else { build_match<inline_array_ast_node>(prev_size); }
 
 				return true;
 			}
 
-		private:
-			template<typename NodeType, typename Keyword>
-			[[nodiscard]] bool do_build_pair()
+			/**
+			 * @brief Reads a pair of values used to create a map initialization from input
+			 *
+			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+			 * @throw exception::eval_error throw from build_operator()
+			 * @throw exception::eval_error Incomplete map pair, missing the second
+			 */
+			[[nodiscard]] bool build_map_pair()
 			{
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
@@ -2595,7 +2500,7 @@ namespace gal::lang
 				const auto begin = point_;
 				if (not build_operator()) { return false; }
 
-				if (not build_any<Keyword>())
+				if (not build_any<keyword_pair_splitter_name>())
 				{
 					point_ = begin;
 					while (prev_size != match_stack_.size()) { match_stack_.pop_back(); }
@@ -2610,31 +2515,14 @@ namespace gal::lang
 							point_};
 				}
 
-				build_match<NodeType>(prev_size);
+				build_match<map_pair_ast_node>(prev_size);
 				return true;
 			}
 
-		public:
-			/**
-			 * @brief Reads a pair of values used to create a map initialization from input
-			 *
-			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw exception::eval_error throw from build_operator()
-			 * @throw exception::eval_error Incomplete map pair, missing the second
-			 */
-			[[nodiscard]] bool build_map_pair() { return do_build_pair<map_pair_ast_node, keyword_map_pair_split_name>(); }
-
-			/**
-			 * @brief Reads a pair of values used to create a range initialization from input
-			 *
-			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw exception::eval_error throw from build_operator()
-			 * @throw exception::eval_error Incomplete value_range pair, missing the second
-			 */
-			[[nodiscard]] bool build_value_range() { return do_build_pair<value_range_ast_node, keyword_value_range_split_name>(); }
-
 			/**
 			 * @brief Reads a unary prefixed expression from input
+			 *
+			 * @todo need to be optimized
 			 *
 			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
 			 * @throw exception::eval_error throw from build_operator(group_id)
@@ -2644,27 +2532,63 @@ namespace gal::lang
 			{
 				scoped_parser p{*this};
 
-				constexpr auto unary_operators = parser_detail::operator_matcher::m10;
-				return std::ranges::any_of(
-						unary_operators,
-						[this, prev_size = match_stack_.size()](const auto& element)
-						{
-							const auto is_char = element.size() == 1;
-							if ((is_char && build_char(element[0])) || (not is_char && build_symbol(element)))
-							{
-								if (not build_operator(parser_detail::operator_matcher::operators.size() - 1))
-								{
-									throw exception::eval_error{
-											std_format::format("Incomplete unary prefix '{}' expression", element),
-											filename_,
-											point_};
-								}
+				return [this, prev_size = match_stack_.size()]<std::size_t... Index>(std::index_sequence<Index...>) -> bool
+				{
+					// auto operator_builder = [this, prev_size]<typename Element>()
+					// {
+					// // we always check the unary one, skip it
+					// 	if (not build_operator(parser_detail::operator_matcher::operators.size() - 2))
+					// 	{
+					// 		throw exception::eval_error{
+					// 				std_format::format("Incomplete unary prefix '{}' expression", Element::value),
+					// 				filename_,
+					// 				point_};
+					// 	}
+					//
+					// 	this->build_match<unary_operator_ast_node>(prev_size, Element::value);
+					// };
 
-								build_match<unary_operator_ast_node>(prev_size, element);
-								return true;
-							}
-							return false;
-						});
+					// auto f = [this, operator_builder]<std::size_t I>()
+					// {
+					// 	using type = std::tuple_element_t<I, parser_detail::operator_matcher::m10_type>;
+					// 	if (this->build_any<type>())
+					// 	{
+					// 		operator_builder.decltype(operator_builder)::template operator()<type>();
+					// 		return true;
+					// 	}
+					// 	return false;
+					// };
+					//
+					// return (f.decltype(f)::template operator()<Index>() || ...);
+					return (test<Index>(prev_size) || ...);
+				}(std::make_index_sequence<std::tuple_size_v<parser_detail::operator_matcher::m10_type>>{});
+			}
+
+			template<typename T>
+			void builder(const auto prev_size)
+			{
+				// we always check the unary one, skip it
+				if (not build_operator(parser_detail::operator_matcher::operators.size() - 1))
+				{
+					throw exception::eval_error{
+							std_format::format("Incomplete unary prefix '{}' expression", T::value),
+							filename_,
+							point_};
+				}
+
+				this->build_match<unary_operator_ast_node>(prev_size, T::value);
+			}
+
+			template<std::size_t Index>
+			bool test(const auto prev_size)
+			{
+				using type = std::tuple_element_t<Index, parser_detail::operator_matcher::m10_type>;
+				if (build_any<type>())
+				{
+					this->builder<type>(prev_size);
+					return true;
+				}
+				return false;
 			}
 
 			/**
@@ -2687,13 +2611,15 @@ namespace gal::lang
 
 				while (true)
 				{
-					if (build_any<keyword_function_parameter_bracket_name::left_type>())
+					// func(arguments)
+					if (build_char('('))
 					{
 						(void)build_argument_list();
-						if (not build_any<keyword_function_parameter_bracket_name::right_type>())
+
+						if (not build_char(')'))
 						{
 							throw exception::eval_error{
-									"Incomplete function call",
+									"Incomplete function call, missing ')'",
 									filename_,
 									point_};
 						}
@@ -2730,17 +2656,17 @@ namespace gal::lang
 							auto fun_call = std::move(back);
 							match_stack_.pop_back();
 
-							ast_node::children_type dot_access_children{};
-							ast_node::children_type fun_call_children{};
-							dot_access->swap(dot_access_children);
-							fun_call->swap(fun_call_children);
+							ast_node::children_type dot_access_children = dot_access->exchange_children();
+							ast_node::children_type fun_call_children = fun_call->exchange_children();
 
 							fun_call_children.front().swap(dot_access_children.back());
 							dot_access_children.pop_back();
 
-							fun_call->swap(fun_call_children);
+							[[maybe_unused]] const auto ef = fun_call->exchange_children(std::move(fun_call_children));
+							gal_assert(ef.empty());
 							dot_access_children.push_back(std::move(fun_call));
-							dot_access->swap(dot_access_children);
+							[[maybe_unused]] const auto ed = dot_access->exchange_children(std::move(dot_access_children));
+							gal_assert(ed.empty());
 
 							if (dot_access->size() != 2)
 							{
@@ -2752,24 +2678,26 @@ namespace gal::lang
 							match_stack_.emplace_back(std::move(dot_access));
 						}
 					}
-					else if (build_any<keyword_array_call_name::left_type>())
+					// arr[index]
+					else if (build_any<array_access_interface_name::left_type>())
 					{
-						if (not(build_operator() && build_any<keyword_array_call_name::right_type>()))
+						if (not(build_operator() && build_any<array_access_interface_name::right_type>()))
 						{
 							throw exception::eval_error{
-									"Incomplete array access",
+									"Incomplete array access, missing ']'",
 									filename_,
 									point_};
 						}
 
-						build_match<array_call_ast_node>(prev_size);
+						build_match<array_access_ast_node>(prev_size);
 					}
+					// object.method
 					else if (build_symbol("."))
 					{
 						if (not build_identifier(true))
 						{
 							throw exception::eval_error{
-									"Incomplete dot access fun call",
+									"Incomplete dot access fun call, missing function name",
 									filename_,
 									point_};
 						}
@@ -2813,27 +2741,27 @@ namespace gal::lang
 			 * @throw exception::eval_error Incomplete variable declaration
 			 * @throw exception::eval_error Incomplete global declaration
 			 */
-			[[nodiscard]] bool build_var_decl(const bool class_context = false, const foundation::string_view_type class_name = "")
+			[[nodiscard]] bool build_var_decl(const bool class_context = false, const foundation::string_view_type class_name = "unknown_class")
 			{
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
-				if (class_context && (build_keyword(keyword_member_decl_name::value) || build_keyword(keyword_variable_name::value)))
+				if (build_keyword(keyword_variable_declare_name::value))
 				{
-					match_stack_.emplace_back(this->make_node<id_ast_node>(class_name, point_));
-					if (not build_identifier(true))
+					if (class_context)
 					{
-						throw exception::eval_error{
-								"Incomplete member declaration",
-								filename_,
-								point_};
+						match_stack_.emplace_back(this->make_node<id_ast_node>(class_name, point_));
+						if (not build_identifier(true))
+						{
+							throw exception::eval_error{
+									"Incomplete member declaration, missing variable name.",
+									filename_,
+									point_};
+						}
+						build_match<member_decl_ast_node>(prev_size);
+						return true;
 					}
-					build_match<member_decl_ast_node>(prev_size);
-					return true;
-				}
 
-				if (build_keyword(keyword_variable_name::value))
-				{
 					if (build_reference())
 					{
 						// we built a reference node - continue
@@ -2845,23 +2773,13 @@ namespace gal::lang
 
 				if (build_keyword(keyword_global_name::value))
 				{
+					// todo: global var i = 42 or global i = 42?
 					if (not(build_reference() || build_identifier(true))) { throw exception::eval_error{"Incomplete global declaration", filename_, point_}; }
 
 					build_match<global_decl_ast_node>(prev_size);
 					return true;
 				}
 
-				if (build_keyword(keyword_member_decl_name::value))
-				{
-					if (not build_identifier(true)) { throw exception::eval_error{"Incomplete member declaration", filename_, point_}; }
-
-					if (not build_any<keyword_class_accessor_name>()) { throw exception::eval_error{"Incomplete member declaration", filename_, point_}; }
-
-					if (not build_identifier(true)) { throw exception::eval_error{"Missing member name in definition", filename_, point_}; }
-
-					build_match<member_decl_ast_node>(prev_size);
-					return true;
-				}
 				return false;
 			}
 
@@ -2879,6 +2797,8 @@ namespace gal::lang
 			}
 
 			/**
+			 * @todo Need to be optimized
+			 *
 			 * @throw exception::eval_error throw from build_eol()
 			 * @throw exception::eval_error Incomplete expression
 			 */
@@ -2887,7 +2807,7 @@ namespace gal::lang
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
-				if (parser_detail::operator_matcher::operators[group_id] == operator_precedence::unary) { return build_value(); }
+				if (parser_detail::operator_matcher::operators[group_id] == operation_precedence::unary) { return build_value(); }
 
 				if (not build_operator(group_id + 1)) { return false; }
 
@@ -2906,7 +2826,7 @@ namespace gal::lang
 
 					switch (parser_detail::operator_matcher::operators[group_id])
 					{
-							using enum operator_precedence;
+							using enum operation_precedence;
 						case logical_or:
 						{
 							build_match<logical_or_ast_node>(prev_size, op);
@@ -2923,24 +2843,28 @@ namespace gal::lang
 						case equality:
 						case comparison:
 						case bitwise_shift:
-						case plus:
-						case multiply:
+						case plus_minus:
+						case multiply_divide:
 						{
 							build_match<binary_operator_ast_node>(prev_size, op);
 							break;
 						}
 						case unary:
+						case operation_size:
 						{
 							// cannot reach here because of if() statement at the top
 							UNREACHABLE();
 						}
 					}
 				}
+
 				return true;
 			}
 
 			/**
 			 * @brief Parses a string of binary equation operators
+			 *
+			 * @todo Need to be optimized
 			 *
 			 * @throw exception::eval_error throw from build_operator()
 			 * @throw exception::eval_error throw from build_symbol(" ")
@@ -2958,7 +2882,7 @@ namespace gal::lang
 
 					for (constexpr std::array operators{
 							     operator_name_type{operator_assign_name::value},
-							     operator_name_type{operator_assign_if_type_match_name::value},
+							     operator_name_type{operator_reference_assign_name::value},
 							     operator_name_type{operator_plus_assign_name::value},
 							     operator_name_type{operator_minus_assign_name::value},
 							     operator_name_type{operator_multiply_assign_name::value},
@@ -3003,13 +2927,13 @@ namespace gal::lang
 					const auto begin = point_;
 					// todo: Although these branches do not have no side effects on the `state` of the parser, misjudgment can have a significant effect on the `efficiency` of the parser.
 					// We need to be careful about the order of these branches.
-					if (build_block() || build_eol())
+					if (build_eol()  || build_block())
 					{
 						has_more = true;
 						result = true;
 						saw_eol = true;
 					}
-					else if (build_def() || build_if() || build_while() || build_for() || build_switch() || build_class(class_allowed) || build_try())
+					else if (build_def() || build_if() || build_while() || build_for() || build_match() || build_class(class_allowed) || build_try())
 					{
 						if (not saw_eol)
 						{
@@ -3022,12 +2946,14 @@ namespace gal::lang
 						result = true;
 						saw_eol = true;
 					}
-					else if (build_equation() || build_return() || build_break() || build_continue())
+					// note: build_equation must come after build_return/break/continue, otherwise these keywords will be used as identifiers.
+					// todo: solve it!
+					else if (build_return() || build_break() || build_continue() || build_equation())
 					{
 						if (not saw_eol)
 						{
 							throw exception::eval_error{
-									"Two function definitions missing line separator",
+									"Two expression definitions missing line separator",
 									filename_,
 									begin};
 						}
@@ -3092,10 +3018,13 @@ namespace gal::lang
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
+				while (build_eol()) {}
+
 				if (build_any<keyword_block_begin_name>())
 				{
 					(void)build_statements();
-					// todo: do we need keyword_block_end_name ?
+
+					if (not build_any<keyword_block_end_name>()) { throw exception::eval_error("Incomplete block, missing '/'", filename_, point_); }
 
 					if (match_stack_.size() == prev_size) { match_stack_.emplace_back(lang::make_node<noop_ast_node>()); }
 
@@ -3117,13 +3046,14 @@ namespace gal::lang
 				scoped_parser p{*this};
 				const auto prev_size = match_stack_.size();
 
-				if (not build_any<keyword_class_scope_name::left_type>()) { return false; }
+				if (not build_char('{')) { return false; }
 
 				(void)build_class_statements(class_name);
-				if (not build_any<keyword_class_scope_name::right_type>())
+
+				if (not build_char('}'))
 				{
 					throw exception::eval_error{
-							"Incomplete class block",
+							"Incomplete class block, missing '}'",
 							filename_,
 							point_};
 				}

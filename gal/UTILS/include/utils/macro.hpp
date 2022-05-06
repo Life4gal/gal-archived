@@ -4,6 +4,7 @@
 #define GAL_UTILS_MACRO_HPP
 
 #ifdef _MSC_VER
+	#define COMPILER_MSVC
 	#define UNREACHABLE() __assume(0)
 	#define DEBUG_TRAP() __debugbreak()
 	#define IMPORTED_SYMBOL __declspec(dllimport)
@@ -16,6 +17,7 @@
 		warningNumber))
 
 #else
+	#define COMPILER_GCC
 	#define UNREACHABLE() __builtin_unreachable()
 	#define DEBUG_TRAP() __builtin_trap()
 	#define IMPORTED_SYMBOL __attribute__((visibility("default")))

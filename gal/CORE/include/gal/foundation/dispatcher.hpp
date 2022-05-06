@@ -6,20 +6,19 @@
 #include <gal/boxed_cast.hpp>
 #include <gal/boxed_value.hpp>
 #include <gal/foundation/dynamic_object.hpp>
-#include <gal/proxy_function.hpp>
+#include <gal/foundation/function_proxy.hpp>
 #include <gal/foundation/string_pool.hpp>
 #include <gal/language/name.hpp>
-#include <ranges>
-#include <utils/enum_utils.hpp>
-#include <utils/format.hpp>
 #include <utils/utility_base.hpp>
-#include <utils/logger.hpp>
-#include <map>
-#include <array>
-#include <set>
 
 namespace gal::lang
 {
+	namespace parser_detail
+	{
+		// see gal/language/common.hpp
+		class parser_base;
+	}
+
 	namespace exception
 	{
 		/**
@@ -27,19 +26,19 @@ namespace gal::lang
 		 */
 		class reserved_word_error final : public std::runtime_error
 		{
-		public:
-			using word_type = foundation::string_view_type;
-
 		private:
-			word_type word_;
+			foundation::string_type word_;
 
 		public:
-			explicit reserved_word_error(word_type word)
+			explicit reserved_word_error(foundation::string_type word)
 				: std::runtime_error{
 						  std_format::format("'{}' is a reserved word and not allowed in object name", word)},
-				  word_{word} {}
+				  word_{std::move(word)} {}
 
-			[[nodiscard]] word_type which() const noexcept { return word_; }
+			explicit reserved_word_error(const foundation::string_view_type word)
+				: reserved_word_error{foundation::string_type{word}} {}
+
+			[[nodiscard]] foundation::string_view_type which() const noexcept { return word_; }
 		};
 
 		/**
@@ -47,22 +46,19 @@ namespace gal::lang
 		 */
 		class illegal_name_error final : public std::runtime_error
 		{
-		public:
-			using name_type = foundation::string_type;
-
 		private:
-			name_type name_;
+			foundation::string_type name_;
 
 		public:
-			explicit illegal_name_error(name_type&& name)
+			explicit illegal_name_error(foundation::string_type name)
 				: std::runtime_error{
-						  std_format::format("'{}' is a reserved name and not allowed in object name", name)},
+						  std_format::format("'{}' is a illegal name and not allowed in object name", name)},
 				  name_{std::move(name)} {}
 
 			explicit illegal_name_error(const foundation::string_view_type name)
-				: illegal_name_error{name_type{name}} {}
+				: illegal_name_error{foundation::string_type{name}} {}
 
-			[[nodiscard]] const name_type& which() const noexcept { return name_; }
+			[[nodiscard]] foundation::string_view_type which() const noexcept { return name_; }
 		};
 
 		/**
@@ -70,50 +66,38 @@ namespace gal::lang
 		 */
 		class name_conflict_error final : public std::runtime_error
 		{
-		public:
-			using name_type = foundation::string_type;
-
 		private:
-			name_type name_;
+			foundation::string_type name_;
 
 		public:
-			explicit name_conflict_error(name_type name)
+			explicit name_conflict_error(foundation::string_type name)
 				: std::runtime_error{
 						  std_format::format("'{}' is already defined in the current context", name)},
 				  name_{std::move(name)} {}
 
 			explicit name_conflict_error(const foundation::string_view_type name)
-				: name_conflict_error{name_type{name}} {}
+				: name_conflict_error{foundation::string_type{name}} {}
 
-			[[nodiscard]] const name_type& which() const noexcept { return name_; }
+			[[nodiscard]] foundation::string_view_type which() const noexcept { return name_; }
 		};
 
 		class global_mutable_error final : public std::runtime_error
 		{
-		public:
-			using name_type = foundation::string_type;
-
 		private:
-			name_type name_;
+			foundation::string_type name_;
 
 		public:
-			explicit global_mutable_error(name_type name)
+			explicit global_mutable_error(foundation::string_type name)
 				: std::runtime_error{
 						  std_format::format("global variable '{}' must be immutable", name)},
 				  name_{std::move(name)} {}
 
 			explicit global_mutable_error(const foundation::string_view_type name)
-				: global_mutable_error{name_type{name}} {}
+				: global_mutable_error{foundation::string_type{name}} {}
 
-			[[nodiscard]] const name_type& which() const noexcept { return name_; }
+			[[nodiscard]] foundation::string_view_type which() const noexcept { return name_; }
 		};
 	}// namespace exception
-
-	namespace parser_detail
-	{
-		// see gal/language/common.hpp
-		class parser_base;
-	}
 
 	namespace foundation
 	{
@@ -121,2143 +105,1647 @@ namespace gal::lang
 		 * @brief Holds a collection of settings which can be applied to the runtime.
 		 * @note Used to implement loadable module support.
 		 */
-		class engine_core
+		class engine_module
 		{
 		public:
-			using function_type = proxy_function;
-
+			// name <=> type_info
 			using type_infos_type = std::map<string_view_type, gal_type_info, std::less<>>;
-			using functions_type = std::map<string_view_type, function_type, std::less<>>;
-			using variables_type = std::map<string_view_type, boxed_value, std::less<>>;
+			// name <=> function
+			using functions_type = std::map<string_view_type, function_proxy_type, std::less<>>;
+			// name <=> "global" object
+			// note: module level object is global visible
+			using objects_type = std::map<string_view_type, boxed_value, std::less<>>;
+			// evaluation string
 			using evaluations_type = std::set<string_view_type, std::less<>>;
-			using type_conversions_type = std::set<type_conversion_type, std::less<>>;
+			// convertor
+			using convertors_type = std::set<convertor_type, std::less<>>;
 
 		private:
+			// module string pool, store all name
+			// todo: GAL will copy all type_info, function, object, evaluation, converter when loading a module,
+			// but their names are stored in the string_pool of the target module,
+			// GAL will not copy them, we need a way to ensure that we will correctly copy all the names when the module is destroyed!
 			string_pool_type pool_;
 
 			type_infos_type types_;
 			functions_type functions_;
-			variables_type variables_;
+			objects_type objects_;
 			evaluations_type evaluations_;
-			type_conversions_type type_conversions_;
+			convertors_type convertors_;
 
-			template<typename Engine>
-			void apply_type_info(Engine& engine)
+		public:
+			/**
+			 * @brief Registers a new named type.
+			 */
+			engine_module& add_type_info(
+					const string_view_type name,
+					gal_type_info type
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current())
+					)
 			{
-				GAL_UTILS_DO_IF_DEBUG(
-						std::string detail{};
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a type_info '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							types_.contains(name) ? "but it was already exist" : "add successed");)
+
+				if (const auto it = types_.find(name);
+					it == types_.end()) { types_.emplace_hint(it, pool_.append(name), type); }
+
+				return *this;
+			}
+
+			engine_module& add_function(
+					const string_view_type name,
+					function_proxy_type function
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a function '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							functions_.contains(name) ? "but it was already exist" : "add successed");)
+
+				if (const auto it = functions_.find(name);
+					it == functions_.end()) { functions_.emplace_hint(it, pool_.append(name), std::move(function)); }
+
+				return *this;
+			}
+
+			engine_module& add_object(
+					const string_view_type name,
+					boxed_value object
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add an global object '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							not object.is_const() ? "but it is not a const object" : objects_.contains(name) ? "but it was already exist" : "add successed");)
+
+				if (not object.is_const()) { throw exception::global_mutable_error{name}; }
+
+				if (const auto it = objects_.find(name);
+					it == objects_.end()) { objects_.emplace_hint(it, pool_.append(name), std::move(object)); }
+
+				return *this;
+			}
+
+			engine_module& add_evaluation(
+					const string_view_type evaluation
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a evaluation '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							evaluation,
+							evaluations_.contains(evaluation) ? "but it was already exist" : "add successed");)
+
+				if (const auto it = evaluations_.find(evaluation);
+					it == evaluations_.end()) { evaluations_.emplace_hint(it, pool_.append(evaluation)); }
+
+				return *this;
+			}
+
+			engine_module& add_convertor(
+					convertor_type convertor
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				[[maybe_unused]] const auto result = convertors_.emplace(std::move(convertor)).second;
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a convertor, {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							result ? "but it was already exist" : "add successed");
+						)
+
+				return *this;
+			}
+
+		private:
+			template<bool Takeover, typename Engine, typename Dispatcher>
+			void do_load_module(Engine& engine, Dispatcher& dispatcher)
+			{
+				//*********************
+				//****  TYPE_INFO  ****
+				//*********************
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						string_type type_info_detail{};
 						std::ranges::for_each(
 							types_ | std::views::keys,
-							[&detail](const auto& key)
+							[&type_info_detail](const auto& key)
 							{
-							detail.append(key).push_back('\n');
+							type_info_detail.append(key).push_back('\n');
 							});
-						utils::logger::debug("There are currently {} type_info(s), details:\n\t{}", types_.size(), detail);
-						)
+						utils::logger::debug("There are currently {} type_info(s), details:\n\t{}", types_.size(), type_info_detail);)
 
 				std::ranges::for_each(
 						types_,
-						[&engine](const auto& type)
+						[&dispatcher](const auto& type)
 						{
-							try { engine.add_type_info(type.first, type.second); }
+							try { dispatcher.add_type_info(type.first, type.second); }
 							catch (const exception::name_conflict_error&)
 							{
 								// todo: Should we throw an error if there's a name conflict while applying a module?
 							}
 						});
-			}
 
-			template<typename Engine>
-			void apply_function(Engine& engine)
-			{
-				GAL_UTILS_DO_IF_DEBUG(
-						std::string detail{};
+				//*********************
+				//****  FUNCTION  ****
+				//*********************
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						string_type function_detail{};
 						std::ranges::for_each(
 							functions_ | std::views::keys,
-							[&detail](const auto& key)
+							[&function_detail](const auto& key)
 							{
-							detail.append(key).push_back('\n');
+							function_detail.append(key).push_back('\n');
 							});
-						utils::logger::debug("There are currently {} function(s), details:\n\t{}", functions_.size(), detail);)
+						utils::logger::debug("There are currently {} function(s), details:\n\t{}", functions_.size(), function_detail);)
 
 				std::ranges::for_each(
 						functions_,
-						[&engine](const auto& function)
+						[&dispatcher](auto&& function)
 						{
-							try { engine.add_function(function.first, function.second); }
+							try
+							{
+								if constexpr (Takeover) { dispatcher.add_function(function.first, std::move(function.second)); }
+								else { dispatcher.add_function(function.first, function.second); }
+							}
 							catch (const exception::name_conflict_error&)
 							{
 								// todo: Should we throw an error if there's a name conflict while applying a module?
 							}
 						});
-			}
 
-			template<typename Engine>
-			void apply_variable(Engine& engine)
-			{
-				GAL_UTILS_DO_IF_DEBUG(
-						std::string detail{};
+				//*******************
+				//****  OBJECT  ****
+				//*******************
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						string_type object_detail{};
 						std::ranges::for_each(
-							variables_ | std::views::keys,
-							[&detail](const auto& key)
+							objects_ | std::views::keys,
+							[&object_detail](const auto& key)
 							{
-							detail.append(key).push_back('\n');
+							object_detail.append(key).push_back('\n');
 							});
-						utils::logger::debug("There are currently {} variable(s), details:\n\t{}", variables_.size(), detail);)
+						utils::logger::debug("There are currently {} object(s), details:\n\t{}", objects_.size(), object_detail);)
 
 				std::ranges::for_each(
-						variables_,
-						[&engine](const auto& variable) { engine.add_global(variable.first, variable.second); });
-			}
+						objects_,
+						[&dispatcher](auto&& object)
+						{
+							if constexpr (Takeover) { dispatcher.add_global(object.first, std::move(object.second)); }
+							else { dispatcher.add_global(object.first, object.second); }
+						});
 
-			template<typename Eval>
-			void apply_evaluation(Eval& eval)
-			{
-				GAL_UTILS_DO_IF_DEBUG(
-						std::string detail{};
+				//************************
+				//****  EVALUATION  ****
+				//************************
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						string_type evaluation_detail{};
 						std::ranges::for_each(
 							evaluations_,
-							[&detail](const auto& key)
+							[&evaluation_detail](const auto& key)
 							{
-							detail.append(key).push_back('\n');
+							evaluation_detail.append(key).push_back('\n');
 							});
-						utils::logger::debug("There are currently {} evaluation(s), details:\n\t{}", evaluations_.size(), detail);)
+						utils::logger::debug("There are currently {} evaluation(s), details:\n\t{}", evaluations_.size(), evaluation_detail);)
 
 				std::ranges::for_each(
 						evaluations_,
-						[&eval](const auto& evaluation) { (void)eval.eval(evaluation); });
-			}
+						[&engine](auto&& evaluation) { (void)engine.eval(evaluation); });
 
-			template<typename Engine>
-			void apply_type_conversion(Engine& engine)
-			{
-				GAL_UTILS_DO_IF_DEBUG(
-						utils::logger::debug("There are currently {} type_conversion(s)", types_.size());)
+				//************************
+				//****  CONVERTOR  ****
+				//************************
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::debug("There are currently {} convertors(s)", convertors_.size());)
 
 				std::ranges::for_each(
-						type_conversions_,
-						[&engine](const auto& conversion) { engine.add_type_conversion(conversion); });
+						convertors_,
+						[&dispatcher](auto&& convertor)
+						{
+							if constexpr (Takeover) { dispatcher.add_convertor(std::move(convertor)); }
+							else { dispatcher.add_convertor(convertor); }
+						});
+
+				if constexpr (Takeover) { dispatcher.takeover_pool(std::move(pool_)); }
+				else {}
 			}
 
 		public:
-			// todo: should only allow right value?
-			// todo: The dispatcher should take over the string_pool of the core after getting all the contents of the core, there should be a coercive measure to ensure that this happens
-			[[nodiscard]] string_pool_type take_pool(
-					GAL_UTILS_DO_IF_DEBUG(
-							const std::string_view reason = "no reason",
-							const std_source_location& location = std_source_location::current()
-							)
-					) noexcept/* && */
+			/**
+			 * @brief Load a module, copy all type_info, function, object, evaluation, converter, shared their name.
+			 *
+			 * @note All names of the modules' type_info, function, object, evaluation, converter will be invalid if module been destroyed.
+			 */
+			template<typename Engine, typename Dispatcher>
+			void borrow(Engine& engine, Dispatcher& dispatcher) { this->do_load_module<false>(engine, dispatcher); }
+
+			/**
+			 * @brief Load a module, move away all type_info, function, object, evaluation, converter, also take over the module string_pool, then the module can be safely destroyed.
+			 *
+			 * @note DO NOT USE THE MODULE AFTER IT BEEN TAKEN
+			 */
+			template<typename Engine, typename Dispatcher>
+			void take(Engine& engine, Dispatcher& dispatcher) && { this->do_load_module<true>(engine, dispatcher); }
+		};
+
+		using engine_module_type = std::shared_ptr<engine_module>;
+		/**
+		 * @brief Signature of module entry point that all binary loadable modules must implement.
+		 */
+		using engine_module_maker = engine_module_type(*)();
+		[[nodiscard]] inline engine_module_type make_engine_module() { return std::make_shared<engine_module>(); }
+
+		/**
+		 * @brief A function_proxy implementation that is able to take
+		 * a vector of function_proxies and perform a dispatch on them.
+		 * It is used specifically in the case of dealing with function object variables.
+		 */
+		class dispatch_function final : public function_proxy_base
+		{
+		public:
+			using functions_type = function_proxies_type;
+
+		private:
+			functions_type functions_;
+
+			[[nodiscard]] static type_infos_type build_param_types(const function_proxies_view_type functions)
 			{
-				GAL_UTILS_DO_IF_DEBUG(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-							__func__,
-							location.file_name(),
-							location.function_name(),
-							location.line(),
-							location.column(),
-							reason);
-						)
+				if (functions.empty()) { return {}; }
 
-				GAL_UTILS_DO_IF_DEBUG(
-						std::string detail{};
-						std::ranges::for_each(
-							pool_.get_mapping() | std::views::keys,
-							[&detail](const auto& key)
-							{
-							detail.append(key).push_back('\n');
-							});
-						utils::logger::debug("pool size: '{}'\ndetails:\n\t{}", pool_.size(), detail);
-						)
+				// the first one's types
+				const auto types = functions.front()->type_view();
 
-				return std::exchange(pool_, string_pool_type{});
+				type_infos_type copy_types{types.begin(), types.end()};
+				bool size_mismatch = false;
+
+				std::ranges::for_each(
+						// skip the first one
+						functions | std::views::drop(1),
+						[&copy_types, &size_mismatch](const auto tv)
+						{
+							if (tv.size() != copy_types.size()) { size_mismatch = true; }
+
+							const auto size = static_cast<decltype(copy_types)::difference_type>(std::ranges::min(copy_types.size(), tv.size()));
+							std::ranges::transform(
+									copy_types | std::views::take(size),
+									tv,
+									copy_types.begin(),
+									[](auto&& lhs, auto&& rhs)
+									{
+										if (lhs != rhs) { return boxed_value::class_type(); }
+										return lhs;
+									});
+						},
+						[](const auto& function) { return function->type_view(); });
+
+				gal_assert(not copy_types.empty(), "type_info vector is empty, this is only possible if something else is broken");
+
+				if (size_mismatch) { copy_types.resize(1); }
+
+				return copy_types;
 			}
 
-			engine_core& add_type_info(
-					const string_view_type name,
-					gal_type_info type
-					GAL_UTILS_DO_IF_DEBUG(
-							,
-							const std_source_location& location = std_source_location::current())
-					)
+			static arity_size_type calculate_arity(const function_proxies_view_type functions) noexcept
 			{
-				[[maybe_unused]] const auto result = types_.emplace(pool_.append(name), type).second;
-				GAL_UTILS_DO_IF_DEBUG(
-						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-							__func__,
-							location.file_name(),
-							location.function_name(),
-							location.line(),
-							location.column(),
-							result ? "but it was already exist" : "add successed");
-						)
+				if (functions.empty() || std::ranges::any_of(
+						    // skip the first one
+						    functions | std::views::drop(1),
+						    [arity = functions.front()->arity_size()](const auto a) { return a != arity; },
+						    [](const auto& function) { return function->arity_size(); })) { return no_parameters_arity; }
 
-				gal_assert(result);
-				return *this;
+				return functions.front()->arity_size();
 			}
 
-			engine_core& add_function(
-					const string_view_type name,
-					function_type function
-					GAL_UTILS_DO_IF_DEBUG(
-							,
-							const std_source_location& location = std_source_location::current())
-					)
+			[[nodiscard]] boxed_value do_invoke(const parameters_view_type params, const convertor_manager_state& state) const override { return dispatch(functions_, params, state); }
+
+		public:
+			explicit dispatch_function(functions_type functions)
+				: function_proxy_base{
+						  build_param_types(functions),
+						  calculate_arity(functions)},
+				  functions_{std::move(functions)} {}
+
+			[[nodiscard]] const_function_proxies_type overloaded_functions() const override { return {functions_.begin(), functions_.end()}; }
+
+			[[nodiscard]] bool operator==(const function_proxy_base& other) const noexcept override
 			{
-				[[maybe_unused]] const auto result = functions_.emplace(pool_.append(name), std::move(function)).second;
-				GAL_UTILS_DO_IF_DEBUG(
-						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-							__func__,
-							location.file_name(),
-							location.function_name(),
-							location.line(),
-							location.column(),
-							result ? "but it was already exist" : "add successed");
-						)
-
-				return *this;
-			}
-
-			engine_core& add_variable(
-					const string_view_type name,
-					boxed_value variable
-					GAL_UTILS_DO_IF_DEBUG(
-							,
-							const std_source_location& location = std_source_location::current())
-					)
-			{
-				if (not variable.is_const()) { throw exception::global_mutable_error{name}; }
-
-				[[maybe_unused]] const auto result = variables_.emplace(pool_.append(name), std::move(variable)).second;
-				GAL_UTILS_DO_IF_DEBUG(
-						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-							__func__,
-							location.file_name(),
-							location.function_name(),
-							location.line(),
-							location.column(),
-							result ? "but it was already exist" : "add successed");
-						)
-
-				gal_assert(result);
-				return *this;
-			}
-
-			engine_core& add_evaluation(
-					const string_view_type evaluation
-					GAL_UTILS_DO_IF_DEBUG(
-							,
-							const std_source_location& location = std_source_location::current())
-					)
-			{
-				[[maybe_unused]] const auto result = evaluations_.emplace(pool_.append(evaluation)).second;
-				GAL_UTILS_DO_IF_DEBUG(
-						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-							__func__,
-							location.file_name(),
-							location.function_name(),
-							location.line(),
-							location.column(),
-							result ? "but it was already exist" : "add successed");
-						)
-
-				gal_assert(result);
-				return *this;
-			}
-
-			engine_core& add_type_conversion(
-					type_conversion_type conversion
-					GAL_UTILS_DO_IF_DEBUG(
-							,
-							const std_source_location& location = std_source_location::current())
-					)
-			{
-				[[maybe_unused]] const auto result = type_conversions_.emplace(std::move(conversion)).second;
-				GAL_UTILS_DO_IF_DEBUG(
-						utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-							__func__,
-							location.file_name(),
-							location.function_name(),
-							location.line(),
-							location.column(),
-							result ? "but it was already exist" : "add successed");
-						)
-
-				gal_assert(result);
-				return *this;
-			}
-
-			// todo: optimize it (reduce copy)
-			template<typename Eval, typename Engine>
-			void apply(
-					Eval& eval,
-					Engine& engine
-					GAL_UTILS_DO_IF_DEBUG(
-							,
-							const std_source_location& location = std_source_location::current())
-					)
-				requires requires
-				{
-					engine.add_type_info(std::declval<const string_view_type>(), std::declval<const gal_type_info&>());
-					engine.add_function(std::declval<const string_view_type>(), std::declval<const function_type&>());
-					engine.add_global(std::declval<const string_view_type>(), std::declval<const boxed_value&>());
-					eval.eval(std::declval<const string_view_type>());
-					engine.add_type_conversion(std::declval<const type_conversion_type&>());
-				}
-			{
-				GAL_UTILS_DO_IF_DEBUG(
-						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{}))",
-							__func__,
-							location.file_name(),
-							location.function_name(),
-							location.line(),
-							location.column());
-						)
-
-				this->apply_type_info(engine);
-				this->apply_function(engine);
-				this->apply_variable(engine);
-				this->apply_evaluation(eval);
-				this->apply_type_conversion(engine);
-			}
-
-			[[nodiscard]] bool has_function(const string_view_type name, const function_type& function) const noexcept
-			{
-				if (const auto it = functions_.find(name);
-					it != functions_.end() && *it->second == *function) { return true; }
-
+				if (const auto* func = dynamic_cast<const dispatch_function*>(&other)) { return func->functions_ == functions_; }
 				return false;
+			}
+
+			[[nodiscard]] bool match(const parameters_view_type params, const convertor_manager_state& state) const override
+			{
+				return std::ranges::any_of(
+						functions_,
+						[params, &state](const auto& function) { return function->match(params, state); });
 			}
 		};
 
-		using shared_engine_core = std::shared_ptr<engine_core>;
-
-		namespace dispatcher_detail
+		struct engine_stack
 		{
-			/**
-			 * @brief A proxy_function implementation that is able to take
-			 * a vector of proxy_functions and perform a dispatch on them.
-			 * It is used specifically in the case of dealing with function object variables.
-			 */
-			class dispatch_function final : public proxy_function_base
+			using scope_type = std::map<string_view_type, boxed_value, std::less<>>;
+			using stack_type = std::vector<scope_type>;
+			using stacks_type = std::vector<stack_type>;
+
+			using parameters_list_type = std::vector<parameters_type>;
+
+			using call_depth_type = int;
+
+		private:
+			std::reference_wrapper<string_pool_type> borrowed_pool_;
+			std::vector<string_pool_type::block_borrower> borrowed_block_;
+
+		public:
+			stacks_type stacks;
+			parameters_list_type parameters_list;
+			call_depth_type depth;
+
+			[[nodiscard]] stack_type& recent_stack() noexcept { return stacks.back(); }
+
+			[[nodiscard]] const stack_type& recent_stack() const noexcept { return stacks.back(); }
+
+			[[nodiscard]] stack_type& recent_parent_stack() noexcept { return stacks[stacks.size() - 2]; }
+
+			[[nodiscard]] const stack_type& recent_parent_stack() const noexcept { return stacks[stacks.size() - 2]; }
+
+			[[nodiscard]] scope_type& recent_scope() noexcept { return recent_stack().back(); }
+
+			[[nodiscard]] const scope_type& recent_scope() const noexcept { return recent_stack().back(); }
+
+			[[nodiscard]] parameters_type& recent_call() noexcept { return parameters_list.back(); }
+
+			[[nodiscard]] const parameters_type& recent_call() const noexcept { return parameters_list.back(); }
+
+		private:
+			[[nodiscard]] string_pool_type::block_borrower& recent_borrowed_block() noexcept { return borrowed_block_.back(); }
+
+			void prepare_new_stack()
 			{
-			public:
-				using function_type = mutable_proxy_function;
-				using functions_type = mutable_proxy_functions_type;
+				// add a new stack with 1 element
+				stacks.emplace_back(1);
+				// todo: if a variable is in the scope of the global variable but the user declares the variable directly with 'var' instead of 'global', it will result in the absence of borrowed_block_ to register the variable, and then the vector goes out of bounds (there is no back), how to resolve the conflict?
+				borrowed_block_.emplace_back(borrowed_pool_.get());
+			}
 
-			private:
-				functions_type functions_;
+			void finish_stack() noexcept { stacks.pop_back(); }
 
-				static type_infos_type build_param_types(const functions_type& functions)
-				{
-					if (functions.empty()) { return {}; }
-
-					auto copy_types = functions.front()->types();
-					bool size_mismatch = false;
-
-					for (auto begin = functions.begin() + 1; begin != functions.end(); ++begin)
-					{
-						const auto& param_types = (*begin)->types();
-
-						if (param_types.size() != copy_types.size()) { size_mismatch = true; }
-
-						const auto size = static_cast<decltype(copy_types)::difference_type>(std::ranges::min(copy_types.size(), param_types.size()));
-						std::transform(
-								copy_types.begin(),
-								copy_types.begin() + size,
-								param_types.begin(),
-								copy_types.begin(),
-								[](auto&& lhs, auto&& rhs)
-								{
-									if (lhs != rhs) { return make_type_info<boxed_value>(); }
-									return lhs;
-								});
-					}
-
-					gal_assert(not copy_types.empty(), "type_info vector is empty, this is only possible if something else is broken");
-
-					if (size_mismatch) { copy_types.resize(1); }
-
-					return copy_types;
-				}
-
-				[[nodiscard]] boxed_value do_invoke(const parameters_view_type params, const type_conversion_state& conversion) const override { return dispatch(functions_, params, conversion); }
-
-			public:
-				static arity_size_type calculate_arity(const functions_type& functions) noexcept
-				{
-					if (functions.empty() || std::ranges::any_of(
-							    functions.begin() + 1,
-							    functions.end(),
-							    [arity = functions.front()->get_arity()](const auto a) { return a != arity; },
-							    [](const auto& function) { return function->get_arity(); })) { return no_parameters_arity; }
-
-					return functions.front()->get_arity();
-				}
-
-				explicit dispatch_function(functions_type&& functions)
-					: proxy_function_base{
-							  build_param_types(functions),
-							  calculate_arity(functions)},
-					  functions_{std::move(functions)} {}
-
-				[[nodiscard]] immutable_proxy_functions_type container_functions() const override { return {functions_.begin(), functions_.end()}; }
-
-				[[nodiscard]] bool operator==(const proxy_function_base& other) const noexcept override
-				{
-					const auto* d = dynamic_cast<const dispatch_function*>(&other);
-					return d && d->functions_ == functions_;
-				}
-
-				[[nodiscard]] bool match(parameters_view_type params, const type_conversion_state& conversion) const override
-				{
-					return std::ranges::any_of(
-							functions_,
-							[params, &conversion](const auto& function) { return function->match(params, conversion); });
-				}
-			};
-
-			struct engine_stack
+			void prepare_new_scope()
 			{
-				friend class dispatcher;
-				friend class dispatcher_state;
-				friend struct scoped_function_scope;
-
-				using scope_type = engine_core::variables_type;
-				using stack_data_type = std::vector<scope_type>;
-				using stack_type = std::vector<stack_data_type>;
-
-				using param_list_type = parameters_type;
-				using param_list_view_type = parameters_view_type;
-				using param_lists_type = std::vector<param_list_type>;
-
-				using call_depth_type = int;
-
-				std::reference_wrapper<string_pool_type> pool;
-				std::vector<string_pool_type::block_borrower> borrowed_block;
-
-				stack_type stack;
-				param_lists_type param_lists;
-				call_depth_type depth;
-
-			private:
-				void prepare_new_stack(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current()
-								)
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} prepare a new stack from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason);
-							)
-
-					// add a new Stack with 1 element
-					stack.emplace_back(1);
-				}
-
-				void prepare_new_scope(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} prepare a new scope from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason));
-
-					recent_stack_data().emplace_back();
-					borrowed_block.emplace_back(pool.get());
-				}
-
-				void prepare_new_call(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} prepare a new call from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason));
-
-					param_lists.emplace_back();
-				}
-
-				void finish_stack(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						) noexcept
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} finish a stack from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason));
-
-					gal_assert(not stack.empty());
-					stack.pop_back();
-				}
-
-				void finish_scope(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						) noexcept
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} finish a scope from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason));
-
-					gal_assert(not recent_stack_data().empty());
-					recent_stack_data().pop_back();
-					borrowed_block.pop_back();
-				}
-
-				void finish_call(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						) noexcept
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} finish a call from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason));
-
-					gal_assert(not param_lists.empty());
-					param_lists.pop_back();
-				}
-
-				/**
-				 * @brief Adds a named object to the current scope.
-				 * @note This version does not check the validity of the name.
-				 */
-				boxed_value& add_variable_no_check(
-						const string_view_type name,
-						boxed_value variable
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} variable '{}' from (file: '{}' function: '{}' position: ({}:{}))",
-								__func__,
-								name,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column());
-							)
-
-					if (const auto it = recent_scope().find(name);
-						it == recent_scope().end()) { return recent_scope().emplace(borrowed_block.back().append(name), std::move(variable)).first->second; }
-
-					throw exception::name_conflict_error{name};
-				}
-
-				void push_param(
-						param_list_type&& params
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} {} params from (file: '{}' function: '{}' position: ({}:{}))",
-								__func__,
-								params.size(),
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column());)
-
-					auto& current_call = recent_call_param();
-					current_call.insert(current_call.end(), std::make_move_iterator(params.begin()), std::make_move_iterator(params.end()));
-				}
-
-				void push_param(
-						const param_list_view_type params
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} {} params from (file: '{}' function: '{}' position: ({}:{}))",
-								__func__,
-								params.size(),
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column());)
-
-					auto& current_call = recent_call_param();
-					current_call.insert(current_call.end(), params.begin(), params.end());
-				}
-
-				void pop_param(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						) noexcept
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason);)
-
-					auto& current_call = param_lists.back();
-					current_call.clear();
-				}
-
-			public:
-				explicit engine_stack(
-						string_pool_type& pool
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std::string_view reason = "initial a new engine_stack",
-								const std_source_location& location = std_source_location::current())
-						)
-					: pool{pool},
-					  depth{0}
-				{
-					prepare_new_stack(GAL_UTILS_DO_IF_DEBUG(reason, location));
-					prepare_new_call(GAL_UTILS_DO_IF_DEBUG(reason, location));
-				}
-
-				[[nodiscard]] constexpr bool is_root() const noexcept { return depth == 0; }
-
-				/**
-				 * @brief Pushes a new stack on to the list of stacks.
-				 */
-				void new_stack(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						) { prepare_new_stack(GAL_UTILS_DO_IF_DEBUG(reason, location)); }
-
-				void pop_stack(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						) { finish_stack(GAL_UTILS_DO_IF_DEBUG(reason, location)); }
-
-				[[nodiscard]] stack_data_type& recent_stack_data() noexcept { return stack.back(); }
-
-				[[nodiscard]] const stack_data_type& recent_stack_data() const noexcept { return stack.back(); }
-
-				[[nodiscard]] stack_data_type& recent_parent_stack_data() noexcept { return stack[stack.size() - 2]; }
-
-				[[nodiscard]] const stack_data_type& recent_parent_stack_data() const noexcept { return stack[stack.size() - 2]; }
-
-				/**
-				 * @return All values in the local thread state.
-				 */
-				template<template<typename...> typename Container, typename... AnyOther>
-					requires std::is_constructible_v<Container<scope_type::value_type, AnyOther...>, scope_type::const_iterator, scope_type::const_iterator>
-				[[nodiscard]] Container<scope_type::value_type, AnyOther...> copy_recent_locals() const
-				{
-					const auto& s = recent_stack_data();
-					gal_assert(not s.empty());
-					return Container<scope_type::value_type, AnyOther...>{s.front().begin(), s.front().end()};
-				}
-
-				/**
-				 * @return All values in the local thread state.
-				 */
-				template<template<typename...> typename Container, typename... AnyOther>
-					requires std::is_constructible_v<Container<scope_type::key_type, scope_type::mapped_type, AnyOther...>, scope_type::const_iterator, scope_type::const_iterator>
-				[[nodiscard]] Container<scope_type::key_type, scope_type::mapped_type, AnyOther...> copy_recent_locals() const
-				{
-					const auto& s = recent_stack_data();
-					gal_assert(not s.empty());
-					return Container<scope_type::key_type, scope_type::mapped_type, AnyOther...>{s.front().begin(), s.front().end()};
-				}
-
-				/**
-				 * @return All values in the local thread state in the parent scope,
-				 * or if it does not exist, the current scope.
-				 */
-				template<template<typename...> typename Container, typename... AnyOther>
-					requires std::is_constructible_v<Container<scope_type::value_type, AnyOther...>, scope_type::const_iterator, scope_type::const_iterator>
-				[[nodiscard]] Container<scope_type::value_type, AnyOther...> copy_recent_parent_locals() const
-				{
-					if (const auto& s = recent_stack_data();
-						s.size() > 1) { return Container<scope_type::value_type, AnyOther...>{s[1].begin(), s[1].end()}; }
-					return copy_recent_locals<Container, AnyOther...>();
-				}
-
-				/**
-				 * @return All values in the local thread state in the parent scope,
-				 * or if it does not exist, the current scope.
-				 */
-				template<template<typename...> typename Container, typename... AnyOther>
-					requires std::is_constructible_v<Container<scope_type::key_type, scope_type::mapped_type, AnyOther...>, scope_type::const_iterator, scope_type::const_iterator>
-				[[nodiscard]] Container<scope_type::key_type, scope_type::mapped_type, AnyOther...> copy_recent_parent_locals() const
-				{
-					if (const auto& s = recent_stack_data();
-						s.size() > 1) { return Container<scope_type::key_type, scope_type::mapped_type, AnyOther...>{s[1].begin(), s[1].end()}; }
-					return copy_recent_locals<Container, AnyOther...>();
-				}
-
-				/**
-				 * @brief Sets all of the locals for the current thread state.
-				 *
-				 * @param new_locals The set of variables to replace the current state with.
-				 *
-				 * @note Any existing locals are removed and the given set of variables is added.
-				 */
-				void set_locals(
-						const scope_type& new_locals
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							std::string detail{};
-							std::ranges::for_each(
-								new_locals | std::views::keys,
-								[&detail](const auto& key)
-								{
-								detail.append(key).push_back('\n');
-								});
-
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}', detail:\n{}",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason,
-								detail);)
-
-					auto& s = recent_stack_data();
-					s.front().insert(new_locals.begin(), new_locals.end());
-				}
-
-				/**
-				 * @brief Sets all of the locals for the current thread state.
-				 *
-				 * @param new_locals The set of variables to replace the current state with.
-				 *
-				 * @note Any existing locals are removed and the given set of variables is added.
-				 */
-				void set_locals(
-						scope_type&& new_locals
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							std::string detail{};
-							std::ranges::for_each(
-								new_locals | std::views::keys,
-								[&detail](const auto& key)
-								{
-								detail.append(key).push_back('\n');
-								});
-
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}', detail:\n{}",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason,
-								detail);)
-
-					auto& s = recent_stack_data();
-					s.front().insert(std::make_move_iterator(new_locals.begin()), std::make_move_iterator(new_locals.end()));
-				}
-
-				/**
-				 * @brief Adds a new scope to the stack.
-				 */
-				void new_scope(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					prepare_new_scope(GAL_UTILS_DO_IF_DEBUG(reason, location));
-					prepare_new_call(GAL_UTILS_DO_IF_DEBUG(reason, location));
-				}
-
-				[[nodiscard]] scope_type& recent_scope() noexcept { return recent_stack_data().back(); }
-
-				[[nodiscard]] const scope_type& recent_scope() const noexcept { return recent_stack_data().back(); }
-
-				/**
-				 * @brief Pops the current scope from the stack.
-				 */
-				void pop_scope(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						) noexcept
-				{
-					finish_call(GAL_UTILS_DO_IF_DEBUG(reason, location));
-					finish_scope(GAL_UTILS_DO_IF_DEBUG(reason, location));
-				}
-
-				boxed_value& add_variable(
-						const string_view_type name,
-						boxed_value variable
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} variable '{}' from (file: '{}' function: '{}' position: ({}:{}))",
-								__func__,
-								name,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column());)
-
-					GAL_UTILS_DO_IF_DEBUG(
-							int scope_no = 0;
-							)
-
-					for (auto& stack_data = recent_stack_data();
-					     auto& scope: stack_data | std::views::reverse)
-					{
-						GAL_UTILS_DO_IF_DEBUG(
-								utils::logger::debug("searching variable '{}' in '{}'th scope",
-									name,
-									scope_no);
-								)
-
-						if (auto it = scope.find(name); it != scope.end())
-						{
-							GAL_UTILS_DO_IF_DEBUG(
-									utils::logger::debug("find variable '{}' in '{}'th scope",
-										name,
-										scope_no);
-									)
-
-							it->second = std::move(variable);
-							return it->second;
-						}
-
-						GAL_UTILS_DO_IF_DEBUG(
-								++scope_no
-								);
-					}
-
-					return add_variable_no_check(name, std::move(variable) GAL_UTILS_DO_IF_DEBUG(, location));
-				}
-
-				[[nodiscard]] param_list_type& recent_call_param() noexcept { return param_lists.back(); }
-
-				[[nodiscard]] const param_list_type& recent_call_param() const noexcept { return param_lists.back(); }
-
-				void emit_call(
-						type_conversion_manager::conversion_saves& saves
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					if (is_root()) { type_conversion_manager::enable_conversion_saves(saves, true); }
-					++depth;
-
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}', current depth: '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason,
-								depth);)
-
-					push_param(type_conversion_manager::take_conversion_saves(saves) GAL_UTILS_DO_IF_DEBUG(, location));
-				}
-
-				void finish_call(
-						type_conversion_manager::conversion_saves& saves
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						) noexcept
-				{
-					--depth;
-					gal_assert(depth >= 0);
-
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}', current depth: '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason,
-								depth);)
-
-					if (is_root())
-					{
-						pop_param(GAL_UTILS_DO_IF_DEBUG(reason, location));
-						type_conversion_manager::enable_conversion_saves(saves, false);
-					}
-				}
-			};
-
-			class dispatcher_state
+				recent_stack().emplace_back();
+				borrowed_block_.emplace_back(borrowed_pool_.get());
+			}
+
+			void finish_scope() noexcept
 			{
-			public:
-				using dispatcher_type = std::reference_wrapper<dispatcher>;
+				recent_stack().pop_back();
+				borrowed_block_.pop_back();
+			}
 
-			private:
-				dispatcher_type d_;
-				type_conversion_state conversion_;
+			void prepare_new_call() { parameters_list.emplace_back(); }
 
-			public:
-				explicit dispatcher_state(dispatcher& d);
+			void finish_call() { parameters_list.pop_back(); }
 
-				[[nodiscard]] dispatcher_type::type* operator->() const noexcept { return &d_.get(); }
-
-				[[nodiscard]] dispatcher_type::type& operator*() const noexcept { return d_.get(); }
-
-				[[nodiscard]] auto& stack() const noexcept;
-
-				[[nodiscard]] const type_conversion_state& conversion() const noexcept { return conversion_; }
-
-				[[nodiscard]] type_conversion_manager::conversion_saves& conversion_saves() const noexcept { return conversion_.saves(); }
-
-				boxed_value& add_object_no_check(
-						string_view_type name,
-						boxed_value object
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						) const;
-
-				[[nodiscard]] boxed_value& get_object(string_view_type name, auto& cache_location) const;
-			};
-
-			struct scoped_scope : utils::scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>
+		public:
+			explicit engine_stack(string_pool_type& pool)
+				: borrowed_pool_{pool},
+				  depth{0}
 			{
-				friend struct scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>;
+				prepare_new_stack();
+				prepare_new_call();
+			}
 
-				explicit scoped_scope(
-						const dispatcher_state& s
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std::string_view reason = "initial a new scoped_scope",
-								const std_source_location& location = std_source_location::current())
-						)
-					: scoped_base{s}
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason);)
-				}
-
-			private:
-				void do_construct() const;
-				void do_destruct() const;
-			};
-
-			struct scoped_object_scope : scoped_scope
-			{
-				friend struct scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>;
-
-				scoped_object_scope(
-						const dispatcher_state& s,
-						boxed_value object
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								std::string_view reason = "initial a new scoped_object_scope",
-								const std_source_location& location = std_source_location::current())
-						);
-			};
-
-			struct scoped_stack_scope : utils::scoped_base<scoped_stack_scope, std::reference_wrapper<const dispatcher_state>>
-			{
-				friend struct scoped_base<scoped_stack_scope, std::reference_wrapper<const dispatcher_state>>;
-
-				explicit scoped_stack_scope(
-						const dispatcher_state& state
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std::string_view reason = "initial a new scoped_stack_scope",
-								const std_source_location& location = std_source_location::current())
-						)
-					: scoped_base{state}
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason);)
-				}
-
-			private:
-				void do_construct() const;
-				void do_destruct() const;
-			};
-
-			struct scoped_function_scope : utils::scoped_base<scoped_function_scope, std::reference_wrapper<const dispatcher_state>>
-			{
-				friend struct scoped_base<scoped_function_scope, std::reference_wrapper<const dispatcher_state>>;
-
-				explicit scoped_function_scope(
-						const dispatcher_state& state
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std::string_view reason = "initial a new scoped_function_scope",
-								const std_source_location& location = std_source_location::current())
-						)
-					: scoped_base{state}
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})) because '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								reason);)
-				}
-
-				void push_params(
-						engine_stack::param_list_type&& params
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						) const;
-
-				void push_params(
-						engine_stack::param_list_view_type params
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						) const;
-
-			private:
-				void do_construct() const;
-				void do_destruct() const;
-			};
+			[[nodiscard]] constexpr bool is_root() const noexcept { return depth == 0; }
 
 			/**
-			 * @brief Main class for the dispatch kits.
-			 * Handles management of the object stack, functions and registered types.
+			 * @brief Pushes a new stack on to the list of stacks.
 			 */
-			class dispatcher
+			void new_stack(
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							const std::string_view reason = "no reason",
+							const std_source_location& location = std_source_location::current()
+							))
 			{
-				friend class dispatcher_state;
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to push a new stack because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);)
 
-			public:
-				// type format for add_type_info
-				constexpr static char type_name_format[] = "@@{}@@";
+				prepare_new_stack();
+			}
 
-				using type_infos_type = engine_core::type_infos_type;
+			/**
+			 * @brief Pops a new stack on to the list of stacks.
+			 */
+			void pop_stack(
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							const std::string_view reason = "no reason",
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to pop a stack because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);)
 
-				using scope_type = engine_stack::scope_type;
-				using stack_data_type = engine_stack::stack_data_type;
+				finish_stack();
+			}
 
-				using variable_cache_location_type = std::optional<std::reference_wrapper<boxed_value>>;
+			/**
+			 * @brief Adds a new scope to the stack.
+			 */
+			void new_scope(
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							const std::string_view reason = "no reason",
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to push a new scope because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);)
 
-				struct state_type
+				prepare_new_scope();
+				prepare_new_call();
+			}
+
+			/**
+			 * @brief Pops the current scope from the stack.
+			 */
+			void pop_scope(
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							const std::string_view reason = "no reason",
+							const std_source_location& location = std_source_location::current())) noexcept
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to pop a scope because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);)
+
+				finish_call();
+				finish_scope();
+			}
+
+			/**
+			 * @brief Adds a named object to the current scope.
+			 * @note This version does not check the validity of the name.
+			 *
+			 * @throw exception::name_conflict_error object already exists
+			 */
+			boxed_value& add_object_no_check(
+					const string_view_type name,
+					boxed_value object
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add object '{}' without check, {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							recent_scope().contains(name) ? "but it already exists." : "add successed");)
+
+				auto& scope = recent_scope();
+				if (const auto it = scope.find(name);
+					it == scope.end()) { return scope.emplace(recent_borrowed_block().append(name), std::move(object)).first->second; }
+
+				throw exception::name_conflict_error{name};
+			}
+
+			/**
+			 * @brief Adds a named object to the current scope, assign it if it already exist.
+			 */
+			boxed_value& add_object(
+					const string_view_type name,
+					boxed_value object
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add object '{}' with check, {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							std::ranges::any_of(recent_stack() | std::views::reverse, [name](const auto scope)
+								{ return scope.contains(name); })
+							? "but it already exists."
+							: "add successed");)
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						int scope_no = 0;)
+
+				for (auto& stack = recent_stack();
+				     auto& scope: stack | std::views::reverse)
 				{
-					using function_type = dispatch_function::function_type;
-					using function_object_type = proxy_function;
-					using boxed_function_type = boxed_value;
-
-					using functions_type = std::map<string_view_type, std::shared_ptr<dispatch_function::functions_type>, std::less<>>;
-					using function_objects_type = std::map<string_view_type, function_object_type, std::less<>>;
-					using boxed_functions_type = std::map<string_view_type, boxed_function_type, std::less<>>;
-					using variables_type = engine_core::variables_type;
-
-					functions_type functions;
-					function_objects_type function_objects;
-					boxed_functions_type boxed_functions;
-					variables_type variables;
-					type_infos_type types;
-				};
-
-				// todo: The lifetime of our cached location may be longer than the actual object (such as returning an empty smart pointer and then automatically destroying it after use)
-				using function_cache_location_type = std::optional<state_type::functions_type::mapped_type>;
-
-			private:
-				std::reference_wrapper<string_pool_type> pool_;
-
-				state_type state_;
-				type_conversion_manager manager_;
-				std::reference_wrapper<parser_detail::parser_base> parser_;
-
-				utils::thread_storage<engine_stack> stack_;
-				mutable utils::threading::shared_mutex mutex_;
-				mutable function_cache_location_type method_missing_location_;
-
-				struct function_comparator
-				{
-					bool operator()(const proxy_function& lhs, const proxy_function& rhs) const
-					{
-						const auto real_lhs = std::dynamic_pointer_cast<const dynamic_proxy_function_base>(lhs);
-						const auto real_rhs = std::dynamic_pointer_cast<const dynamic_proxy_function_base>(rhs);
-
-						if (real_lhs && real_rhs)
-						{
-							if (real_lhs->get_guard()) { return real_rhs->get_guard() ? false : true; }
-							return false;
-						}
-
-						if (real_lhs && not real_rhs) { return false; }
-						if (not real_lhs && real_rhs) { return true; }
-
-						const auto& lhs_types = lhs->types();
-						const auto& rhs_types = rhs->types();
-
-						const auto boxed_type = make_type_info<boxed_value>();
-						const auto boxed_number_type = make_type_info<boxed_number>();
-
-						for (decltype(lhs_types.size()) i = 1; i < lhs_types.size() && i < rhs_types.size(); ++i)
-						{
-							const auto& lhs_ti = lhs_types[i];
-							const auto& rhs_ti = rhs_types[i];
-
-							if (lhs_ti.bare_equal(rhs_ti) && lhs_ti.is_const() == rhs_ti.is_const())
-							{
-								// The first two types are essentially the same, next iteration
-								continue;
-							}
-
-							if (lhs_ti.bare_equal(rhs_ti) && lhs_ti.is_const() && not rhs_ti.is_const())
-							{
-								// const is after non-const for the same type
-								return false;
-							}
-
-							if (lhs_ti.bare_equal(rhs_ti) && not lhs_ti.is_const()) { return true; }
-
-							if (lhs_ti.bare_equal(boxed_type))
-							{
-								// boxed_values are sorted last
-								return false;
-							}
-
-							if (rhs_ti.bare_equal(boxed_type)) { return true; }
-
-							if (lhs_ti.bare_equal(boxed_number_type)) { return false; }
-
-							if (rhs_ti.bare_equal(boxed_number_type)) { return true; }
-
-							// otherwise, we want to sort by typeid
-							return lhs_ti.before(rhs_ti);
-						}
-
-						return false;
-					}
-				};
-
-				/**
-				 * @return a function object (boxed_value wrapper) if it exists.
-				 * @throw std::range_error if it does not.
-				 * @warning does not obtain a mutex lock.
-				 */
-				[[nodiscard]] boxed_value& get_function_object(const string_view_type name, variable_cache_location_type& cache_location)
-				{
-					if (cache_location.has_value()) { return *cache_location; }
-
-					auto& functions = state_.boxed_functions;
-
-					if (const auto it = functions.find(name);
-						it != functions.end())
-					{
-						cache_location.emplace(std::ref(it->second));
-						return it->second;
-					}
-					throw std::range_error{"object not found"};
-				}
-
-			public:
-				explicit dispatcher(string_pool_type& pool, parser_detail::parser_base& p)
-					: pool_{pool},
-					  parser_{p} { stack_.construct(pool); }
-
-				/**
-				 * @brief casts an object while applying any dynamic_conversion available.
-				 * @throw bad_boxed_cast(std::bad_cast)
-				 */
-				template<typename T>
-				decltype(auto) boxed_cast(const boxed_value& object) const
-				{
-					const type_conversion_state state{manager_};
-					return gal::lang::boxed_cast<T>(object, &state);
-				}
-
-				/**
-				 * @brief Registers a new named type.
-				 */
-				void add_type_info(
-						const string_view_type name,
-						const gal_type_info& type
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					const auto formatted_name = std_format::format(type_name_format, name);
-
-					utils::threading::unique_lock lock{mutex_};
-
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								state_.variables.contains(formatted_name) ? "but it was already exist" : "add successed");
-							)
-
-					// inline add_global because we need add name into pool
-					if (not state_.variables.contains(formatted_name)) { state_.variables.emplace(pool_.get().append(formatted_name), const_var(type)); }
-					else { throw exception::name_conflict_error{name}; }
-
-					state_.types.emplace(pool_.get().append(name), type);
-				}
-
-				/**
-				 * @brief Add a new named proxy_function to the system.
-				 * @throw name_conflict_error if there's a function matching the given one being added.
-				 */
-				void add_function(
-						const string_view_type name,
-						state_type::function_type function
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					utils::threading::unique_lock lock{mutex_};
-
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								state_.functions.contains(name) ? "but it was already exist" : "add successed");
-							)
-
-					string_view_type pool_name = name;
-
-					auto function_object = [&pool_name, this]<typename Fun>(Fun&& func) -> state_type::function_object_type
-					{
-						auto& functions = state_.functions;
-
-						if (const auto it = functions.find(pool_name);
-							it != functions.end())
-						{
-							// name already registered
-
-							for (const auto& f: *it->second) { if (*func == *f) { throw exception::name_conflict_error{pool_name}; } }
-
-							auto copy_fs = *it->second;
-							// tightly control vec growth
-							copy_fs.reserve(copy_fs.size() + 1);
-							copy_fs.emplace_back(std::forward<Fun>(func));
-							std::ranges::stable_sort(copy_fs, function_comparator{});
-							it->second = std::make_shared<std::decay_t<decltype(copy_fs)>>(copy_fs);
-							return std::make_shared<dispatch_function>(std::move(copy_fs));
-						}
-						else
-						{
-							// need register name
-							// todo: name scope? borrow it?
-							pool_name = pool_.get().append(pool_name);
-
-							if (func->has_arithmetic_param())
-							{
-								// if the function is the only function, but it also contains
-								// arithmetic operators, we must wrap it in a dispatch function
-								// to allow for automatic arithmetic type conversions
-								std::decay_t<decltype(*it->second)> fs;
-								fs.reserve(1);
-								fs.emplace_back(std::forward<Fun>(func));
-								functions.emplace(pool_name, std::make_shared<std::decay_t<decltype(fs)>>(fs));
-								return std::make_shared<dispatch_function>(std::move(fs));
-							}
-							auto fs = std::make_shared<std::decay_t<decltype(*it->second)>>();
-							fs->emplace_back(func);
-							functions.emplace(pool_name, fs);
-							return func;
-						}
-					}(std::move(function));
-
-					state_.boxed_functions.insert_or_assign(pool_name, const_var(function_object));
-					state_.function_objects.insert_or_assign(pool_name, std::move(function_object));
-				}
-
-				/**
-				 * @brief Adds a new global (const) shared object, between all the threads.
-				 *
-				 * @throw global_mutable_error variable is not const
-				 */
-				boxed_value& add_global(
-						const string_view_type name,
-						boxed_value variable
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{}))",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column());
-							)
-
-					if (not variable.is_const()) { throw exception::global_mutable_error{name}; }
-
-					return add_global_mutable(name, std::move(variable) GAL_UTILS_DO_IF_DEBUG(, location));
-				}
-
-				/**
-				 * @brief Add a new conversion for up-casting to a base class.
-				 */
-				void add_type_conversion(
-						const type_conversion_manager::conversion_type& conversion
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						) { manager_.add(conversion GAL_UTILS_DO_IF_DEBUG(, location)); }
-
-				/**
-				 * @brief Adds a new global (non-const) shared object, between all the threads.
-				 */
-				boxed_value& add_global_mutable(
-						const string_view_type name,
-						boxed_value variable
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					utils::threading::unique_lock lock{mutex_};
-
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								state_.variables.contains(name) ? "but it was already exist" : "add successed");)
-
-					if (not state_.variables.contains(name)) { return state_.variables.emplace(pool_.get().append(name), std::move(variable)).first->second; }
-
-					throw exception::name_conflict_error{name};
-				}
-
-				/**
-				 * @brief Adds a new global (non-const) shared object, between all the threads.
-				 */
-				boxed_value& add_global_mutable_no_throw(
-						const string_view_type name,
-						boxed_value variable
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					utils::threading::unique_lock lock{mutex_};
-
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								state_.variables.contains(name) ? "but it was already exist" : "add successed");
-							)
-
-					if (const auto it = state_.variables.find(name);
-						it != state_.variables.end()) { return it->second; }
-
-					return state_.variables.emplace(pool_.get().append(name), std::move(variable)).first->second;
-				}
-
-				/**
-				 * @brief Updates an existing global shared object or adds a new global shared object if not found.
-				 */
-				void global_assign_or_insert(
-						const string_view_type name,
-						boxed_value variable
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					utils::threading::unique_lock lock{mutex_};
-
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								state_.variables.contains(name) ? "but it was already exist, assign it" : "add successed");
-							)
-
-					if (const auto it = state_.variables.find(name);
-						it != state_.variables.end()) { it->second = std::move(variable); }
-					else { state_.variables.emplace(pool_.get().append(name), std::move(variable)); }
-				}
-
-				/**
-				 * @brief Set the value of an object, by name. If the object
-				 * is not available in the current scope it is created.
-				 */
-				boxed_value& local_assign_or_insert(
-						const string_view_type name,
-						boxed_value variable
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						) { return stack_->add_variable(name, std::move(variable) GAL_UTILS_DO_IF_DEBUG(, location)); }
-
-				/**
-				 * @brief Add a object, if this variable already exists in the current scope, an exception will be thrown.
-				 */
-				boxed_value& local_insert_or_throw(
-						const string_view_type name,
-						boxed_value variable
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						) { return stack_->add_variable_no_check(name, std::move(variable) GAL_UTILS_DO_IF_DEBUG(, location)); }
-
-				/**
-				 * @brief Searches the current stack for an object of the given name
-				 * includes a special overload for the _ place holder object to
-				 * ensure that it is always in scope.
-				 */
-				[[nodiscard]] boxed_value& get_object(
-						const string_view_type name,
-						variable_cache_location_type& cache_location
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("{} variable '{}' from (file: '{}' function: '{}' position: ({}:{})), {}",
-								__func__,
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							utils::logger::info("searching object '{}' in '{}'th scope",
 								name,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								cache_location.has_value() ? "it was already cached" : "try to find it");)
-
-					if (cache_location.has_value()) { return *cache_location; }
-
-					GAL_UTILS_DO_IF_DEBUG(
-							int scope_no = 0;)
-
-					// Is it in the stack?
-					for (auto& stack_data = stack_->recent_stack_data();
-					     auto& scope: stack_data | std::views::reverse)
+								scope_no);)
+					if (const auto it = scope.find(name);
+						it != scope.end())
 					{
-						GAL_UTILS_DO_IF_DEBUG(
-								utils::logger::debug("searching variable '{}' in '{}'th scope",
+						GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+								utils::logger::info("found object '{}' in '{}'th scope",
 									name,
 									scope_no);)
 
-						if (auto it = scope.find(name);
-							it != scope.end())
-						{
-							GAL_UTILS_DO_IF_DEBUG(
-									utils::logger::debug("find variable '{}' in '{}'th scope",
-										name,
-										scope_no);)
-
-							cache_location.emplace(it->second);
-							return it->second;
-						}
-
-						GAL_UTILS_DO_IF_DEBUG(
-								++scope_no);
+						return it->second = std::move(object);
 					}
 
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::debug("can not find local variable '{}', try to find it in global scope or function scope", name);
-							)
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							++scope_no);
+				}
 
-					// Is the value we are looking for a global or function?
-					utils::threading::shared_lock lock{mutex_};
+				return add_object_no_check(name, std::move(object) GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, location));
+			}
 
-					if (const auto it = state_.variables.find(name);
-						it != state_.variables.end())
+			void push_params(
+					parameters_type&& params
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), with '{}' params.",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							params.size());)
+
+				auto& current_call = recent_call();
+				current_call.insert(current_call.end(), std::make_move_iterator(params.begin()), std::make_move_iterator(params.end()));
+			}
+
+			void push_params(
+					const parameters_view_type params
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' params from (file: '{}' function: '{}' position: ({}:{})), with '{}' params.",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							params.size());)
+
+				auto& current_call = recent_call();
+				current_call.insert(current_call.end(), params.begin(), params.end());
+			}
+
+			void pop_params(
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							const std::string_view reason = "no reason",
+							const std_source_location& location = std_source_location::current())) noexcept
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), clear recent call's params because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);)
+
+				recent_call().clear();
+			}
+
+			void emit_call(
+					const convertor_manager_state& state
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std::string_view reason = "emit a call",
+							const std_source_location& location = std_source_location::current()))
+			{
+				if (is_root()) { state->enable_conversion_saves(true); }
+				++depth;
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})) because '{}', current depth: '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason,
+							depth);)
+
+				push_params(state->exchange_conversion_saves());
+			}
+
+			void finish_call(
+					const convertor_manager_state& state
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std::string_view reason = "finish a call",
+							const std_source_location& location = std_source_location::current())) noexcept
+			{
+				--depth;
+				gal_assert(depth >= 0);
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})) because '{}', current depth: '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason,
+							depth);)
+
+				if (is_root())
+				{
+					pop_params(GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(reason, location));
+					state->enable_conversion_saves(false);
+				}
+			}
+		};
+
+		class dispatcher;
+
+		class dispatcher_state
+		{
+		public:
+			using dispatcher_type = std::reference_wrapper<dispatcher>;
+
+		private:
+			dispatcher_type d_;
+			convertor_manager_state state_;
+
+		public:
+			explicit dispatcher_state(dispatcher& d);
+
+			[[nodiscard]] dispatcher_type::type* operator->() const noexcept { return &d_.get(); }
+
+			[[nodiscard]] dispatcher_type::type& operator*() const noexcept { return d_.get(); }
+
+			[[nodiscard]] engine_stack& stack(GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(const std_source_location& location = std_source_location::current())) const noexcept;
+
+			[[nodiscard]] const convertor_manager_state& convertor_state() const noexcept { return state_; }
+		};
+
+		struct scoped_scope : utils::scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>
+		{
+			friend struct scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>;
+
+			explicit scoped_scope(
+					const dispatcher_state& s
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const string_view_type reason = "initial a new scoped_scope",
+							const std_source_location& location = std_source_location::current()))
+				: scoped_base{s}
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), create a scoped_scope because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);)
+			}
+
+		private:
+			void do_construct() const;
+			void do_destruct() const;
+		};
+
+		struct scoped_object_scope : scoped_scope
+		{
+			friend struct scoped_base<scoped_scope, std::reference_wrapper<const dispatcher_state>>;
+
+			scoped_object_scope(
+					const dispatcher_state& s,
+					boxed_value object
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							string_view_type reason = "initial a new scoped_object_scope",
+							const std_source_location& location = std_source_location::current()));
+		};
+
+		struct scoped_stack_scope : utils::scoped_base<scoped_stack_scope, std::reference_wrapper<const dispatcher_state>>
+		{
+			friend struct scoped_base<scoped_stack_scope, std::reference_wrapper<const dispatcher_state>>;
+
+			explicit scoped_stack_scope(
+					const dispatcher_state& state
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const string_view_type reason = "initial a new scoped_stack_scope",
+							const std_source_location& location = std_source_location::current()))
+				: scoped_base{state}
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), create a scoped_stack_scope because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);)
+			}
+
+		private:
+			void do_construct() const;
+			void do_destruct() const;
+		};
+
+		struct scoped_function_scope : utils::scoped_base<scoped_function_scope, std::reference_wrapper<const dispatcher_state>>
+		{
+			friend struct scoped_base<scoped_function_scope, std::reference_wrapper<const dispatcher_state>>;
+
+			explicit scoped_function_scope(
+					const dispatcher_state& state
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const string_view_type reason = "initial a new scoped_function_scope",
+							const std_source_location& location = std_source_location::current()))
+				: scoped_base{state}
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), create a scoped_function_scope because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							reason);)
+			}
+
+		private:
+			void do_construct() const;
+			void do_destruct() const;
+		};
+
+		/**
+		 * @brief Main class for the dispatch kits.
+		 * Handles management of the object stack, functions and registered types.
+		 */
+		class dispatcher
+		{
+			friend class dispatcher_state;
+
+		public:
+			using object_cache_location_type = std::optional<std::reference_wrapper<boxed_value>>;
+			// todo: The lifetime of our cached location may be longer than the actual object (such as returning an empty smart pointer and then automatically destroying it after use)
+			using function_cache_location_type = std::optional<std::shared_ptr<function_proxies_type>>;
+
+			using type_infos_type = engine_module::type_infos_type;
+
+			struct function_pack
+			{
+				std::shared_ptr<dispatch_function::functions_type> overloaded;
+				function_proxy_type dispatched;
+				boxed_value boxed;
+			};
+
+			using functions_type = std::map<string_view_type, function_pack, std::less<>>;
+
+			using objects_type = engine_module::objects_type;
+
+			struct state_type
+			{
+				type_infos_type types;
+				functions_type functions;
+				objects_type global_objects;
+			};
+
+		private:
+			std::reference_wrapper<string_pool_type> borrowed_pool_;
+
+			state_type state_;
+			convertor_manager convertor_manager_;
+			std::reference_wrapper<parser_detail::parser_base> parser_;
+
+			utils::thread_storage<engine_stack> stack_;
+			mutable utils::threading::shared_mutex mutex_;
+			mutable function_cache_location_type method_missing_location_;
+
+			struct function_comparator
+			{
+				bool operator()(const function_proxy_type& lhs, const function_proxy_type& rhs) const
+				{
+					const auto real_lhs = std::dynamic_pointer_cast<const dynamic_function_proxy_base>(lhs);
+					const auto real_rhs = std::dynamic_pointer_cast<const dynamic_function_proxy_base>(rhs);
+
+					if (real_lhs && real_rhs)
 					{
-						GAL_UTILS_DO_IF_DEBUG(
-								utils::logger::debug("find variable '{}' in global scope", name);)
+						if (real_lhs->get_guard()) { return real_rhs->get_guard() ? false : true; }
+						return false;
+					}
+
+					if (real_lhs && not real_rhs) { return false; }
+					if (not real_lhs && real_rhs) { return true; }
+
+					const auto lhs_types = lhs->type_view();
+					const auto rhs_types = rhs->type_view();
+
+					for (decltype(lhs_types.size()) i = 1; i < lhs_types.size() && i < rhs_types.size(); ++i)
+					{
+						const auto& lhs_type = lhs_types[static_cast<std::ranges::range_difference_t<decltype(lhs_types)>>(i)];
+						const auto& rhs_type = rhs_types[static_cast<std::ranges::range_difference_t<decltype(rhs_types)>>(i)];
+
+						if (lhs_type.bare_equal(rhs_type) && lhs_type.is_const() == rhs_type.is_const())
+						{
+							// The first two types are essentially the same, next iteration
+							continue;
+						}
+
+						if (lhs_type.bare_equal(rhs_type) && lhs_type.is_const() && not rhs_type.is_const())
+						{
+							// const is after non-const for the same type
+							return false;
+						}
+
+						if (lhs_type.bare_equal(rhs_type) && not lhs_type.is_const()) { return true; }
+
+						if (lhs_type.bare_equal(boxed_value::class_type()))
+						{
+							// boxed_values are sorted last
+							return false;
+						}
+
+						if (rhs_type.bare_equal(boxed_value::class_type())) { return true; }
+
+						if (lhs_type.bare_equal(boxed_number::class_type())) { return false; }
+
+						if (rhs_type.bare_equal(boxed_number::class_type())) { return true; }
+
+						// otherwise, we want to sort by typeid
+						return lhs_type.before(rhs_type);
+					}
+
+					return false;
+				}
+			};
+
+		public:
+			explicit dispatcher(string_pool_type& pool, parser_detail::parser_base& p)
+				: borrowed_pool_{pool},
+				  parser_{p} { stack_.construct(pool); }
+
+			void takeover_pool(string_pool_type&& pool) const { borrowed_pool_.get().takeover(std::move(pool)); }
+
+			/**
+			 * @brief casts an object while applying any dynamic_conversion available.
+			 * @throw bad_boxed_cast(std::bad_cast)
+			 */
+			template<typename T>
+			decltype(auto) boxed_cast(const boxed_value& object) const
+			{
+				const convertor_manager_state state{convertor_manager_};
+				return gal::lang::boxed_cast<T>(object, &state);
+			}
+
+			/**
+			 * @brief Registers a new named type.
+			 */
+			void add_type_info(
+					const string_view_type name,
+					const gal_type_info& type
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				utils::threading::unique_lock lock{mutex_};
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::debug("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add type_info '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							state_.types.contains(name) ? "but it was already exist" : "add successed");)
+
+				if (const auto it = state_.types.find(name);
+					it != state_.types.end()) { throw exception::name_conflict_error{name}; }
+				else { state_.types.emplace_hint(it, borrowed_pool_.get().append(name), type); }
+			}
+
+			/**
+			 * @brief Add a new named proxy_function to the system.
+			 *
+			 * @throw exception::name_conflict_error if there's a function matching the given one being added.
+			 */
+			void add_function(
+					const string_view_type name,
+					function_proxy_type function
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				utils::threading::unique_lock lock{mutex_};
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a function '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							state_.functions.contains(name) ? "but it was already exist" : "add successed");)
+
+				string_view_type pool_name = name;
+
+				auto function_object = [&pool_name, this]<typename Fun>(Fun&& func) -> function_proxy_type
+				{
+					auto& functions = state_.functions;
+
+					if (const auto it = functions.find(pool_name);
+						it != functions.end())
+					{
+						// name already registered
+						if (std::ranges::any_of(*it->second.overloaded, [&func](const auto& f) { return *func == *f; })) { throw exception::name_conflict_error{pool_name}; }
+
+						auto copy_fs = *it->second.overloaded;
+						// tightly control vec growth
+						copy_fs.reserve(1 + copy_fs.size());
+						copy_fs.emplace_back(std::forward<Fun>(func));
+						std::ranges::stable_sort(copy_fs, function_comparator{});
+
+						it->second.overloaded = std::make_shared<std::decay_t<decltype(copy_fs)>>(copy_fs);
+						return std::make_shared<dispatch_function>(std::move(copy_fs));
+					}
+					else
+					{
+						// need register name
+						pool_name = borrowed_pool_.get().append(pool_name);
+
+						if (func->has_arithmetic_param())
+						{
+							// if the function is the only function, but it also contains
+							// arithmetic operators, we must wrap it in a dispatch function
+							// to allow for automatic arithmetic type conversions
+							std::decay_t<decltype(*it->second.overloaded)> fs;
+							fs.reserve(1);
+							fs.emplace_back(std::forward<Fun>(func));
+							functions.emplace(pool_name, std::make_shared<std::decay_t<decltype(fs)>>(fs));
+							return std::make_shared<dispatch_function>(std::move(fs));
+						}
+						auto fs = std::make_shared<std::decay_t<decltype(*it->second.overloaded)>>();
+						fs->emplace_back(func);
+						functions.emplace(pool_name, fs);
+						return func;
+					}
+				}(std::move(function));
+
+				auto& [_, dispatched, boxed] = state_.functions[pool_name];
+				boxed = const_var(function_object);
+				dispatched = std::move(function_object);
+			}
+
+			/**
+			 * @brief Adds a new global (const) shared object, between all the threads.
+			 *
+			 * @throw global_mutable_error object is not const
+			 */
+			boxed_value& add_global(
+					const string_view_type name,
+					boxed_value object
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add an global object '{}', {}.",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							not object.is_const() ? "but it is not a const object" : "const test passed, forward to add_global_mutable");)
+
+				if (not object.is_const()) { throw exception::global_mutable_error{name}; }
+
+				return add_global_mutable(name, std::move(object) GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, location));
+			}
+
+			/**
+			 * @brief Add a new convertor for up-casting to a base class.
+			 */
+			void add_convertor(
+					const convertor_type& conversion
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current())) { convertor_manager_.add_convertor(conversion GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, location)); }
+
+			/**
+			 * @brief Adds a new global (non-const) shared object, between all the threads.
+			 */
+			boxed_value& add_global_mutable(
+					const string_view_type name,
+					boxed_value object
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				utils::threading::unique_lock lock{mutex_};
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add an global {} object '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							object.is_const() ? "const" : "mutable",
+							name,
+							state_.global_objects.contains(name) ? "but it was already exist" : "add successed");)
+
+				if (const auto it = state_.global_objects.find(name);
+					it == state_.global_objects.end()) { return state_.global_objects.emplace_hint(it, borrowed_pool_.get().append(name), std::move(object))->second; }
+
+				throw exception::name_conflict_error{name};
+			}
+
+			/**
+			 * @brief Adds a new global (non-const) shared object, between all the threads.
+			 */
+			boxed_value& add_global_mutable_no_throw(
+					const string_view_type name,
+					boxed_value object
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				utils::threading::unique_lock lock{mutex_};
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add an global {} object '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							object.is_const() ? "const" : "mutable",
+							name,
+							state_.global_objects.contains(name) ? "but it was already exist" : "add successed");)
+
+				if (const auto it = state_.global_objects.find(name);
+					it != state_.global_objects.end()) { return it->second; }
+				else { return state_.global_objects.emplace_hint(it, borrowed_pool_.get().append(name), std::move(object))->second; }
+			}
+
+			/**
+			 * @brief Updates an existing global shared object or adds a new global shared object if not found.
+			 */
+			boxed_value& add_global_or_assign(
+					const string_view_type name,
+					boxed_value object
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				utils::threading::unique_lock lock{mutex_};
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add an global {} object '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							object.is_const() ? "const" : "mutable",
+							name,
+							state_.global_objects.contains(name) ? "but it was already exist, assign it" : "add successed");)
+
+				if (const auto it = state_.global_objects.find(name);
+					it != state_.global_objects.end()) { return it->second = std::move(object); }
+				else { return state_.global_objects.emplace_hint(it, borrowed_pool_.get().append(name), std::move(object))->second; }
+			}
+
+			/**
+			 * @brief Set the value of an object, by name. If the object
+			 * is not available in the current scope it is created.
+			 */
+			boxed_value& add_local_or_assign(
+					const string_view_type name,
+					boxed_value object
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current())) { return stack_->add_object(name, std::move(object) GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, location)); }
+
+			/**
+			 * @brief Add a object, if this variable already exists in the current scope, an exception will be thrown.
+			 *
+			 * @throw exception::name_conflict_error object already exist.
+			 */
+			boxed_value& add_local_or_throw(
+					const string_view_type name,
+					boxed_value object
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current())) { return stack_->add_object_no_check(name, std::move(object) GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, location)); }
+
+			/**
+				 * @brief Returns the type info for a named type.
+				 * @throw std::range_error
+				 */
+			[[nodiscard]] gal_type_info get_type_info(
+					const string_view_type name,
+					const bool throw_if_not_exist = true
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current())) const
+			{
+				utils::threading::shared_lock lock{mutex_};
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to get type_info '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							not state_.types.contains(name) ? "but it was not exist" : "found it");)
+
+				if (const auto it = state_.types.find(name);
+					it != state_.types.end()) { return it->second; }
+
+				if (throw_if_not_exist) { throw std::range_error{"type_info not exist"}; }
+				return {};
+			}
+
+			/**
+			 * @brief Searches the current stack for an object of the given name
+			 * includes a special overload for the _ place holder object to
+			 * ensure that it is always in scope.
+			 *
+			 * @throw std::range_error object not found.
+			 */
+			[[nodiscard]] boxed_value& get_object(
+					const string_view_type name,
+					object_cache_location_type& cache_location
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to get object '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							cache_location.has_value() ? "it was already cached" : "try to find it");)
+
+				if (cache_location.has_value()) { return *cache_location; }
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						int scope_no = 0;)
+
+				// Is it in the stack?
+				for (auto& stack = stack_->recent_stack();
+				     auto& scope: stack | std::views::reverse)
+				{
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							utils::logger::info("searching object '{}' in '{}'th scope",
+								name,
+								scope_no);)
+
+					if (auto it = scope.find(name);
+						it != scope.end())
+					{
+						GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+								utils::logger::info("found object '{}' in '{}'th scope",
+									name,
+									scope_no);)
 
 						cache_location.emplace(it->second);
 						return it->second;
 					}
 
-					// no? is it a function object?
-					return get_function_object(name, cache_location);
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							++scope_no);
 				}
 
-				/**
-				 * @brief Returns the type info for a named type.
-				 * @throw std::range_error
-				 */
-				[[nodiscard]] gal_type_info get_type_info(
-						const string_view_type name,
-						const bool throw_if_not_exist = true
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						) const
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("can not find local variable '{}', try to find it in global scope or function scope", name);)
+
+				// Is the value we are looking for a global?
+				utils::threading::shared_lock lock{mutex_};
+
+				if (const auto it = state_.global_objects.find(name);
+					it != state_.global_objects.end())
 				{
-					utils::threading::shared_lock lock{mutex_};
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							utils::logger::info("find variable '{}' in global scope", name);
+							)
 
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								not state_.types.contains(name) ? "but it was not exist" : "found it");)
-
-					if (const auto it = state_.types.find(name);
-						it != state_.types.end()) { return it->second; }
-
-					if (throw_if_not_exist) { throw std::range_error{"type_info not exist"}; }
-					return {};
+					cache_location.emplace(it->second);
+					return it->second;
 				}
 
-				/**
-				 * @brief return true if the object matches the registered type by name.
-				 */
-				[[nodiscard]] bool is_type_match(const string_view_type name, const boxed_value& object) const noexcept
-				{
-					try { if (get_type_info(name).bare_equal(object.type_info())) { return true; } }
-					catch (const std::range_error&) { }
+				// no? is it a function object?
+				return get_function_object(name, cache_location);
+			}
 
-					try
+		private:
+			/**
+			 * @return a function object (boxed_value wrapper) if it exists.
+			 * @throw std::range_error if it does not.
+			 * @warning does not obtain a mutex lock.
+			 */
+			[[nodiscard]] boxed_value& get_function_object(const string_view_type name, object_cache_location_type& cache_location)
+			{
+				auto& functions = state_.functions;
+
+				if (const auto it = functions.find(name);
+					it != functions.end())
+				{
+					cache_location.emplace(std::ref(it->second.boxed));
+					return it->second.boxed;
+				}
+				throw std::range_error{"object not found"};
+			}
+
+		public:
+			/**
+			 * @brief Return true if a function exists.
+			 */
+			[[nodiscard]] bool has_function(const string_view_type name) const
+			{
+				utils::threading::shared_lock lock{mutex_};
+
+				return state_.functions.contains(name);
+			}
+
+			/**
+			 * @brief Return a function by name.
+			 *
+			 * @note Returns a valid pointer (instead of a null pointer) even if not found.
+			 *
+			 * @todo Do we really need return a valid pointer?
+			 */
+			[[nodiscard]] auto get_function(
+					const string_view_type name
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current())) const
+			{
+				utils::threading::shared_lock lock{mutex_};
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to get function '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							not state_.functions.contains(name) ? "but it was not exist" : "found it");)
+
+				const auto& functions = state_.functions;
+				if (const auto it = functions.find(name); it != functions.end()) { return it->second.overloaded; }
+				else { return std::make_shared<std::decay_t<decltype(it->second.overloaded)>::element_type>(); }
+			}
+
+			[[nodiscard]] auto get_method_missing_functions() const
+			{
+				if (method_missing_location_.has_value()) { return *method_missing_location_; }
+
+				auto result = get_function(dynamic_object::missing_method_name);
+				method_missing_location_.emplace(result);
+				return result;
+			}
+
+			/**
+			 * @brief Returns true if a call can be made that consists of the first
+			 * parameter (the function) with the remaining parameters as its arguments.
+			 */
+			[[nodiscard]] boxed_value invokable(const parameters_view_type params) const
+			{
+				if (params.empty()) { throw exception::arity_error{1, static_cast<exception::arity_error::size_type>(params.size())}; }
+
+				const auto& fun = this->boxed_cast<const_function_proxy_type>(params.front());
+				const convertor_manager_state state{convertor_manager_};
+				// skip the first one
+				return const_var(fun->match(params.sub_list(1), state));
+			}
+
+			/**
+			 * @brief return true if the object matches the registered type by name.
+			 */
+			[[nodiscard]] bool is_typeof(const string_view_type name, const boxed_value& object) const noexcept
+			{
+				try { if (get_type_info(name).bare_equal(object.type_info())) { return true; } }
+				catch (const std::range_error&) { }
+
+				try
+				{
+					const auto& o = boxed_cast<const dynamic_object&>(object);
+					return o.nameof() == name;
+				}
+				catch (const std::bad_cast&) { }
+
+				return false;
+			}
+
+			/**
+			 * @brief Returns the registered name of a known type_info object
+			 * compares the "bare_type_info" for the broadest possible match.
+			 */
+			[[nodiscard]] string_view_type nameof(const gal_type_info& type) const
+			{
+				utils::threading::shared_lock lock{mutex_};
+
+				if (const auto it = std::ranges::find_if(
+							state_.types,
+							[&type](const auto& t) { return t.bare_equal(type); },
+							[](const auto& pair) { return pair.second; });
+					it != state_.types.end()) { return it->first; }
+
+				return type.bare_name();
+			}
+
+			/**
+			 * @brief Returns the registered name of a known type_info object
+			 * compares the "bare_type_info" for the broadest possible match.
+			 */
+			[[nodiscard]] string_view_type nameof(const boxed_value& object) const { return nameof(object.type_info()); }
+
+			void emit_call(
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							const std::string_view reason = "emit a call",
+							const std_source_location& location = std_source_location::current())) { stack_->emit_call(convertor_manager_state{convertor_manager_} GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, reason, location)); }
+
+			void finish_call(
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							const std::string_view reason = "finish a call",
+							const std_source_location& location = std_source_location::current())) noexcept { stack_->finish_call(convertor_manager_state{convertor_manager_} GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, reason, location)); }
+
+			[[nodiscard]] bool is_member_function_call(
+					const function_proxies_view_type functions,
+					const parameters_view_type params,
+					const bool has_param) const noexcept
+			{
+				if (not has_param || params.empty()) { return false; }
+
+				return std::ranges::any_of(
+						functions,
+						[&params, cms = convertor_manager_state{convertor_manager_}](const auto& function) { return function->is_member_function() && function->is_first_type_match(params.front(), cms); });
+			}
+
+			boxed_value call_member_function(
+					const string_view_type name,
+					function_cache_location_type& cache_location,
+					const parameters_view_type params,
+					const bool has_params
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current()))
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to call member function '{}' with '{}' params",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							params.size());)
+
+				gal_assert(not cache_location.has_value());
+				const auto& functions = get_function(name);
+				cache_location.emplace(functions);
+
+				const convertor_manager_state cms{convertor_manager_};
+
+				const auto do_member_function_call = [this, cms](
+						const function_proxy_base::arity_size_type num_params,
+						const parameters_view_type ps,
+						const auto& fs) -> boxed_value
+				{
+					const auto member_params = ps.front_sub_list(num_params);
+					auto object = dispatch(fs, member_params, cms);
+					if (num_params < static_cast<function_proxy_base::arity_size_type>(ps.size()) || object.type_info().bare_equal(function_proxy_base::class_type()))
 					{
-						const auto& o = boxed_cast<const dynamic_object&>(object);
-						return o.type_name() == name;
-					}
-					catch (const std::bad_cast&) { }
+						const dispatcher_state state{*this};
+						scoped_object_scope object_scope{state, ps.front()};
 
-					return false;
-				}
-
-				/**
-				 * @brief Returns the registered name of a known type_info object
-				 * compares the "bare_type_info" for the broadest possible match.
-				 */
-				[[nodiscard]] string_view_type get_type_name(const gal_type_info& type) const
-				{
-					utils::threading::shared_lock lock{mutex_};
-
-					if (const auto it = std::ranges::find_if(
-								state_.types,
-								[&type](const auto& t) { return t.bare_equal(type); },
-								[](const auto& pair) { return pair.second; });
-						it != state_.types.end()) { return it->first; }
-
-					return type.bare_name();
-				}
-
-				[[nodiscard]] string_view_type get_type_name(const boxed_value& object) const { return get_type_name(object.type_info()); }
-
-				/**
-				 * @brief Return true if a function exists.
-				 */
-				[[nodiscard]] bool has_function(const string_view_type name) const
-				{
-					utils::threading::shared_lock lock{mutex_};
-
-					return state_.functions.contains(name);
-				}
-
-				/**
-				 * @brief Return a function by name.
-				 *
-				 * @note Returns a valid pointer (instead of a null pointer) even if not found.
-				 *
-				 * @todo Do we really need return a valid pointer?
-				 */
-				[[nodiscard]] state_type::functions_type::mapped_type get_function(
-						const string_view_type name
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						) const
-				{
-					utils::threading::shared_lock lock{mutex_};
-
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), {}",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								not state_.functions.contains(name) ? "but it was not exist" : "found it");)
-
-					const auto& functions = state_.functions;
-					if (const auto it = functions.find(name);
-						it != functions.end()) { return it->second; }
-					return std::make_shared<state_type::functions_type::mapped_type::element_type>();
-				}
-
-				[[nodiscard]] state_type::functions_type::mapped_type get_method_missing_functions() const
-				{
-					if (method_missing_location_.has_value()) { return *method_missing_location_; }
-
-					auto result = get_function(lang::method_missing_name::value);
-					method_missing_location_.emplace(result);
-					return result;
-				}
-
-				/**
-				 * @return a function object (boxed_value wrapper) if it exists.
-				 * @throw std::range_error if it does not.
-				 */
-				[[nodiscard]] boxed_value& get_function_object(const string_view_type name)
-				{
-					utils::threading::shared_lock lock{mutex_};
-
-					variable_cache_location_type dummy{};
-					return get_function_object(name, dummy);
-				}
-
-				/**
-				 * @brief Get a map of all objects that can be seen from the current scope in a scripting context.
-				 */
-				[[nodiscard]] state_type::variables_type copy_scripting_objects() const
-				{
-					// We don't want the current context, but one up if it exists
-					const auto& stack = (stack_->stack.size() == 1) ? stack_->recent_stack_data() : stack_->recent_parent_stack_data();
-
-					state_type::variables_type ret{};
-
-					// note: map insert doesn't overwrite existing values, which is why this works
-					std::ranges::for_each(
-							stack | std::views::reverse,
-							[&ret](const auto& scope) { ret.insert(scope.begin(), scope.end()); });
-
-					// add the global values
-					utils::threading::shared_lock lock{mutex_};
-					ret.insert(state_.variables.begin(), state_.variables.end());
-
-					return ret;
-				}
-
-				/**
-				 * @brief Get a map of all objects that can be seen from the current scope in a scripting context.
-				 *
-				 * todo: more effective way
-				 */
-				[[nodiscard]] auto get_scripting_objects() const
-				{
-					using return_type = std::map<string_view_type, std::reference_wrapper<const boxed_value>, std::less<>>;
-
-					// We don't want the current context, but one up if it exists
-					const auto& stack = (stack_->stack.size() == 1) ? stack_->recent_stack_data() : stack_->recent_parent_stack_data();
-
-					return_type ret{};
-
-					// note: map insert doesn't overwrite existing values, which is why this works
-					std::ranges::for_each(
-							stack | std::views::reverse,
-							[&ret](const auto& scope)
-							{
-								std::ranges::for_each(
-										scope,
-										[&ret](const auto& pair) { ret.emplace(pair.first, std::cref(pair.second)); });
-							});
-
-					// add the global values
-					utils::threading::shared_lock lock{mutex_};
-					std::ranges::for_each(
-							state_.variables,
-							[&ret](const auto& pair) { ret.emplace(pair.first, std::cref(pair.second)); });
-
-					return ret;
-				}
-
-				/**
-				 * @brief Get a map of all registered functions.
-				 */
-				[[nodiscard]] auto copy_functions() const
-				{
-					utils::threading::shared_lock lock{mutex_};
-
-					const auto& functions = state_.functions;
-
-					// todo: return type?
-					std::map<string_view_type, state_type::function_type> ret{};
-
-					std::ranges::for_each(
-							functions,
-							[&ret](const auto& pair)
-							{
-								std::ranges::for_each(
-										*pair.second,
-										[&ret, &pair](const auto& function) { ret.emplace(pair.first, function); });
-							});
-
-					return ret;
-				}
-
-				/**
-				 * @brief Get a map of all functions that can be seen from a scripting context.
-				 */
-				[[nodiscard]] state_type::variables_type copy_function_objects() const
-				{
-					const auto& functions = state_.function_objects;
-
-					state_type::variables_type ret{};
-
-					std::ranges::for_each(
-							functions,
-							[&ret](const auto& function) { ret.emplace(function.first, const_var(function.second)); });
-
-					return ret;
-				}
-
-				/**
-				 * @brief Return all registered types.
-				 */
-				template<template<typename...> typename Container, typename... AnyOther>
-					requires std::is_constructible_v<Container<type_infos_type::value_type, AnyOther...>, type_infos_type::const_iterator, type_infos_type::const_iterator>
-				[[nodiscard]] Container<type_infos_type::value_type, AnyOther...> copy_types() const
-				{
-					utils::threading::shared_lock lock{mutex_};
-					return Container<type_infos_type::value_type, AnyOther...>{state_.types.begin(), state_.types.end()};
-				}
-
-				[[nodiscard]] state_type copy_state() const
-				{
-					utils::threading::shared_lock lock{mutex_};
-					return state_;
-				}
-
-				void swap_state(state_type& other) noexcept
-				{
-					using std::swap;
-					swap(state_, other);
-				}
-
-				void set_state(const state_type& state)
-				{
-					utils::threading::unique_lock lock{mutex_};
-					state_ = state;
-				}
-
-				/**
-				 * @brief Returns true if a call can be made that consists of the first
-				 * parameter (the function) with the remaining parameters as its arguments.
-				 */
-				[[nodiscard]] boxed_value invokable(const parameters_view_type params) const
-				{
-					if (params.empty()) { throw exception::arity_error{1, static_cast<exception::arity_error::size_type>(params.size())}; }
-
-					const auto& fun = this->boxed_cast<immutable_proxy_function>(params.front());
-					const type_conversion_state state{manager_};
-
-					return const_var(fun->match(params.sub_list(1), state));
-				}
-
-				void emit_call(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						) { stack_->emit_call(manager_.get_conversion_saves() GAL_UTILS_DO_IF_DEBUG(, reason, location)); }
-
-				void finish_call(
-						GAL_UTILS_DO_IF_DEBUG(
-								const std::string_view reason = "no reason",
-								const std_source_location& location = std_source_location::current())
-						) noexcept { stack_->finish_call(manager_.get_conversion_saves() GAL_UTILS_DO_IF_DEBUG(, reason, location)); }
-
-				static bool is_member_function_call(
-						const dispatch_function::functions_type& functions,
-						const parameters_view_type params,
-						const bool has_param,
-						const type_conversion_state& conversion) noexcept
-				{
-					if (not has_param || params.empty()) { return false; }
-
-					return std::ranges::any_of(
-							functions,
-							[&params, &conversion](const auto& function) { return function->is_member_function() && function->is_first_type_match(params.front(), conversion); });
-				}
-
-				[[nodiscard]] boxed_value call_member_function(
-						const string_view_type name,
-						function_cache_location_type& cache_location,
-						const parameters_view_type params,
-						const bool has_params,
-						const type_conversion_state& conversion
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						)
-				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), function '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								name);)
-
-					gal_assert(not cache_location.has_value());
-					const auto& functions = get_function(name GAL_UTILS_DO_IF_DEBUG(, location));
-					cache_location.emplace(functions);
-
-					const auto do_member_function_call = [this, &conversion](
-							const exception::arity_error::size_type num_params,
-							const parameters_view_type ps,
-							const dispatch_function::functions_type& fs) -> boxed_value
-					{
-						const auto member_params = ps.front_sub_list(num_params);
-						auto object = dispatch(fs, member_params, conversion);
-						if (num_params < static_cast<exception::arity_error::size_type>(ps.size()) || object.type_info().bare_equal(make_type_info<proxy_function_base>()))
-						{
-							const dispatcher_state state{*this};
-							scoped_object_scope object_scope{state, ps.front()};
-
-							try
-							{
-								const auto function = boxed_cast<const proxy_function_base*>(object);
-								try { return (*function)(ps.sub_list(num_params), conversion); }
-								catch (const exception::bad_boxed_cast&) { }
-								catch (const exception::arity_error&) { }
-								catch (const exception::guard_error&) { }
-								throw exception::dispatch_error{
-										ps.sub_list(num_params).to<parameters_type>(),
-										{boxed_cast<immutable_proxy_function>(object)}};
-							}
-							catch (const exception::bad_boxed_cast&)
-							{
-								// unable to convert bv into a proxy_function_base
-								throw exception::dispatch_error{
-										ps.sub_list(num_params).to<parameters_type>(),
-										{fs.begin(), fs.end()}};
-							}
-						}
-						return object;
-					};
-
-					if (is_member_function_call(*functions, params, has_params, conversion)) { return do_member_function_call(1, params, *functions); }
-
-					std::exception_ptr current_exception;
-
-					if (not functions->empty())
-					{
-						try { return dispatch(*functions, params, conversion); }
-						catch (exception::dispatch_error&) { current_exception = std::current_exception(); }
-					}
-
-					// If we get here we know that either there was no method with that name,
-					// or there was no matching method
-
-					const auto missing_functions = [this, params, &conversion]
-					{
-						dispatch_function::functions_type ret{};
-
-						const auto mmf = get_method_missing_functions();
-
-						std::ranges::for_each(
-								*mmf,
-								[&ret, params, &conversion](const auto& f) { if (f->is_first_type_match(params.front(), conversion)) { ret.push_back(f); } });
-
-						return ret;
-					}();
-
-					const bool is_no_param = std::ranges::all_of(
-							missing_functions,
-							[](const auto& f) { return f->get_arity() == 2; });
-
-					if (not missing_functions.empty())
-					{
 						try
 						{
-							if (is_no_param)
-							{
-								auto tmp_params = params.to<parameters_type>();
-								tmp_params.insert(tmp_params.begin() + 1, var(name));
-								return do_member_function_call(2, parameters_view_type{tmp_params}, missing_functions);
-							}
-							const std::array tmp_params{params.front(), var(name), var(parameters_type{params.begin() + 1, params.end()})};
-							return dispatch(missing_functions, parameters_view_type{tmp_params}, conversion);
-						}
-						catch (const exception::option_explicit_error& e)
-						{
+							const auto function = boxed_cast<const function_proxy_base*>(object);
+							try { return (*function)(ps.sub_list(num_params), cms); }
+							catch (const exception::bad_boxed_cast&) { }
+							catch (const exception::arity_error&) { }
+							catch (const exception::guard_error&) { }
 							throw exception::dispatch_error{
-									params.to<parameters_type>(),
-									{functions->begin(), functions->end()},
-									e.what()};
+									ps.sub_list(num_params).to<parameters_type>(),
+									{boxed_cast<const_function_proxy_type>(object)}};
+						}
+						catch (const exception::bad_boxed_cast&)
+						{
+							// unable to convert bv into a proxy_function_base
+							throw exception::dispatch_error{
+									ps.sub_list(num_params).to<parameters_type>(),
+									{fs.begin(), fs.end()}};
 						}
 					}
+					return object;
+				};
 
-					// If we get all the way down here we know there was no "method_missing" method at all.
-					if (current_exception) { std::rethrow_exception(current_exception); }
-					throw exception::dispatch_error{
-							params.to<parameters_type>(),
-							{functions->begin(), functions->end()}};
+				if (is_member_function_call(*functions, params, has_params)) { return do_member_function_call(1, params, *functions); }
+
+				std::exception_ptr current_exception;
+
+				if (not functions->empty())
+				{
+					try { return dispatch(*functions, params, cms); }
+					catch (exception::dispatch_error&) { current_exception = std::current_exception(); }
 				}
 
-				[[nodiscard]] boxed_value call_function(
-						const string_view_type name,
-						function_cache_location_type& cache_location,
-						const parameters_view_type params,
-						const type_conversion_state& conversion
-						GAL_UTILS_DO_IF_DEBUG(
-								,
-								const std_source_location& location = std_source_location::current())
-						) const
+				// If we get here we know that either there was no method with that name,
+				// or there was no matching method
+
+				const auto missing_functions = [this, params, &cms]
 				{
-					GAL_UTILS_DO_IF_DEBUG(
-							utils::logger::info("{} from (file: '{}' function: '{}' position: ({}:{})), function '{}'",
-								__func__,
-								location.file_name(),
-								location.function_name(),
-								location.line(),
-								location.column(),
-								name);)
+					decltype(get_method_missing_functions())::element_type ret{};
 
-					if (cache_location.has_value()) { return dispatch(**cache_location, params, conversion); }
+					const auto mmf = get_method_missing_functions();
 
-					auto functions = get_function(name GAL_UTILS_DO_IF_DEBUG(, location));
-					cache_location.emplace(functions);
+					std::ranges::for_each(
+							*mmf,
+							[&ret, params, &cms](const auto& f) { if (f->is_first_type_match(params.front(), cms)) { ret.push_back(f); } });
 
-					return dispatch(*functions, params, conversion);
-				}
-
-				/**
-				 * @brief Dump type info.
-				 */
-				void dump_type_to(const gal_type_info& type, string_type& dest) const
-				{
-					std_format::format_to(
-							std::back_inserter(dest),
-							"[{}]{}",
-							type.is_const() ? "immutable" : "mutable",
-							get_type_name(type));
-				}
-
-				/**
-				 * @brief Dump type info.
-				 */
-				[[nodiscard]] string_type dump_type(const gal_type_info& type) const
-				{
-					string_type ret{};
-					dump_type_to(type, ret);
 					return ret;
-				}
+				}();
 
-				/**
-				 * @brief Dump object info.
-				 */
-				void dump_object_to(const boxed_value& object, string_type& dest) const { dump_type_to(object.type_info(), dest); }
+				const bool is_no_param = std::ranges::all_of(
+						missing_functions,
+						[](const auto& f) { return f->arity_size() == 2; });
 
-				/**
-				 * @brief Dump object info.
-				 */
-				[[nodiscard]] string_type dump_object(const boxed_value& object) const { return dump_type(object.type_info()); }
-
-				void dump_function_to(const string_view_type name, const state_type::function_objects_type::mapped_type& function, string_type& dest) const
+				if (not missing_functions.empty())
 				{
-					const auto& types = function->types();
-
-					dest.reserve(dest.size() + types.size() * 64);
-
-					dump_type_to(types.front(), dest);
-
-					dest.append(" ").append(name).append("(");
-					for (auto it = types.begin() + 1; it != types.end(); ++it)
+					try
 					{
-						dump_type_to(*it, dest);
-
-						if (it != types.end()) { dest.append(", "); }
+						if (is_no_param)
+						{
+							auto tmp_params = params.to<parameters_type>();
+							tmp_params.insert(tmp_params.begin() + 1, var(name));
+							return do_member_function_call(2, tmp_params, missing_functions);
+						}
+						const std::array tmp_params{params.front(), var(name), var(parameters_type{params.begin() + 1, params.end()})};
+						return dispatch(missing_functions, tmp_params, cms);
 					}
-					dest.append(")");
-				}
-
-				[[nodiscard]] string_type dump_function(const string_view_type name, const state_type::function_objects_type::mapped_type& function) const
-				{
-					string_type ret{};
-					dump_function_to(name, function, ret);
-					return ret;
-				}
-
-				void dump_function_to(const state_type::function_objects_type::value_type& pair, string_type& dest) const { dump_function_to(pair.first, pair.second, dest); }
-
-				[[nodiscard]] string_type dump_function(const state_type::function_objects_type::value_type& pair) const
-				{
-					string_type ret{};
-					dump_function_to(pair, ret);
-					return ret;
-				}
-
-				void dump_everything_to(string_type& dest) const
-				{
-					dest.append("Registered type: \n");
-
-					// todo: copy or lock?
+					catch (const std::exception& e)
 					{
-						// const auto types = copy_types<std::vector>();
-						utils::threading::shared_lock lock{mutex_};
-						std::ranges::for_each(
-								state_.types,
-								[&dest](const auto& pair) { dest.append(pair.first).append(": ").append(pair.second.bare_name()).append("\n"); });
+						throw exception::dispatch_error{
+								params.to<parameters_type>(),
+								{functions->begin(), functions->end()},
+								e.what()};
 					}
-					dest.push_back('\n');
-
-					// todo: copy or lock?
-					{
-						// const auto functions = copy_functions();
-						utils::threading::shared_lock lock{mutex_};
-						std::ranges::for_each(
-								state_.functions,
-								[&dest, this](const auto& pair)
-								{
-									std::ranges::for_each(
-											*pair.second,
-											[&dest, &pair, this](const auto& function) { dump_function_to(pair.first, function, dest); });
-								});
-					}
-					dest.push_back('\n');
 				}
 
-				[[nodiscard]] string_type dump_everything() const
-				{
-					string_type ret{};
-					dump_everything_to(ret);
-					return ret;
-				}
+				// If we get all the way down here we know there was no "method_missing" method at all.
+				if (current_exception) { std::rethrow_exception(current_exception); }
+				throw exception::dispatch_error{
+						params.to<parameters_type>(),
+						{functions->begin(), functions->end()}};
+			}
 
-				[[nodiscard]] const type_conversion_manager& get_conversion_manager() const noexcept { return manager_; }
-
-				[[nodiscard]] parser_detail::parser_base& get_parser() const noexcept { return parser_.get(); }
-			};
-
-			inline dispatcher_state::dispatcher_state(dispatcher& d)
-				: d_{d},
-				  conversion_{d.manager_} {}
-
-			inline auto& dispatcher_state::stack() const noexcept { return *this->operator*().stack_; }
-
-			inline boxed_value& dispatcher_state::add_object_no_check(
+			boxed_value call_function(
 					const string_view_type name,
-					boxed_value object
-					GAL_UTILS_DO_IF_DEBUG(
+					function_cache_location_type& cache_location,
+					const parameters_view_type params
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
 							,
-							const std_source_location& location)
-					) const { return stack().add_variable_no_check(name, std::move(object) GAL_UTILS_DO_IF_DEBUG(, location)); }
+							const std_source_location& location = std_source_location::current())) const
+			{
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to call function '{}' with '{}' params",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							name,
+							params.size());)
 
-			boxed_value& dispatcher_state::get_object(string_view_type name, auto& cache_location) const { return this->operator*().get_object(name, cache_location); }
+				const convertor_manager_state state{convertor_manager_};
 
-			inline void scoped_scope::do_construct() const { data().get().stack().new_scope(); }
+				if (cache_location.has_value()) { return dispatch(**cache_location, params, state); }
 
-			inline void scoped_scope::do_destruct() const { data().get().stack().pop_scope(); }
+				auto functions = get_function(name);
+				cache_location.emplace(functions);
 
-			inline scoped_object_scope::scoped_object_scope(
-					const dispatcher_state& s,
-					boxed_value object
-					GAL_UTILS_DO_IF_DEBUG(
-							,
-							const std::string_view reason,
-							const std_source_location& location)
-					)
-				: scoped_scope{s GAL_UTILS_DO_IF_DEBUG(, reason, location)} { (void)s.add_object_no_check(lang::object_self_type_name::value, std::move(object) GAL_UTILS_DO_IF_DEBUG(, location)); }
+				return dispatch(*functions, params, state);
+			}
 
-			inline void scoped_stack_scope::do_construct() const { data().get().stack().new_stack(); }
+			[[nodiscard]] const convertor_manager& get_conversion_manager() const noexcept { return convertor_manager_; }
 
-			inline void scoped_stack_scope::do_destruct() const { data().get().stack().pop_stack(); }
+			[[nodiscard]] parser_detail::parser_base& get_parser() const noexcept { return parser_.get(); }
+		};
 
-			inline void scoped_function_scope::push_params(
-					engine_stack::param_list_type&& params
-					GAL_UTILS_DO_IF_DEBUG(
-							,
-							const std_source_location& location)
-					) const { data().get().stack().push_param(std::move(params) GAL_UTILS_DO_IF_DEBUG(, location)); }
+		inline dispatcher_state::dispatcher_state(dispatcher& d)
+			: d_{d},
+			  state_{d.get_conversion_manager()} { }
 
-			inline void scoped_function_scope::push_params(
-					const engine_stack::param_list_view_type params
-					GAL_UTILS_DO_IF_DEBUG(
-							,
-							const std_source_location& location)
-					) const { data().get().stack().push_param(params GAL_UTILS_DO_IF_DEBUG(, location)); }
+		inline engine_stack& dispatcher_state::stack(GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(const std_source_location& location)) const noexcept
+		{
+			GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+					utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), gained control of stack.",
+						__func__,
+						location.file_name(),
+						location.function_name(),
+						location.line(),
+						location.column());)
 
-			inline void scoped_function_scope::do_construct() const { data().get().stack().emit_call(data().get().conversion_saves()); }
+			return *d_.get().stack_;
+		}
 
-			inline void scoped_function_scope::do_destruct() const { data().get().stack().finish_call(data().get().conversion_saves()); }
-		}// namespace dispatcher_detail
+		inline void scoped_scope::do_construct() const { data().get().stack().new_scope(GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO("scoped_scope do_construct")); }
+
+		inline void scoped_scope::do_destruct() const { data().get().stack().pop_scope(GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO("scoped_scope do_destruct")); }
+
+		inline scoped_object_scope::scoped_object_scope(
+				const dispatcher_state& s,
+				boxed_value object
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						,
+						string_view_type reason,
+						const std_source_location& location
+						))
+			: scoped_scope{s GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, reason, location)} { s.stack().add_object_no_check(lang::object_self_type_name::value, std::move(object)); }
+
+		inline void scoped_stack_scope::do_construct() const { data().get().stack().new_stack(GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO("scoped_stack_scope do_construct")); }
+
+		inline void scoped_stack_scope::do_destruct() const { data().get().stack().pop_stack(GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO("scoped_stack_scope do_destruct")); }
+
+		inline void scoped_function_scope::do_construct() const { data().get().stack().emit_call(data().get().convertor_state() GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, "scoped_function_scope do_construct -> emit_call")); }
+
+		inline void scoped_function_scope::do_destruct() const { data().get().stack().finish_call(data().get().convertor_state() GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, "scoped_function_scope do_destruct -> finish_call")); }
 	}
-}// namespace gal::lang::foundation
+}
 
-#endif//GAL_LANG_FOUNDATION_DISPATCHER_HPP
+#endif // GAL_LANG_FOUNDATION_DISPATCHER_HPP

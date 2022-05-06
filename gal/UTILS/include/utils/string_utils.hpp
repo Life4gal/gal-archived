@@ -5,8 +5,15 @@
 
 #include<string>
 #include<string_view>
+
+#include <utils/macro.hpp>
+DISABLE_WARNING_PUSH
+DISABLE_WARNING(4702)
+
 #include <range/v3/view.hpp>
 #include <range/v3/algorithm.hpp>
+
+DISABLE_WARNING_POP
 
 #include <utils/concept.hpp>
 #include <utils/function.hpp>

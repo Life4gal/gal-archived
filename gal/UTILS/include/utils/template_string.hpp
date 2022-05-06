@@ -54,6 +54,27 @@ namespace gal::utils
 
 			[[nodiscard]] constexpr static const_iterator right_end() noexcept { return right_type::template end(); }
 		};
+
+		template<typename...>
+		struct basic_multiple_template_string;
+
+		template<typename BasicTemplateString, typename... BasicTemplateStrings>
+			requires(std::is_same_v<typename BasicTemplateString::value_type, typename BasicTemplateStrings::value_type> && ...)
+		struct basic_multiple_template_string<BasicTemplateString, BasicTemplateStrings...> : multiple_constexpr_string_base<basic_multiple_template_string<BasicTemplateString, BasicTemplateStrings...>, typename BasicTemplateString::value_type, typename BasicTemplateString::size_type, BasicTemplateString, BasicTemplateStrings...>
+		{
+			using base_type = multiple_constexpr_string_base<basic_multiple_template_string<BasicTemplateString, BasicTemplateStrings...>, typename BasicTemplateString::value_type, typename BasicTemplateString::size_type, BasicTemplateString, BasicTemplateStrings...>;
+
+			using value_type = typename BasicTemplateString::template value_type;
+			using size_type = typename BasicTemplateString::template size_type;
+
+			using const_iterator = typename BasicTemplateString::template const_iterator;
+
+			template<std::size_t Index>
+			[[nodiscard]] constexpr static const_iterator begin() noexcept { return typename base_type::template subtype<Index>::template begin(); }
+
+			template<std::size_t Index>
+			[[nodiscard]] constexpr static const_iterator end() noexcept { return typename base_type::template subtype<Index>::template end(); }
+		};
 	}
 
 	template<char... Chars>
@@ -88,6 +109,25 @@ namespace gal::utils
 		requires std::is_same_v<typename Left::value_type, typename Right::value_type> && std::is_same_v<typename Left::value_type, char32_t>
 	// ReSharper disable once CppInconsistentNaming
 	using template_bilateral_u32string = template_string_detail::basic_bilateral_template_string<Left, Right>;
+
+	template<typename FirstString, typename... RemainingStrings>
+		requires (std::is_same_v<typename FirstString::value_type, typename RemainingStrings::value_type> && ...) && std::is_same_v<typename FirstString::value_type, char>
+	using template_multiple_string = template_string_detail::basic_multiple_template_string<FirstString, RemainingStrings...>;
+	template<typename FirstString, typename... RemainingStrings>
+		requires (std::is_same_v<typename FirstString::value_type, typename RemainingStrings::value_type> && ...) && std::is_same_v<typename FirstString::value_type, wchar_t>
+	using template_multiple_wstring = template_string_detail::basic_multiple_template_string<FirstString, RemainingStrings...>;
+	template<typename FirstString, typename... RemainingStrings>
+		requires (std::is_same_v<typename FirstString::value_type, typename RemainingStrings::value_type> && ...) && std::is_same_v<typename FirstString::value_type, char8_t>
+	// ReSharper disable once CppInconsistentNaming
+	using template_multiple_u8string = template_string_detail::basic_multiple_template_string<FirstString, RemainingStrings...>;
+	template<typename FirstString, typename... RemainingStrings>
+		requires (std::is_same_v<typename FirstString::value_type, typename RemainingStrings::value_type> && ...) && std::is_same_v<typename FirstString::value_type, char16_t>
+	// ReSharper disable once CppInconsistentNaming
+	using template_multiple_u16string = template_string_detail::basic_multiple_template_string<FirstString, RemainingStrings...>;
+	template<typename FirstString, typename... RemainingStrings>
+		requires (std::is_same_v<typename FirstString::value_type, typename RemainingStrings::value_type> && ...) && std::is_same_v<typename FirstString::value_type, char32_t>
+	// ReSharper disable once CppInconsistentNaming
+	using template_multiple_u32string = template_string_detail::basic_multiple_template_string<FirstString, RemainingStrings...>;
 
 	#define GAL_UTILS_DO_NOT_USE_TEMPLATE_STRING_INNER_TYPE_GENERATOR(string_type, string, string_length, begin_index) \
 		decltype(                                                                                         \
@@ -143,6 +183,60 @@ namespace gal::utils
 		::gal::utils::template_bilateral_u32string<                                         \
 			GAL_UTILS_DO_NOT_USE_TEMPLATE_STRING_INNER_TYPE_GENERATOR(template_u32string, string, sizeof(string) / sizeof((string)[0]) / 2, 0), \
 			GAL_UTILS_DO_NOT_USE_TEMPLATE_STRING_INNER_TYPE_GENERATOR(template_u32string, string, sizeof(string) / sizeof((string)[0]) / 2, sizeof(string) / sizeof((string)[0]) / 2)>
+
+	// todo: we need a way to get the number of parameters and expand to the corresponding parameter list exactly.
+	#define GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_1(string) \
+		::gal::utils::template_multiple_string< \
+			GAL_UTILS_TEMPLATE_STRING_TYPE(string)>
+	#define GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_2(string1, string2) \
+		::gal::utils::template_multiple_string< \
+			GAL_UTILS_TEMPLATE_STRING_TYPE(string1), \
+			GAL_UTILS_TEMPLATE_STRING_TYPE(string2)>
+	#define GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_3(string1, string2, string3) \
+		::gal::utils::template_multiple_string<                         \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string1),                \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string2),                \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string3)>
+	#define GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_4(string1, string2, string3, string4) \
+		::gal::utils::template_multiple_string<                                  \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string1),                         \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string2),                         \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string3),                         \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string4)>
+	#define GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_5(string1, string2, string3, string4, string5) \
+		::gal::utils::template_multiple_string<                                           \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string1),                                  \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string2),                                  \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string3),                                  \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string4),                                  \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string5)>
+	#define GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_6(string1, string2, string3, string4, string5, string6) \
+		::gal::utils::template_multiple_string<                                                    \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string1),                                           \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string2),                                           \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string3),                                           \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string4),                                           \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string5),                                           \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string6)>
+	#define GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_7(string1, string2, string3, string4, string5, string6, string7) \
+		::gal::utils::template_multiple_string<                                                             \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string1),                                                    \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string2),                                                    \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string3),                                                    \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string4),                                                    \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string5),                                                    \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string6),                                                    \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string7)>
+	#define GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_8(string1, string2, string3, string4, string5, string6, string7, string8) \
+		::gal::utils::template_multiple_string<                                                                      \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string1),                                                             \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string2),                                                             \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string3),                                                             \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string4),                                                             \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string5),                                                             \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string6),                                                             \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string7),                                                             \
+				GAL_UTILS_TEMPLATE_STRING_TYPE(string8)>
 }
 
 #endif // GAL_UTILS_TEMPLATE_STRING_HPP

@@ -20,7 +20,7 @@ namespace gal::lang
 	 * @endcode
 	 */
 	template<typename Function>
-	[[nodiscard]] foundation::proxy_function fun(Function&& function) { return foundation::function_register::register_function(std::forward<Function>(function), utils::make_function_signature(function)); }
+	[[nodiscard]] foundation::function_proxy_type fun(Function&& function) { return foundation::function_register::register_function(std::forward<Function>(function), utils::make_function_signature(function)); }
 
 	/**
 	 * @brief Creates a new proxy_function object from a free function, member function or data member.
@@ -32,19 +32,19 @@ namespace gal::lang
 	 * @endcode
 	 */
 	template<typename Function, typename... PreBindParams>
-	[[nodiscard]] foundation::proxy_function fun(Function&& function, PreBindParams ... params) { return fun(std::bind_front(std::forward<Function>(function), std::forward<PreBindParams>(params)...)); }
+	[[nodiscard]] foundation::function_proxy_type fun(Function&& function, PreBindParams ... params) { return fun(std::bind_front(std::forward<Function>(function), std::forward<PreBindParams>(params)...)); }
 
 	template<typename ConstructorSignature>
-	[[nodiscard]] foundation::proxy_function ctor() { return foundation::function_register::register_constructor<ConstructorSignature>(); }
+	[[nodiscard]] foundation::function_proxy_type ctor() { return foundation::function_register::register_constructor<ConstructorSignature>(); }
 
 	template<typename Class>
-	[[nodiscard]] foundation::proxy_function default_ctor() { return ctor<Class()>(); }
+	[[nodiscard]] foundation::function_proxy_type default_ctor() { return ctor<Class()>(); }
 
 	template<typename Class>
-	[[nodiscard]] foundation::proxy_function copy_ctor() { return ctor<Class(const Class&)>(); }
+	[[nodiscard]] foundation::function_proxy_type copy_ctor() { return ctor<Class(const Class&)>(); }
 
 	template<typename Class>
-	[[nodiscard]] foundation::proxy_function move_ctor() { return ctor<Class(Class&&)>(); }
+	[[nodiscard]] foundation::function_proxy_type move_ctor() { return ctor<Class(Class&&)>(); }
 
 	/**
 	 * @brief Single step command for registering a class.
@@ -75,11 +75,11 @@ namespace gal::lang
 	 */
 	template<typename T>
 	void register_class(
-			foundation::engine_core& core,
+			foundation::engine_module& core,
 			const foundation::string_view_type name,
-			foundation::proxy_functions_type&& constructors,
+			foundation::function_proxies_type&& constructors,
 			// todo: container?
-			std::vector<std::pair<foundation::string_view_type, foundation::proxy_function>>&& functions)
+			std::vector<std::pair<foundation::string_view_type, foundation::function_proxy_type>>&& functions)
 	{
 		core.add_type_info(name, foundation::make_type_info<T>());
 

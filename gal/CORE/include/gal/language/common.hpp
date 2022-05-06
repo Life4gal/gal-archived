@@ -12,43 +12,52 @@ namespace gal::lang
 {
 	namespace lang
 	{
-		struct ast_node_tracer;
-
 		struct name_validator
 		{
-			using name_type = foundation::string_view_type;
+			[[nodiscard]] constexpr static auto hash_name(const foundation::string_view_type name) noexcept { return utils::hash_fnv1a<false>(name); }
 
-			[[nodiscard]] constexpr static auto name_hasher(const name_type name) noexcept { return utils::hash_fnv1a<false>(name); }
-
-			[[nodiscard]] static bool is_reserved_name(const name_type name) noexcept
+			[[nodiscard]] static bool is_reserved_name(const foundation::string_view_type name) noexcept
 			{
 				const static std::unordered_set names{
-						name_hasher(keyword_define_name::value),
-						name_hasher(keyword_function_name::value),
-						name_hasher(keyword_variable_name::value),
-						name_hasher(keyword_true_name::value),
-						name_hasher(keyword_false_name::value),
-						name_hasher(keyword_class_name::value),
-						name_hasher(keyword_member_decl_name::value),
-						name_hasher(keyword_global_name::value),
-						name_hasher(keyword_placeholder_name::value),
-						name_hasher(keyword_comma_name::value),
-						name_hasher(keyword_while_name::value),
-						name_hasher(keyword_for_name::value),
-						name_hasher(keyword_break_name::value),
-						name_hasher(keyword_if_name::value),
-						name_hasher(keyword_else_name::value),
-						name_hasher(keyword_logical_and_name::value),
-						name_hasher(keyword_logical_or_name::value),
-						name_hasher(keyword_return_name::value),
-				};
+						hash_name(keyword_define_name::value),
+						hash_name(keyword_class_name::value),
+						hash_name(keyword_variable_declare_name::value),
+						hash_name(keyword_true_name::value),
+						hash_name(keyword_false_name::value),
+						hash_name(keyword_global_name::value),
+						hash_name(keyword_and_name::value),
+						hash_name(keyword_or_name::value),
+						hash_name(keyword_if_name::value),
+						hash_name(keyword_else_name::value),
+						hash_name(keyword_for_in_name::subtype<0>::value),
+						hash_name(keyword_for_in_name::subtype<1>::value),
+						hash_name(keyword_while_name::value),
+						hash_name(keyword_continue_break_return_name::subtype<0>::value),
+						hash_name(keyword_continue_break_return_name::subtype<1>::value),
+						hash_name(keyword_continue_break_return_name::subtype<2>::value),
+						hash_name(keyword_match_case_default_name::subtype<1>::value),
+						hash_name(keyword_match_case_default_name::subtype<2>::value),
+						hash_name(keyword_match_fallthrough_name::value),
+						hash_name(keyword_function_argument_placeholder_name::value),
+						hash_name(keyword_try_catch_finally_name::subtype<0>::value),
+						hash_name(keyword_try_catch_finally_name::subtype<1>::value),
+						hash_name(keyword_try_catch_finally_name::subtype<2>::value),
+						hash_name(keyword_function_guard_name::value),
+						hash_name(keyword_inline_range_gen_name::value),
+						hash_name(keyword_operator_declare_name::value),
+						hash_name(keyword_number_inf_nan_name::subtype<0>::value),
+						hash_name(keyword_number_inf_nan_name::subtype<1>::value)};
 
-				return names.contains(name_hasher(name));
+				return names.contains(hash_name(name));
 			}
 
-			[[nodiscard]] static bool is_valid_object_name(const name_type name) noexcept { return not name.contains(keyword_class_accessor_name::value) && not is_reserved_name(name); }
+			[[nodiscard]] static bool is_valid_object_name(const foundation::string_view_type name) noexcept { return not name.contains(keyword_class_accessor_name::value) && not is_reserved_name(name); }
 
-			static void validate_object_name(const name_type name)
+			/**
+			 * @throw exception::reserved_word_error 
+			 * @throw exception::illegal_name_error
+			 */
+			static void validate_object_name(const foundation::string_view_type name)
 			{
 				if (is_reserved_name(name)) { throw exception::reserved_word_error{name}; }
 
@@ -56,149 +65,38 @@ namespace gal::lang
 			}
 		};
 
-		/**
-		 * @brief Signature of module entry point that all binary loadable modules must implement.
-		 */
-		using core_maker_signature = foundation::shared_engine_core (*)();
-
-		/**
-		 * @brief Types of AST nodes available to the parser and eval
-		 */
-		enum class ast_node_type
+		// see also parser.hpp => operator_matcher
+		enum class operation_precedence
 		{
-			noop_t,
-
-			id_t,
-			constant_t,
-			reference_t,
-			compiled_t,
-			unary_t,
-			binary_t,
-			fun_call_t,
-			array_call_t,
-			dot_access_t,
-			arg_t,
-			arg_list_t,
-			equation_t,
-			global_decl_t,
-			var_decl_t,
-			assign_decl_t,
-			class_decl_t,
-			member_decl_t,
-			def_t,
-			method_t,
-			lambda_t,
-
-			no_scope_block_t,
-			block_t,
-
-			if_t,
-			while_t,
-			for_t,
-			ranged_for_t,
-			break_t,
-			continue_t,
-			file_t,
-			return_t,
-			switch_t,
-			case_t,
-			default_t,
-
-			logical_and_t,
-			logical_or_t,
-
-			inline_range_t,
-			inline_array_t,
-			inline_map_t,
-			map_pair_t,
-			value_range_t,
-
-			try_t,
-			catch_t,
-			finally_t,
-
-			ast_node_type_size
-		};
-
-		enum class operator_precedence
-		{
-			logical_or,
+			// or
+			logical_or = 0,
+			// and
 			logical_and,
+			// |
 			bitwise_or,
+			// ^
 			bitwise_xor,
+			// &
 			bitwise_and,
+			// == or !=
 			equality,
+			// < or <= or > or >=
 			comparison,
+			// << or >>
 			bitwise_shift,
-			plus,
-			multiply,
+			// + or -
+			plus_minus,
+			// * or / or %
+			multiply_divide,
+			// ! or ~ or + or -
 			unary,
+
+			operation_size,
 		};
 
-		constexpr foundation::string_view_type ast_node_name(const ast_node_type type) noexcept
-		{
-			// todo: name
-			constexpr foundation::string_view_type node_type_names[]{
-					{"noop"},
-
-					{"id"},
-					{"constant"},
-					{"reference"},
-					{"compiled"},
-					{"unary_operation"},
-					{"binary_operation"},
-					{"fun_call"},
-					{"array_call"},
-					{"dot_access"},
-					{"arg"},
-					{"arg_list"},
-					{"equation"},
-					{"global_decl"},
-					{"var_decl"},
-					{"assign_decl"},
-					{"class_decl"},
-					{"attribute_decl"},
-					{"def"},
-					{"method"},
-					{"lambda"},
-
-					{"no_scope_block"},
-					{"block"},
-
-					{"if"},
-					{"while"},
-					{"for"},
-					{"ranged_for"},
-					{"break"},
-					{"continue"},
-					{"file"},
-					{"return"},
-					{"switch"},
-					{"case"},
-					{"default"},
-
-					{"logical_and"},
-					{"logical_or"},
-
-					{"inline_range"},
-					{"inline_array"},
-					{"inline_map"},
-					{"map_pair"},
-					{"value_range"},
-
-					{"try"},
-					{"catch"},
-					{"finally"},
-			};
-
-			static_assert(std::size(node_type_names) == static_cast<std::size_t>(ast_node_type::ast_node_type_size));
-
-			return node_type_names[static_cast<std::size_t>(type)];
-		}
-
 		/**
-	 * @brief Convenience type for file positions.
-	 */
+		 * @brief Convenience type for file positions.
+		 */
 		using file_point = utils::basic_point<int>;
 		using file_location = utils::basic_location<int>;
 
@@ -215,6 +113,9 @@ namespace gal::lang
 				: location{location},
 				  filename{filename} {}
 		};
+
+		struct ast_node;
+		struct ast_node_tracer;
 	}
 
 	namespace exception
@@ -254,7 +155,7 @@ namespace gal::lang
 
 			explicit file_not_found_error(std::string filename)
 				: std::runtime_error{std_format::format("File '{}' not found", filename)},
-				  filename{std::move(filename)} { }
+				  filename{std::move(filename)} {}
 
 			explicit file_not_found_error(std::string_view filename)
 				: std::runtime_error{std_format::format("File '{}' not found", filename)},
@@ -267,27 +168,30 @@ namespace gal::lang
 		class eval_error final : public std::runtime_error
 		{
 		public:
-			std::string reason;
-			std::string filename;
+			using string_type = foundation::string_type;
+			using string_view_type = foundation::string_view_type;
+
+			string_type reason;
+			string_type filename;
 			lang::file_point begin_position;
-			std::string detail;
+			string_type detail;
 			std::vector<lang::ast_node_tracer> stack_traces;
 
 		private:
-			static void format_reason(std::string& target, const std::string_view r) { std_format::format_to(std::back_inserter(target), "Error: '{}' ", r); }
+			static void format_reason(std::string& target, const string_view_type r) { std_format::format_to(std::back_inserter(target), "Error: '{}' ", r); }
 
-			static std::string get_formatted_reason(const std::string_view r)
+			static std::string get_formatted_reason(const string_view_type r)
 			{
-				std::string ret;
+				string_type ret;
 				format_reason(ret, r);
 				return ret;
 			}
 
 			static void format_parameters(
-					std::string& target,
+					string_type& target,
 					const foundation::parameters_view_type params,
 					const bool has_dot_notation,
-					const foundation::dispatcher_detail::dispatcher& dispatcher)
+					const foundation::dispatcher& dispatcher)
 			{
 				std_format::format_to(std::back_inserter(target),
 				                      "With {} parameters: (",
@@ -298,9 +202,9 @@ namespace gal::lang
 					for (auto it = params.begin(); it != params.end(); ++it)
 					{
 						std_format::format_to(std::back_inserter(target),
-						                      "{} ({})",
-						                      dispatcher.get_type_name(*it),
-						                      it->is_const() ? " (immutable)" : " (mutable)");
+						                      "'{}'({})",
+						                      dispatcher.nameof(*it),
+						                      it->is_const() ? "immutable" : "mutable");
 
 						if (it == params.begin() && has_dot_notation)
 						{
@@ -318,23 +222,23 @@ namespace gal::lang
 				target.append(") ");
 			}
 
-			static void format_filename(std::string& target, const std::string_view f)
+			static void format_filename(string_type& target, const lang::parse_location::filename_type f)
 			{
-				if (f != lang::inline_eval_filename_name::value) { std_format::format_to(std::back_inserter(target), "in '{}' ", f); }
+				if (f != lang::keyword_inline_eval_filename_name::value) { std_format::format_to(std::back_inserter(target), "in '{}' ", f); }
 				else { std_format::format_to(std::back_inserter(target), "during evaluation "); }
 			}
 
-			static void format_position(std::string& target, const lang::file_point p) { std_format::format_to(std::back_inserter(target), "at ({}, {}) ", p.line, p.column); }
+			static void format_position(string_type& target, const lang::file_point p) { std_format::format_to(std::back_inserter(target), "at ({}, {}) ", p.line, p.column); }
 
-			static std::string format(
-					const std::string_view r,
-					const std::string_view f,
+			static string_type format(
+					const string_view_type r,
+					const lang::parse_location::filename_type f,
 					const lang::file_point p,
 					const foundation::parameters_view_type params,
 					const bool has_dot_notation,
-					const foundation::dispatcher_detail::dispatcher& dispatcher)
+					const foundation::dispatcher& dispatcher)
 			{
-				std::string ret;
+				string_type ret;
 
 				format_reason(ret, r);
 				format_parameters(ret, params, has_dot_notation, dispatcher);
@@ -344,13 +248,13 @@ namespace gal::lang
 				return ret;
 			}
 
-			static std::string format(
-					const std::string_view r,
+			static string_type format(
+					const string_view_type r,
 					const foundation::parameters_view_type params,
 					const bool has_dot_notation,
-					const foundation::dispatcher_detail::dispatcher& dispatcher)
+					const foundation::dispatcher& dispatcher)
 			{
-				std::string ret;
+				string_type ret;
 
 				format_reason(ret, r);
 				format_parameters(ret, params, has_dot_notation, dispatcher);
@@ -358,12 +262,12 @@ namespace gal::lang
 				return ret;
 			}
 
-			static std::string format(
-					const std::string_view r,
-					const std::string_view f,
+			static string_type format(
+					const string_view_type r,
+					const string_view_type f,
 					const lang::file_point p)
 			{
-				std::string ret;
+				string_type ret;
 
 				format_reason(ret, r);
 				format_filename(ret, f);
@@ -373,17 +277,17 @@ namespace gal::lang
 			}
 
 			static void format_types(
-					std::string& target,
-					const foundation::immutable_proxy_function& function,
+					string_type& target,
+					const foundation::const_function_proxy_type& function,
 					bool has_dot_notation,
-					const foundation::dispatcher_detail::dispatcher& dispatcher);
+					const foundation::dispatcher& dispatcher);
 
-			static std::string format_detail(
-					const foundation::immutable_proxy_functions_view_type functions,
+			static string_type format_detail(
+					const foundation::const_function_proxies_view_type functions,
 					const bool has_dot_notation,
-					const foundation::dispatcher_detail::dispatcher& dispatcher)
+					const foundation::dispatcher& dispatcher)
 			{
-				std::string ret;
+				string_type ret;
 
 				if (functions.size() == 1)
 				{
@@ -401,7 +305,7 @@ namespace gal::lang
 							[&ret, has_dot_notation, &dispatcher](const auto& function)
 							{
 								ret.push_back('\t');
-								format_types(ret, function, has_dot_notation, dispatcher);
+								eval_error::format_types(ret, function, has_dot_notation, dispatcher);
 								ret.push_back('\n');
 							});
 				}
@@ -411,13 +315,13 @@ namespace gal::lang
 
 		public:
 			eval_error(
-					const std::string_view reason,
-					const std::string_view filename,
+					const string_view_type reason,
+					const string_view_type filename,
 					const lang::file_point begin_position,
 					const foundation::parameters_view_type params,
-					const foundation::immutable_proxy_functions_view_type functions,
+					const foundation::const_function_proxies_view_type functions,
 					const bool has_dot_notation,
-					const foundation::dispatcher_detail::dispatcher& dispatcher)
+					const foundation::dispatcher& dispatcher)
 				: std::runtime_error{format(reason, filename, begin_position, params, has_dot_notation, dispatcher)},
 				  reason{reason},
 				  filename{filename},
@@ -425,42 +329,18 @@ namespace gal::lang
 				  detail{format_detail(functions, has_dot_notation, dispatcher)} {}
 
 			eval_error(
-					const std::string_view reason,
+					const string_view_type reason,
 					const foundation::parameters_view_type params,
-					const foundation::immutable_proxy_functions_view_type functions,
+					const foundation::const_function_proxies_view_type functions,
 					const bool has_dot_notation,
-					const foundation::dispatcher_detail::dispatcher& dispatcher)
+					const foundation::dispatcher& dispatcher)
 				: std::runtime_error{format(reason, params, has_dot_notation, dispatcher)},
 				  reason{reason},
 				  detail{format_detail(functions, has_dot_notation, dispatcher)} {}
 
 			eval_error(
-					const std::string_view reason,
-					const foundation::parameters_type& params,
-					const foundation::immutable_proxy_functions_type& functions,
-					const bool has_dot_notation,
-					const foundation::dispatcher_detail::dispatcher& dispatcher)
-				: eval_error{reason, foundation::parameters_view_type{params}, foundation::immutable_proxy_functions_view_type{functions}, has_dot_notation, dispatcher} {}
-
-			eval_error(
-					const std::string_view reason,
-					const foundation::parameters_view_type params,
-					const foundation::immutable_proxy_functions_type& functions,
-					const bool has_dot_notation,
-					const foundation::dispatcher_detail::dispatcher& dispatcher)
-				: eval_error{reason, params, foundation::immutable_proxy_functions_view_type{functions}, has_dot_notation, dispatcher} {}
-
-			eval_error(
-					const std::string_view reason,
-					const foundation::parameters_type& params,
-					const foundation::immutable_proxy_functions_view_type functions,
-					const bool has_dot_notation,
-					const foundation::dispatcher_detail::dispatcher& dispatcher)
-				: eval_error{reason, foundation::parameters_view_type{params}, functions, has_dot_notation, dispatcher} {}
-
-			eval_error(
-					const std::string_view reason,
-					const std::string_view filename,
+					const string_view_type reason,
+					const string_view_type filename,
 					const lang::file_point begin_position)
 				: std::runtime_error{format(reason, filename, begin_position)},
 				  reason{reason},
@@ -468,20 +348,23 @@ namespace gal::lang
 				  begin_position{begin_position} {}
 
 			explicit eval_error(
-					const std::string_view reason)
+					const string_view_type reason)
 				: std::runtime_error{get_formatted_reason(reason)},
 				  reason{reason} {}
 
-			void pretty_print_to(std::string& dest) const;
+			void pretty_print_to(string_type& dest) const;
 
-			[[nodiscard]] std::string pretty_print() const;
+			[[nodiscard]] string_type pretty_print() const;
 		};
 	}// namespace exception
 
 	namespace lang
 	{
-		struct ast_node;
 		using ast_node_ptr = std::unique_ptr<ast_node>;
+
+		template<typename NodeType, typename... Args>
+			requires std::derived_from<NodeType, ast_node>
+		[[nodiscard]] ast_node_ptr make_node(Args&&... args) { return std::make_unique<NodeType>(std::forward<Args>(args)...); }
 
 		class ast_visitor
 		{
@@ -493,11 +376,7 @@ namespace gal::lang
 			constexpr ast_visitor(ast_visitor&&) = default;
 			constexpr ast_visitor& operator=(ast_visitor&&) = default;
 
-			virtual void visit(const ast_node& node)
-			{
-				(void)node;
-				throw std::runtime_error{"visitor is not implemented"};
-			}
+			virtual void visit(const ast_node& node) = 0;
 		};
 
 		class ast_optimizer
@@ -510,17 +389,8 @@ namespace gal::lang
 			constexpr ast_optimizer(ast_optimizer&&) = default;
 			constexpr ast_optimizer& operator=(ast_optimizer&&) = default;
 
-			// ReSharper disable once CppParameterMayBeConst
-			[[nodiscard]] virtual ast_node_ptr optimize(ast_node_ptr node)
-			{
-				(void)node;
-				throw std::runtime_error{"optimizer is not implemented"};
-			}
+			[[nodiscard]] virtual ast_node_ptr optimize(ast_node_ptr node) = 0;
 		};
-
-		template<typename NodeType, typename... Args>
-			requires std::derived_from<NodeType, ast_node>
-		[[nodiscard]] ast_node_ptr make_node(Args&&... args) { return std::make_unique<NodeType>(std::forward<Args>(args)...); }
 
 		namespace common_detail
 		{
@@ -540,11 +410,23 @@ namespace gal::lang
 			template<typename T>
 			const ast_rtti_index_type ast_rtti<T>::value = ++ast_rtti_index_counter::index;
 
-			#define GAL_AST_SET_RTTI(class_name)                    \
-			constexpr static auto get_rtti_index() noexcept \
-			{                                               \
-				return common_detail::ast_rtti<class_name>::value;         \
-			}
+			struct ast_rtti_manager
+			{
+			private:
+				inline static std::map<ast_rtti_index_type, foundation::string_type> ast_rtti_info_{};
+
+			public:
+				static foundation::string_view_type register_ast_rtti_name(const ast_rtti_index_type index, const foundation::string_view_type name) { return ast_rtti_info_.emplace(index, name).first->second; }
+
+				[[nodiscard]] static foundation::string_view_type nameof(const ast_rtti_index_type index) { return ast_rtti_info_[index]; }
+			};
+
+			#define GAL_AST_SET_RTTI(class_name)						\
+			constexpr static auto get_rtti_index() noexcept				\
+			{																					\
+				return common_detail::ast_rtti<class_name>::value;	\
+			}																					\
+			inline static auto ast_register_name = common_detail::ast_rtti_manager::register_ast_rtti_name(common_detail::ast_rtti<class_name>::value, #class_name);
 
 			template<typename T>
 			concept has_rtti_index = requires(T t)
@@ -571,18 +453,7 @@ namespace gal::lang
 				parse_location location_;
 				identifier_type identifier_;
 
-				template<typename Function>
-				void format_children_to(text_type& target, Function&& function) const
-				{
-					static_cast<const T&>(*this).apply(
-							[&target, function](const auto& child)
-							{
-								function(child, target);
-								target.push_back(' ');
-							});
-				}
-
-				// for cast ctor below 
+				// for cast ctor below
 				template<typename U>
 				explicit operator const ast_node_common_base<U>&() const { return reinterpret_cast<const ast_node_common_base<U>&>(*this); }
 
@@ -615,6 +486,12 @@ namespace gal::lang
 
 				[[nodiscard]] constexpr identifier_type identifier() const noexcept { return identifier_; }
 
+				[[nodiscard]] parse_location::filename_type filename() const noexcept { return location_.filename; }
+
+				[[nodiscard]] file_point location_begin() const noexcept { return location_.location.begin; }
+
+				[[nodiscard]] file_point location_end() const noexcept { return location_.location.end; }
+
 				explicit ast_node_common_base(
 						const ast_rtti_index_type index,
 						const identifier_type text,
@@ -641,12 +518,6 @@ namespace gal::lang
 					  location_{node.location_},
 					  identifier_{node.identifier_} {}
 
-				[[nodiscard]] parse_location::filename_type filename() const noexcept { return location_.filename; }
-
-				[[nodiscard]] file_point location_begin() const noexcept { return location_.location.begin; }
-
-				[[nodiscard]] file_point location_end() const noexcept { return location_.location.end; }
-
 				void pretty_format_position_to(text_type& target) const
 				{
 					std_format::format_to(std::back_inserter(target),
@@ -666,7 +537,9 @@ namespace gal::lang
 				void pretty_format_to(text_type& target) const
 				{
 					target.append(identifier_);
-					format_children_to(target, [](const auto& child, text_type& t) { child.pretty_format_to(t); });
+					std::ranges::for_each(
+							static_cast<const T&>(*this).view(),
+							[&target](const auto& child) { child.pretty_format_to(target); });
 				}
 
 				[[nodiscard]] text_type pretty_print() const
@@ -676,23 +549,30 @@ namespace gal::lang
 					return result;
 				}
 
-				void to_string_to(text_type& target, const std::string_view prepend = "") const
+				void to_string_to(text_type& target, const foundation::string_view_type prepend = "") const
 				{
 					std_format::format_to(
 							std::back_inserter(target),
-							"{}(class index: {}) identifier: {} at:\n ",
+							"{} {}(class index: {}) identifier: '{}' at:\n\t",
 							prepend,
+							ast_rtti_manager::nameof(class_index_),
 							class_index_,
 							identifier_);
 					pretty_format_position_to(target);
-					target.push_back('\n');
 
-					format_children_to(target, [prepend](const auto& child, text_type& t) { child.to_string_to(t, prepend); });
+					std_format::format_to(
+							std::back_inserter(target),
+							"\n\twith {}(s) child node: \n\n",
+							static_cast<const T&>(*this).size());
+
+					std::ranges::for_each(
+							static_cast<const T&>(*this).view(),
+							[&target, prepend](const auto& child) { child.to_string_to(target, prepend); });
 				}
 
 				/**
-				 * @brief Prints the contents of an AST node, including its children, recursively
-				 */
+			 * @brief Prints the contents of an AST node, including its children, recursively
+			 */
 				[[nodiscard]] text_type to_string(const std::string_view prepend = "") const
 				{
 					text_type result;
@@ -700,17 +580,15 @@ namespace gal::lang
 					return result;
 				}
 			};
-		}// namespace common_detail
+		}
 
 		struct ast_node : common_detail::ast_node_common_base<ast_node>
 		{
-			// for access children
-			friend struct ast_node_tracer;
-			friend struct compiled_ast_node;
-
 			using children_type = std::vector<ast_node_ptr>;
 
 		protected:
+			children_type children_;
+
 			ast_node(
 					const common_detail::ast_rtti_index_type index,
 					const identifier_type identifier,
@@ -725,55 +603,47 @@ namespace gal::lang
 				: ast_node_common_base{base},
 				  children_{std::move(children)} {}
 
-			[[nodiscard]] virtual foundation::boxed_value do_eval([[maybe_unused]] const foundation::dispatcher_detail::dispatcher_state& state, [[maybe_unused]] ast_visitor& visitor) const { throw std::runtime_error{"un-dispatched ast_node (internal error)"}; }
-
-		private:
-			children_type children_;
-
-			[[nodiscard]] constexpr auto get_unwrapped_children() { return children_ | std::views::transform([](auto& ptr) -> ast_node& { return *ptr; }); }
-
-			[[nodiscard]] constexpr auto get_unwrapped_children() const { return children_ | std::views::transform([](const auto& ptr) -> const ast_node& { return *ptr; }); }
-
 		public:
-			[[nodiscard]] foundation::parameters_type get_boxed_children() const
-			{
-				const auto children = get_unwrapped_children() | std::views::transform([](const auto& child) { return std::ref(child); });
-
-				foundation::parameters_type ret{};
-				ret.reserve(children.size());
-
-				std::ranges::transform(
-						children,
-						std::back_inserter(ret),
-						var<const std::reference_wrapper<const ast_node>&>);
-
-				return ret;
-			}
-
-			virtual ~ast_node() noexcept = default;
-			// due to unique_ptr
 			ast_node(const ast_node&) = delete;
 			ast_node& operator=(const ast_node&) = delete;
 			ast_node(ast_node&&) = default;
 			ast_node& operator=(ast_node&&) = default;
+			virtual ~ast_node() noexcept = default;
+
+		private:
+			/**
+			 * @throw exception::eval_error
+			 */
+			virtual foundation::boxed_value do_eval([[maybe_unused]] const foundation::dispatcher_state& state, [[maybe_unused]] ast_visitor& visitor) { throw std::runtime_error{"un-dispatched ast_node (internal error)"}; }
+
+		public:
+			foundation::boxed_value eval(const foundation::dispatcher_state& state, ast_visitor& visitor);
 
 			template<typename NodeType, typename... Args>
 				requires std::is_base_of_v<ast_node, NodeType>
-			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) && { return lang::make_node<NodeType>(identifier_, location_, std::move(children_), std::forward<Args>(extra_args)...); }
-
-			template<typename Function>
-				requires (std::is_invocable_v<Function, ast_node&> or std::is_invocable_v<Function, const ast_node&>)
-			void apply(Function&& function) const
+			[[nodiscard]] ast_node_ptr remake_node(Args&&... extra_args) &&
 			{
-				std::ranges::for_each(
-						get_unwrapped_children(),
-						std::forward<Function>(function));
+				if constexpr (std::is_constructible_v<NodeType, identifier_type, parse_location, Args...>)
+				{
+					// there are some ast_nodes that have no children
+					return lang::make_node<NodeType>(identifier_, location_, std::forward<Args>(extra_args)...);
+				}
+				else if (std::is_constructible_v<NodeType, identifier_type, parse_location, children_type&&, Args...>)
+				{
+					// construct node with children
+					return lang::make_node<NodeType>(identifier_, location_, std::move(children_), std::forward<Args>(extra_args)...);
+				}
+				else
+				{
+					gal_assert(false, "unknown ast_node constructor");
+					UNREACHABLE();
+				}
 			}
 
 			/**
 			 * @throw eval_error
 			 */
-			static bool get_bool_condition(const foundation::boxed_value& object, const foundation::dispatcher_detail::dispatcher_state& state)
+			static bool get_bool_condition(const foundation::boxed_value& object, const foundation::dispatcher_state& state)
 			{
 				try { return state->boxed_cast<bool>(object); }
 				catch (const exception::bad_boxed_cast&) { throw exception::eval_error{"Condition not boolean"}; }
@@ -782,18 +652,36 @@ namespace gal::lang
 			/**
 			 * @throw eval_error
 			 */
-			static bool get_scoped_bool_condition(const ast_node& node, const foundation::dispatcher_detail::dispatcher_state& state, ast_visitor& visitor)
+			static bool get_scoped_bool_condition(ast_node& node, const foundation::dispatcher_state& state, ast_visitor& visitor)
 			{
-				foundation::dispatcher_detail::scoped_scope scoped_scope{state};
+				foundation::scoped_scope scoped_scope{state};
 				return get_bool_condition(node.eval(state, visitor), state);
 			}
 
-			foundation::boxed_value eval(const foundation::dispatcher_detail::dispatcher_state& state, ast_visitor& visitor) const;
+		private:
+			[[nodiscard]] constexpr auto get_unwrapped_children() { return children_ | std::views::transform([](auto& ptr) -> ast_node& { return *ptr; }); }
 
-			void swap(children_type& children) noexcept
+			[[nodiscard]] constexpr auto get_unwrapped_children() const { return children_ | std::views::transform([](const auto& ptr) -> const ast_node& { return *ptr; }); }
+
+		public:
+			[[nodiscard]] children_type exchange_children(
+					children_type&& new_children = {}
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const foundation::string_view_type reason = "no reason",
+							const std_source_location& location = std_source_location::current()))
 			{
-				using std::swap;
-				swap(children_, children);
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to exchange children with a '{}' element(s) children because '{}'",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							new_children.size(),
+							reason);)
+
+				return std::exchange(children_, std::move(new_children));
 			}
 
 			[[nodiscard]] constexpr children_type::size_type size() const noexcept { return children_.size(); }
@@ -811,6 +699,26 @@ namespace gal::lang
 			[[nodiscard]] constexpr ast_node_ptr& back_ptr() noexcept { return children_.back(); }
 
 			[[nodiscard]] constexpr const ast_node_ptr& back_ptr() const noexcept { return children_.back(); }
+
+			[[nodiscard]] constexpr auto view_ptr() noexcept { return children_ | std::views::all; }
+
+			[[nodiscard]] constexpr auto view_ptr() const noexcept { return children_ | std::views::all; }
+
+			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin, const children_type::difference_type count) noexcept { return view_ptr() | std::views::drop(begin) | std::views::take(count); }
+
+			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin, const children_type::difference_type count) const noexcept { return view_ptr() | std::views::drop(begin) | std::views::take(count); }
+
+			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin) noexcept { return view_ptr() | std::views::drop(begin); }
+
+			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin) const noexcept { return view_ptr() | std::views::drop(begin); }
+
+			[[nodiscard]] constexpr auto front_view_ptr(const children_type::difference_type count) noexcept { return sub_view_ptr(0, count); }
+
+			[[nodiscard]] constexpr auto front_view_ptr(const children_type::difference_type count) const noexcept { return sub_view_ptr(0, count); }
+
+			[[nodiscard]] constexpr auto back_view_ptr(const children_type::difference_type count) noexcept { return view_ptr() | std::views::reverse | std::views::take(count) | std::views::reverse; }
+
+			[[nodiscard]] constexpr auto back_view_ptr(const children_type::difference_type count) const noexcept { return view_ptr() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 
 			[[nodiscard]] constexpr ast_node& get_child(const children_type::difference_type index) noexcept { return get_unwrapped_children().operator[](index); }
 
@@ -833,23 +741,25 @@ namespace gal::lang
 
 			// [[nodiscard]] [[deprecated("use view instead")]] constexpr auto end() const noexcept { return get_unwrapped_children().end(); }
 
+			[[nodiscard]] constexpr auto view() noexcept { return get_unwrapped_children(); }
+
 			[[nodiscard]] constexpr auto view() const noexcept { return get_unwrapped_children(); }
 
-			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin, const children_type::difference_type count) noexcept { return get_unwrapped_children() | std::views::drop(begin) | std::views::take(count); }
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin, const children_type::difference_type count) noexcept { return view() | std::views::drop(begin) | std::views::take(count); }
 
-			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin, const children_type::difference_type count) const noexcept { return get_unwrapped_children() | std::views::drop(begin) | std::views::take(count); }
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin, const children_type::difference_type count) const noexcept { return view() | std::views::drop(begin) | std::views::take(count); }
 
-			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin) noexcept { return get_unwrapped_children() | std::views::drop(begin); }
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin) noexcept { return view() | std::views::drop(begin); }
 
-			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin) const noexcept { return get_unwrapped_children() | std::views::drop(begin); }
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin) const noexcept { return view() | std::views::drop(begin); }
 
 			[[nodiscard]] constexpr auto front_view(const children_type::difference_type count) noexcept { return sub_view(0, count); }
 
 			[[nodiscard]] constexpr auto front_view(const children_type::difference_type count) const noexcept { return sub_view(0, count); }
 
-			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) noexcept { return get_unwrapped_children() | std::views::reverse | std::views::take(count) | std::views::reverse; }
+			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) noexcept { return view() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 
-			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) const noexcept { return get_unwrapped_children() | std::views::reverse | std::views::take(count) | std::views::reverse; }
+			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) const noexcept { return view() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 		};
 
 		struct ast_node_tracer : common_detail::ast_node_common_base<ast_node_tracer>
@@ -858,63 +768,76 @@ namespace gal::lang
 
 			using children_type = std::vector<ast_node_tracer>;
 
+		public:
 			children_type children;
 
 			explicit ast_node_tracer(const ast_node& node)
-				: ast_node_common_base{node}//,
-			// children{node.get_unwrapped_children().begin(), node.get_unwrapped_children().end()}
+				: ast_node_common_base{node}
 			{
 				children.reserve(node.size());
 				std::ranges::copy(node.view() | std::views::transform([](const auto& n) { return static_cast<ast_node_tracer>(n); }),
 				                  std::back_inserter(children));
 			}
 
-			template<typename Function>
-			void apply(Function&& function) const
-			{
-				std::ranges::for_each(
-						children,
-						std::forward<Function>(function));
-			}
+			[[nodiscard]] constexpr children_type::size_type size() const noexcept { return children.size(); }
 
-			[[nodiscard]] constexpr const children_type& get_children() const noexcept { return children; }
+			[[nodiscard]] constexpr bool empty() const noexcept { return children.empty(); }
 
-			[[nodiscard]] constexpr auto begin() noexcept { return children.begin(); }
+			[[nodiscard]] constexpr ast_node_tracer& get_child(const children_type::difference_type index) noexcept { return children[index]; }
 
-			[[nodiscard]] constexpr auto begin() const noexcept { return children.begin(); }
+			[[nodiscard]] constexpr const ast_node_tracer& get_child(const children_type::difference_type index) const noexcept { return const_cast<ast_node_tracer&>(*this).get_child(index); }
 
-			[[nodiscard]] constexpr auto end() noexcept { return children.end(); }
+			[[nodiscard]] constexpr ast_node_tracer& front() noexcept { return children.front(); }
 
-			[[nodiscard]] constexpr auto end() const noexcept { return children.end(); }
+			[[nodiscard]] constexpr const ast_node_tracer& front() const noexcept { return const_cast<ast_node_tracer&>(*this).front(); }
+
+			[[nodiscard]] constexpr ast_node_tracer& back() noexcept { return children.back(); }
+
+			[[nodiscard]] constexpr const ast_node_tracer& back() const noexcept { return const_cast<ast_node_tracer&>(*this).back(); }
+
+			[[nodiscard]] constexpr auto view() noexcept { return children | std::views::all; }
+
+			[[nodiscard]] constexpr auto view() const noexcept { return children | std::views::all; }
+
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin, const children_type::difference_type count) noexcept { return view() | std::views::drop(begin) | std::views::take(count); }
+
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin, const children_type::difference_type count) const noexcept { return view() | std::views::drop(begin) | std::views::take(count); }
+
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin) noexcept { return view() | std::views::drop(begin); }
+
+			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin) const noexcept { return view() | std::views::drop(begin); }
+
+			[[nodiscard]] constexpr auto front_view(const children_type::difference_type count) noexcept { return sub_view(0, count); }
+
+			[[nodiscard]] constexpr auto front_view(const children_type::difference_type count) const noexcept { return sub_view(0, count); }
+
+			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) noexcept { return view() | std::views::reverse | std::views::take(count) | std::views::reverse; }
+
+			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) const noexcept { return view() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 		};
 
-		inline foundation::boxed_value ast_node::eval(const foundation::dispatcher_detail::dispatcher_state& state, ast_visitor& visitor) const
-		{
-			visitor.visit(*this);
-			try { return do_eval(state, visitor); }
-			catch (exception::eval_error& e)
-			{
-				e.stack_traces.emplace_back(*this);
-				throw;
-			}
-		}
-	}// namespace lang
+		// inline foundation::boxed_value ast_node::eval(const foundation::dispatcher_state& state, ast_visitor& visitor)
+		// {
+		// 	visitor.visit(*this);
+		// 	try { return do_eval(state, visitor); }
+		// 	catch (exception::eval_error& e)
+		// 	{
+		// 		e.stack_traces.emplace_back(*this);
+		// 		throw;
+		// 	}
+		// }
+	}
 
 	namespace exception
 	{
-		inline void eval_error::format_types(
-				std::string& target,
-				const foundation::immutable_proxy_function& function,
-				const bool has_dot_notation,
-				const foundation::dispatcher_detail::dispatcher& dispatcher
-				)
+		inline void eval_error::format_types(string_type& target, const foundation::const_function_proxy_type& function, const bool has_dot_notation, const foundation::dispatcher& dispatcher)
 		{
 			gal_assert(function.operator bool());
 
-			const auto arity = function->get_arity();
-			const auto& types = function->types();
+			const auto arity = function->arity_size();
+			const auto types = function->type_view();
 
-			if (arity == foundation::proxy_function_base::no_parameters_arity)
+			if (arity == foundation::function_proxy_base::no_parameters_arity)
 			{
 				std_format::format_to(
 						std::back_inserter(target),
@@ -929,8 +852,8 @@ namespace gal::lang
 				for (auto it = types.begin() + 1; it != types.end(); ++it)
 				{
 					std_format::format_to(std::back_inserter(target),
-					                      "{} ({})",
-					                      dispatcher.get_type_name(*it),
+					                      "{}({})",
+					                      dispatcher.nameof(*it),
 					                      it->is_const() ? "immutable" : "mutable");
 
 					if (it == types.begin() + 1 && has_dot_notation)
@@ -948,27 +871,27 @@ namespace gal::lang
 				target.append(") ");
 			}
 
-			if (const auto fun = std::dynamic_pointer_cast<const foundation::dynamic_proxy_function_base>(function);
-				fun && fun->has_parse_tree())
+			if (const auto fun = std::dynamic_pointer_cast<const foundation::dynamic_function_proxy_base>(function);
+				fun && fun->has_function_body())
 			{
 				if (const auto guard = fun->get_guard())
 				{
-					if (const auto guard_fun = std::dynamic_pointer_cast<const foundation::dynamic_proxy_function_base>(guard);
-						guard_fun && guard_fun->has_parse_tree())
+					if (const auto guard_fun = std::dynamic_pointer_cast<const foundation::dynamic_function_proxy_base>(guard);
+						guard_fun && guard_fun->has_function_body())
 					{
-						target.append(" : ");
-						guard_fun->get_parse_tree().pretty_format_to(target);
+						target.append(lang::keyword_function_guard_name::value);
+						guard_fun->get_function_body().pretty_format_to(target);
 					}
 				}
 
 				target.append("\n\tDefined at: ");
-				fun->get_parse_tree().pretty_format_position_to(target);
+				fun->get_function_body().pretty_format_position_to(target);
 			}
 		}
 
-		inline std::string eval_error::pretty_print() const
+		inline eval_error::string_type eval_error::pretty_print() const
 		{
-			std::string ret{};
+			string_type ret{};
 			pretty_print_to(ret);
 			return ret;
 		}
@@ -992,33 +915,83 @@ namespace gal::lang
 
 		public:
 			[[nodiscard]] virtual lang::ast_visitor& get_visitor() = 0;
-			[[nodiscard]] virtual lang::ast_node_ptr parse(foundation::string_view_type input, foundation::string_view_type filename) = 0;
+
+			[[nodiscard]] virtual lang::ast_node_ptr parse(foundation::string_view_type input, lang::parse_location::filename_type filename) = 0;
+
 			[[nodiscard]] virtual std::string debug_print(const lang::ast_node& node, foundation::string_view_type prepend) const = 0;
 			virtual void debug_print_to(foundation::string_type& dest, const lang::ast_node& node, foundation::string_view_type prepend) const = 0;
 		};
-	}
+	}// namespace parser_detail
 
-	// todo: better way
+	// see gal/foundation/boxed_exception.hpp
 	namespace interrupt_type
 	{
 		/**
 		 * @brief Special type for returned values
 		 */
-		struct return_value
-		{
-			foundation::boxed_value value;
-		};
+		// struct return_value
+		// {
+		// 	constexpr static foundation::gal_type_info::flag_type return_value_flag = utils::hash_fnv1a<false>("@@internal_return_value_flag@@");
+		//
+		// 	foundation::boxed_value value;
+		// 	foundation::boxed_value type;
+		//
+		// 	[[nodiscard]] static return_value& instance(foundation::boxed_value value)
+		// 	{
+		// 		static return_value ins{.type = {return_value_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
+		//
+		// 		ins.value = std::move(value);
+		// 		return ins;
+		// 	}
+		// };
+
 
 		/**
 		 * @brief Special type indicating a call to 'break'
 		 */
-		struct break_loop { };
+		// struct break_loop
+		// {
+		// 	constexpr static foundation::gal_type_info::flag_type break_loop_flag = utils::hash_fnv1a<false>("@@internal_break_loop_flag@@");
+		//
+		// 	foundation::boxed_value type;
+		//
+		// 	// ReSharper disable once CppNonExplicitConversionOperator
+		// 	[[nodiscard]] operator foundation::boxed_value&() noexcept { return type; }
+		//
+		// 	// ReSharper disable once CppNonExplicitConversionOperator
+		// 	[[nodiscard]] operator const foundation::boxed_value&() const noexcept { return type; }
+		//
+		// 	[[nodiscard]] static break_loop& instance()
+		// 	{
+		// 		static break_loop ins{.type = {break_loop_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
+		//
+		// 		return ins;
+		// 	}
+		// };
 
 		/**
 		 * @brief Special type indicating a call to 'continue'
 		 */
-		struct continue_loop { };
+		// struct continue_loop
+		// {
+		// 	constexpr static foundation::gal_type_info::flag_type continue_loop_flag = utils::hash_fnv1a<false>("@@internal_continue_loop_flag@@");
+		//
+		// 	foundation::boxed_value type;
+		//
+		// 	// ReSharper disable once CppNonExplicitConversionOperator
+		// 	[[nodiscard]] operator foundation::boxed_value&() noexcept { return type; }
+		//
+		// 	// ReSharper disable once CppNonExplicitConversionOperator
+		// 	[[nodiscard]] operator const foundation::boxed_value&() const noexcept { return type; }
+		//
+		// 	[[nodiscard]] static continue_loop& instance()
+		// 	{
+		// 		static continue_loop ins{.type = {continue_loop_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
+		//
+		// 		return ins;
+		// 	}
+		// };
 	}
-}// namespace gal::lang
+}
 
-#endif//GAL_LANG_LANGUAGE_COMMON_HPP
+#endif // GAL_LANG_LANGUAGE_COMMON_HPP

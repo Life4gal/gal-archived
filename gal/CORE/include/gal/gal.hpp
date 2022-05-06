@@ -1,35 +1,29 @@
 #pragma once
 
-#ifndef GAL_LANG_BASIC_HPP
-#define GAL_LANG_BASIC_HPP
+#ifndef GAL_LANG_GAL_HPP
+#define GAL_LANG_GAL_HPP
 
-#include <gal/function_register.hpp>
-#include <gal/language/parser.hpp>
 #include <gal/language/engine.hpp>
-#include <gal/language/visitor.hpp>
-#include <gal/language/optimizer.hpp>
-#include <gal/foundation/standard_library.hpp>
+#include <gal/language/parser.hpp>
+#include <gal/extra/visitor.hpp>
+#include <gal/extra/optimizer.hpp>
+#include <gal/extra/standard_library.hpp>
 
 namespace gal::lang
 {
 	class engine : public lang::engine_base
 	{
 	private:
-		lang::default_visitor visitor_;
-		lang::default_optimizer optimizer_;
+		extra::default_visitor visitor_;
+		extra::default_optimizer optimizer_;
 
 	public:
-		explicit engine(
-				std::vector<std::string> preload_paths = {},
-				const engine_option option = engine_option::default_option
-				)
+		explicit engine(preloaded_paths_type preloaded_paths = {})
 			: engine_base{
-					foundation::standard_library::build(),
+					extra::standard_library::build(),
 					std::make_unique<lang::parser>(visitor_, optimizer_),
-					std::move(preload_paths),
-					option
-			} {}
+					std::move(preloaded_paths)} {}
 	};
 }
 
-#endif // GAL_LANG_BASIC_HPP
+#endif // GAL_LANG_GAL_HPP

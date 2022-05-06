@@ -3,11 +3,10 @@
 #ifndef GAL_LANG_FOUNDATION_BOXED_NUMBER_HPP
 #define GAL_LANG_FOUNDATION_BOXED_NUMBER_HPP
 
-#include <utils/format.hpp>
-#include <gal/language/algebraic.hpp>
-#include <gal/language/macro.hpp>
-#include <gal/boxed_value.hpp>
 #include <gal/boxed_cast.hpp>
+#include <gal/boxed_value.hpp>
+#include <gal/language/algebraic.hpp>
+#include <utils/format.hpp>
 
 namespace gal::lang
 {
@@ -19,16 +18,26 @@ namespace gal::lang
 			explicit arithmetic_error(const std::string_view reason)
 				: std::runtime_error{std_format::format("Arithmetic error due to '{}'", reason)} {}
 		};
-	}
+	}// namespace exception
 
 	namespace foundation
 	{
 		/**
-	 * @brief Represents any numeric type, generically.
-	 * Used internally for generic operations between POD values.
-	 */
+		 * @brief Represents any numeric type, generically.
+		 * Used internally for generic operations between POD values.
+		 *
+		 * todo: boxed_number is badly designed, redesign it!
+		 */
 		class boxed_number
 		{
+		public:
+
+			static const gal_type_info& class_type() noexcept
+			{
+				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,) static gal_type_info type = make_type_info<boxed_number>();
+				return type;
+			}
+
 		private:
 			enum class numeric_type
 			{
@@ -82,8 +91,8 @@ namespace gal::lang
 			}
 
 			/**
-		 * @throw std::bad_any_cast not support numeric type
-		 */
+			 * @throw std::bad_any_cast not support numeric type
+			 */
 			static numeric_type get_type(const boxed_value& object)
 			{
 				const auto& ti = object.type_info();
@@ -119,8 +128,8 @@ namespace gal::lang
 			}
 
 			/**
-		 * @throw std::bad_any_cast not support numeric type
-		 */
+			 * @throw std::bad_any_cast not support numeric type
+			 */
 			template<typename Callable>
 			static auto visit(const boxed_value& object, Callable& function)
 			{
@@ -407,7 +416,7 @@ namespace gal::lang
 				{
 					auto rhs_visitor = [&lhs, operation, &lhs_part](const auto& rhs_part)
 					{
-						return do_binary_invoke(
+						return boxed_number::do_binary_invoke(
 								lhs,
 								operation,
 								lhs.is_xvalue() ? nullptr : static_cast<T*>(lhs.get_raw()),
@@ -415,7 +424,7 @@ namespace gal::lang
 								rhs_part);
 					};
 
-					return visit(
+					return boxed_number::visit(
 							rhs,
 							rhs_visitor);
 				};
@@ -676,7 +685,7 @@ namespace gal::lang
 			/**
 			 * @throw std::bad_any_cast not supported numeric type
 			 */
-			[[nodiscard]] std::string to_string() const
+			[[nodiscard]] string_type to_string() const
 			{
 				switch (get_type(value))
 				{
@@ -706,9 +715,9 @@ namespace gal::lang
 			template<>
 			struct cast_helper<boxed_number>
 			{
-				static boxed_number cast(boxed_value&& object, const type_conversion_state*) { return boxed_number{std::move(object)}; }
+				static boxed_number cast(boxed_value&& object, const convertor_manager_state*) { return boxed_number{std::move(object)}; }
 
-				static boxed_number cast(const boxed_value& object, const type_conversion_state*) { return boxed_number{object}; }
+				static boxed_number cast(const boxed_value& object, const convertor_manager_state*) { return boxed_number{object}; }
 			};
 
 			template<>
@@ -718,6 +727,6 @@ namespace gal::lang
 			struct cast_helper<const boxed_number&> : cast_helper<boxed_number> { };
 		}// namespace boxed_cast_detail
 	}    // namespace foundation
-}
+}        // namespace gal::lang
 
-#endif // GAL_LANG_FOUNDATION_BOXED_NUMBER_HPP
+#endif// GAL_LANG_FOUNDATION_BOXED_NUMBER_HPP

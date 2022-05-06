@@ -45,7 +45,7 @@ namespace gal::lang
 		 */
 		template<typename T>
 		boxed_value make_const_boxed_value(const std::reference_wrapper<T>& object) { return boxed_value{std::cref(object.get())}; }
-	}
+	}// namespace boxed_value_detail
 
 	/**
 	 * @brief Creates a boxed_value. If the object passed in is a value type, it is copied.
@@ -79,7 +79,7 @@ namespace gal::lang
 
 		return b ? t : f;
 	}
-}
+}// namespace gal::lang
 
 
-#endif // GAL_LANG_BOXED_VALUE_HPP
+#endif// GAL_LANG_BOXED_VALUE_HPP
