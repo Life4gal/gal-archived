@@ -8,14 +8,13 @@
 
 #include <fstream>
 #include <gal/exception_handler.hpp>
-#include <gal/language/common.hpp>
-#include <gal/extra/binary_module_windows.hpp>
+#include <gal/foundation/ast.hpp>
+#include <gal/plugins/binary_module_windows.hpp>
 #include <gal/foundation/string_pool.hpp>
 
-namespace gal::lang::lang
+namespace gal::lang::foundation
 {
-	using binary_module_type = std::shared_ptr<extra::binary_module>;
-	using engine_module_type = foundation::engine_module_type;
+	using binary_module_type = std::shared_ptr<plugin::binary_module>;
 
 	/**
 	 * @brief The main object that user will use.
@@ -24,7 +23,7 @@ namespace gal::lang::lang
 	{
 	public:
 		// the filename is also stored in the corresponding pool
-		using file_contents_type = std::map<foundation::string_view_type, foundation::string_pool_type>;
+		using file_contents_type = std::map<string_view_type, string_pool_type>;
 
 		using used_files_type = std::set<file_contents_type::key_type>;
 		using loaded_modules_type = std::map<file_contents_type::key_type, binary_module_type>;
@@ -44,13 +43,13 @@ namespace gal::lang::lang
 
 		preloaded_paths_type preloaded_paths_;
 
-		std::unique_ptr<parser_detail::parser_base> parser_;
+		std::unique_ptr<ast::ast_parser_base> parser_;
 
-		foundation::dispatcher dispatcher_;
+		dispatcher dispatcher_;
 
-		foundation::string_pool_type string_pool_;
+		string_pool_type string_pool_;
 
-		[[nodiscard]] foundation::string_view_type load_file(const std::string_view filename)
+		[[nodiscard]] string_view_type load_file(const std::string_view filename)
 		{
 			auto& pool = file_contents_[filename];
 			pool.append(filename);
@@ -88,31 +87,31 @@ namespace gal::lang::lang
 		/**
 		 * @brief Evaluates the given string in by parsing it and running the results through the evaluator
 		 */
-		[[nodiscard]] foundation::boxed_value do_internal_eval(
-				const foundation::string_view_type input,
-				const foundation::string_view_type filename)
+		[[nodiscard]] boxed_value do_internal_eval(
+				const string_view_type input,
+				const string_view_type filename)
 		{
-			try { return parser_->parse(input, filename)->eval(foundation::dispatcher_state{dispatcher_}, parser_->get_visitor()); }
+			try { return parser_->parse(input, filename)->eval(dispatcher_state{dispatcher_}, parser_->get_visitor()); }
 			catch (interrupt_type::interrupt_return& ret) { return std::move(ret.value); }
 		}
 
 		/**
 		 * @brief Evaluates the given file and looks in the 'use' paths
 		 */
-		[[nodiscard]] foundation::boxed_value internal_eval_file(const foundation::string_view_type filename)
+		[[nodiscard]] boxed_value internal_eval_file(const string_view_type filename)
 		{
 			for (const auto& path: preloaded_paths_)
 			{
 				try
 				{
-					const auto real_path = foundation::string_type{path}.append(filename);
+					const auto real_path = string_type{path}.append(filename);
 					return do_internal_eval(load_file(filename), filename);
 				}
 				catch (const exception::file_not_found_error&)
 				{
 					// failed to load, try the next path
 				}
-				catch (const exception::eval_error& e) { throw foundation::boxed_return_exception{var(e)}; }
+				catch (const exception::eval_error& e) { throw boxed_return_exception{var(e)}; }
 			}
 
 			throw exception::file_not_found_error{filename};
@@ -121,16 +120,16 @@ namespace gal::lang::lang
 		/**
 		 * @brief Evaluates the given string, used during eval() inside of a script
 		 */
-		[[nodiscard]] foundation::boxed_value internal_eval(const foundation::string_view_type input)
+		[[nodiscard]] boxed_value internal_eval(const string_view_type input)
 		{
 			try { return do_internal_eval(input, keyword_inline_eval_filename_name::value); }
-			catch (const exception::eval_error& e) { throw foundation::boxed_return_exception{var(e)}; }
+			catch (const exception::eval_error& e) { throw boxed_return_exception{var(e)}; }
 		}
 
 		/**
 		 * @brief Builds all the requirements, including its evaluator and a run of its prelude.
 		 */
-		void build_system(foundation::engine_module_type&& library)
+		void build_system(engine_module_type&& library)
 		{
 			if (library) { take_module(std::move(*library)); }
 
@@ -144,16 +143,16 @@ namespace gal::lang::lang
 		 * @param preloaded_paths Vector of paths to search when attempting to "use" an included file
 		 */
 		engine_base(
-				foundation::engine_module_type&& library,
-				std::unique_ptr<parser_detail::parser_base> parser,
+				engine_module_type&& library,
+				std::unique_ptr<ast::ast_parser_base> parser,
 				preloaded_paths_type preloaded_paths)
 			: preloaded_paths_{std::move(preloaded_paths)},
 			  parser_{std::move(parser)},
 			  dispatcher_{string_pool_, *parser_} { build_system(std::move(library)); }
 
-		[[nodiscard]] foundation::boxed_value eval(ast_node& node)
+		[[nodiscard]] boxed_value eval(ast::ast_node& node)
 		{
-			try { return node.eval(foundation::dispatcher_state{dispatcher_}, parser_->get_visitor()); }
+			try { return node.eval(dispatcher_state{dispatcher_}, parser_->get_visitor()); }
 			catch (const exception::eval_error& e) { throw var(e); }
 		}
 
@@ -162,13 +161,13 @@ namespace gal::lang::lang
 		 *
 		 * @throw exception::eval_error In the case that evaluation fails.
 		 */
-		[[nodiscard]] foundation::boxed_value eval(
-				const foundation::string_view_type input,
+		[[nodiscard]] boxed_value eval(
+				const string_view_type input,
 				const exception_handler_type& handler = {},
-				const foundation::string_view_type filename = keyword_inline_eval_filename_name::value)
+				const string_view_type filename = keyword_inline_eval_filename_name::value)
 		{
 			try { return do_internal_eval(input, filename); }
-			catch (foundation::boxed_return_exception& e)
+			catch (boxed_return_exception& e)
 			{
 				if (handler) { handler->handle(e, dispatcher_); }
 				throw;
@@ -180,8 +179,8 @@ namespace gal::lang::lang
 		 *
 		 * @throw exception::eval_error In the case that evaluation fails.
 		 */
-		[[nodiscard]] foundation::boxed_value eval_file(
-				const foundation::string_view_type filename,
+		[[nodiscard]] boxed_value eval_file(
+				const string_view_type filename,
 				const exception_handler_type& handler = {}) { return eval(load_file(filename), handler, filename); }
 
 		/**
@@ -195,10 +194,10 @@ namespace gal::lang::lang
 		 */
 		template<typename T>
 		decltype(auto) eval_file(
-				const foundation::string_view_type filename,
+				const string_view_type filename,
 				const exception_handler_type& handler = {}) { return dispatcher_.boxed_cast<T>(eval_file(filename, handler)); }
 
-		[[nodiscard]] ast_node_ptr parse(const foundation::string_view_type input, const bool debug_print = false) const
+		[[nodiscard]] ast::ast_node_ptr parse(const string_view_type input, const bool debug_print = false) const
 		{
 			auto result = parser_->parse(input, "engine_base::parse");
 			if (debug_print)
@@ -214,17 +213,17 @@ namespace gal::lang::lang
 		 * it will not reloaded. The use paths specified at construction
 		 * time are searched for the requested file.
 		 */
-		[[nodiscard]] foundation::boxed_value load(const foundation::string_view_type filename)
+		[[nodiscard]] boxed_value load(const string_view_type filename)
 		{
 			for (const auto& path: preloaded_paths_)
 			{
-				const auto p = foundation::string_type{path}.append(filename);
+				const auto p = string_type{path}.append(filename);
 				try
 				{
 					utils::threading::unique_lock lock{mutex_};
 					utils::threading::unique_lock load_lock{load_mutex_};
 
-					foundation::boxed_value ret{};
+					boxed_value ret{};
 
 					if (not loaded_files_.contains(filename))
 					{
@@ -253,17 +252,17 @@ namespace gal::lang::lang
 			throw exception::file_not_found_error{filename};
 		}
 
-		[[nodiscard]] foundation::string_view_type register_global_string(const foundation::string_view_type string) { return string_pool_.append(string); }
+		[[nodiscard]] string_view_type register_global_string(const string_view_type string) { return string_pool_.append(string); }
 
 		// todo: register local string
 
 		template<typename T>
-		decltype(auto) boxed_cast(const foundation::boxed_value& object) const { return dispatcher_.boxed_cast<T>(object); }
+		decltype(auto) boxed_cast(const boxed_value& object) const { return dispatcher_.boxed_cast<T>(object); }
 
 		/**
 		 * @brief Registers a new named type.
 		 */
-		engine_base& add_type_info(const foundation::string_view_type name, const foundation::gal_type_info& type)
+		engine_base& add_type_info(const string_view_type name, const gal_type_info& type)
 		{
 			dispatcher_.add_type_info(name, type);
 			return *this;
@@ -272,7 +271,7 @@ namespace gal::lang::lang
 		/**
 		 * @brief Add a new named proxy_function to the system.
 		 */
-		engine_base& add_function(const foundation::string_view_type name, foundation::function_proxy_type function)
+		engine_base& add_function(const string_view_type name, function_proxy_type function)
 		{
 			dispatcher_.add_function(name, std::move(function));
 			return *this;
@@ -286,7 +285,7 @@ namespace gal::lang::lang
 		 *
 		 * @throw global_mutable_error variable is not const
 		 */
-		engine_base& add_global(const foundation::string_view_type name, foundation::boxed_value variable)
+		engine_base& add_global(const string_view_type name, boxed_value variable)
 		{
 			name_validator::validate_object_name(name);
 			dispatcher_.add_global(name, std::move(variable));
@@ -296,7 +295,7 @@ namespace gal::lang::lang
 		/**
 		 * @brief Add a new convertor for up-casting to a base class.
 		 */
-		engine_base& add_convertor(const foundation::convertor_type& convertor)
+		engine_base& add_convertor(const convertor_type& convertor)
 		{
 			dispatcher_.add_convertor(convertor);
 			return *this;
@@ -307,7 +306,7 @@ namespace gal::lang::lang
 		 *
 		 * @note All names of the modules' type_info, function, object, evaluation, converter will be invalid if module been destroyed.
 		 */
-		engine_base& borrow_module(const foundation::engine_module_type& m)
+		engine_base& borrow_module(const engine_module_type& m)
 		{
 			m->borrow(*this, dispatcher_);
 			return *this;
@@ -318,7 +317,7 @@ namespace gal::lang::lang
 		 *
 		 * @note DO NOT USE THE MODULE AFTER IT BEEN TAKEN
 		 */
-		engine_base& take_module(foundation::engine_module&& m)
+		engine_base& take_module(engine_module&& m)
 		{
 			std::move(m).take(*this, dispatcher_);
 			return *this;
@@ -332,14 +331,14 @@ namespace gal::lang::lang
 		 * @param name Name of the value to add
 		 * @param variable boxed_value to add as a global
 		 */
-		engine_base& add_global_mutable(const foundation::string_view_type name, foundation::boxed_value variable)
+		engine_base& add_global_mutable(const string_view_type name, boxed_value variable)
 		{
 			name_validator::validate_object_name(name);
 			dispatcher_.add_global_mutable(name, std::move(variable));
 			return *this;
 		}
 
-		engine_base& global_assign_or_insert(const foundation::string_view_type name, foundation::boxed_value object)
+		engine_base& global_assign_or_insert(const string_view_type name, boxed_value object)
 		{
 			name_validator::validate_object_name(name);
 			dispatcher_.add_global_or_assign(name, std::move(object));
@@ -349,17 +348,17 @@ namespace gal::lang::lang
 		/**
 		 * @brief Objects are added to the local thread state.
 		 */
-		engine_base& add_local_or_assign(const foundation::string_view_type name, foundation::boxed_value object)
+		engine_base& add_local_or_assign(const string_view_type name, boxed_value object)
 		{
 			name_validator::validate_object_name(name);
 			dispatcher_.add_local_or_assign(name, std::move(object));
 			return *this;
 		}
 
-		[[nodiscard]] foundation::string_view_type nameof(const foundation::gal_type_info& type) const { return dispatcher_.nameof(type); }
+		[[nodiscard]] string_view_type nameof(const gal_type_info& type) const { return dispatcher_.nameof(type); }
 
 		template<typename T>
-		[[nodiscard]] foundation::string_view_type nameof() const { return this->nameof(foundation::make_type_info<T>()); }
+		[[nodiscard]] string_view_type nameof() const { return this->nameof(foundation::make_type_info<T>()); }
 	};
 }
 

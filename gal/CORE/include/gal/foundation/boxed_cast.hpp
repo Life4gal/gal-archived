@@ -9,6 +9,7 @@
 #include <gal/foundation/boxed_value.hpp>
 #include <gal/foundation/type_info.hpp>
 #include <gal/foundation/parameters.hpp>
+#include <gal/foundation/string.hpp>
 #include <utils/format.hpp>
 #include <utils/thread_storage.hpp>
 #include <utils/assert.hpp>

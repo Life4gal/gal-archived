@@ -3,10 +3,8 @@
 #ifndef GAL_LANG_FOUNDATION_BOXED_VALUE_HPP
 #define GAL_LANG_FOUNDATION_BOXED_VALUE_HPP
 
-#include <gal/foundation/string.hpp>
 #include <gal/foundation/type_info.hpp>
 #include <any>
-#include <typeindex>
 
 namespace gal::lang::foundation
 {

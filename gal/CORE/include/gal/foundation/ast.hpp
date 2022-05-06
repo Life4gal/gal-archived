@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_LANGUAGE_COMMON_HPP
-#define GAL_LANG_LANGUAGE_COMMON_HPP
+#ifndef GAL_LANG_LANGUAGE_AST_HPP
+#define GAL_LANG_LANGUAGE_AST_HPP
 
 #include <unordered_set>
 #include <utils/hash.hpp>
@@ -10,7 +10,7 @@
 
 namespace gal::lang
 {
-	namespace lang
+	namespace foundation
 	{
 		struct name_validator
 		{
@@ -65,7 +65,7 @@ namespace gal::lang
 			}
 		};
 
-		// see also parser.hpp => operator_matcher
+		// see also addons/ast_parser.hpp => operator_matcher
 		enum class operation_precedence
 		{
 			// or
@@ -93,7 +93,10 @@ namespace gal::lang
 
 			operation_size,
 		};
+	}// namespace lang
 
+	namespace ast
+	{
 		/**
 		 * @brief Convenience type for file positions.
 		 */
@@ -173,9 +176,9 @@ namespace gal::lang
 
 			string_type reason;
 			string_type filename;
-			lang::file_point begin_position;
+			ast::file_point begin_position;
 			string_type detail;
-			std::vector<lang::ast_node_tracer> stack_traces;
+			std::vector<ast::ast_node_tracer> stack_traces;
 
 		private:
 			static void format_reason(std::string& target, const string_view_type r) { std_format::format_to(std::back_inserter(target), "Error: '{}' ", r); }
@@ -222,18 +225,18 @@ namespace gal::lang
 				target.append(") ");
 			}
 
-			static void format_filename(string_type& target, const lang::parse_location::filename_type f)
+			static void format_filename(string_type& target, const ast::parse_location::filename_type f)
 			{
-				if (f != lang::keyword_inline_eval_filename_name::value) { std_format::format_to(std::back_inserter(target), "in '{}' ", f); }
+				if (f != foundation::keyword_inline_eval_filename_name::value) { std_format::format_to(std::back_inserter(target), "in '{}' ", f); }
 				else { std_format::format_to(std::back_inserter(target), "during evaluation "); }
 			}
 
-			static void format_position(string_type& target, const lang::file_point p) { std_format::format_to(std::back_inserter(target), "at ({}, {}) ", p.line, p.column); }
+			static void format_position(string_type& target, const ast::file_point p) { std_format::format_to(std::back_inserter(target), "at ({}, {}) ", p.line, p.column); }
 
 			static string_type format(
 					const string_view_type r,
-					const lang::parse_location::filename_type f,
-					const lang::file_point p,
+					const ast::parse_location::filename_type f,
+					const ast::file_point p,
 					const foundation::parameters_view_type params,
 					const bool has_dot_notation,
 					const foundation::dispatcher& dispatcher)
@@ -265,7 +268,7 @@ namespace gal::lang
 			static string_type format(
 					const string_view_type r,
 					const string_view_type f,
-					const lang::file_point p)
+					const ast::file_point p)
 			{
 				string_type ret;
 
@@ -317,7 +320,7 @@ namespace gal::lang
 			eval_error(
 					const string_view_type reason,
 					const string_view_type filename,
-					const lang::file_point begin_position,
+					const ast::file_point begin_position,
 					const foundation::parameters_view_type params,
 					const foundation::const_function_proxies_view_type functions,
 					const bool has_dot_notation,
@@ -341,7 +344,7 @@ namespace gal::lang
 			eval_error(
 					const string_view_type reason,
 					const string_view_type filename,
-					const lang::file_point begin_position)
+					const ast::file_point begin_position)
 				: std::runtime_error{format(reason, filename, begin_position)},
 				  reason{reason},
 				  filename{filename},
@@ -358,7 +361,7 @@ namespace gal::lang
 		};
 	}// namespace exception
 
-	namespace lang
+	namespace ast
 	{
 		using ast_node_ptr = std::unique_ptr<ast_node>;
 
@@ -366,33 +369,59 @@ namespace gal::lang
 			requires std::derived_from<NodeType, ast_node>
 		[[nodiscard]] ast_node_ptr make_node(Args&&... args) { return std::make_unique<NodeType>(std::forward<Args>(args)...); }
 
-		class ast_visitor
+		class ast_visitor_base
 		{
 		public:
-			constexpr ast_visitor() noexcept = default;
-			constexpr virtual ~ast_visitor() noexcept = default;
-			constexpr ast_visitor(const ast_visitor&) = default;
-			constexpr ast_visitor& operator=(const ast_visitor&) = default;
-			constexpr ast_visitor(ast_visitor&&) = default;
-			constexpr ast_visitor& operator=(ast_visitor&&) = default;
+			constexpr ast_visitor_base() noexcept = default;
+			constexpr virtual ~ast_visitor_base() noexcept = default;
+			constexpr ast_visitor_base(const ast_visitor_base&) = default;
+			constexpr ast_visitor_base& operator=(const ast_visitor_base&) = default;
+			constexpr ast_visitor_base(ast_visitor_base&&) = default;
+			constexpr ast_visitor_base& operator=(ast_visitor_base&&) = default;
 
 			virtual void visit(const ast_node& node) = 0;
 		};
 
-		class ast_optimizer
+		class ast_optimizer_base
 		{
 		public:
-			constexpr ast_optimizer() = default;
-			constexpr virtual ~ast_optimizer() noexcept = default;
-			constexpr ast_optimizer(const ast_optimizer&) = default;
-			constexpr ast_optimizer& operator=(const ast_optimizer&) = default;
-			constexpr ast_optimizer(ast_optimizer&&) = default;
-			constexpr ast_optimizer& operator=(ast_optimizer&&) = default;
+			constexpr ast_optimizer_base() = default;
+			constexpr virtual ~ast_optimizer_base() noexcept = default;
+			constexpr ast_optimizer_base(const ast_optimizer_base&) = default;
+			constexpr ast_optimizer_base& operator=(const ast_optimizer_base&) = default;
+			constexpr ast_optimizer_base(ast_optimizer_base&&) = default;
+			constexpr ast_optimizer_base& operator=(ast_optimizer_base&&) = default;
 
 			[[nodiscard]] virtual ast_node_ptr optimize(ast_node_ptr node) = 0;
 		};
 
-		namespace common_detail
+		class ast_parser_base
+		{
+		public:
+			ast_parser_base() = default;
+			virtual ~ast_parser_base() noexcept = default;
+
+			ast_parser_base(ast_parser_base&&) = default;
+
+			ast_parser_base& operator=(const ast_parser_base&) = delete;
+			ast_parser_base& operator=(ast_parser_base&&) = delete;
+
+		protected:
+			ast_parser_base(const ast_parser_base&) = default;
+
+		public:
+			[[nodiscard]] virtual ast_node_ptr parse(foundation::string_view_type input, parse_location::filename_type filename) = 0;
+
+			[[nodiscard]] virtual ast_visitor_base& get_visitor() = 0;
+
+			[[nodiscard]] virtual ast_optimizer_base& get_optimizer() = 0;
+
+			[[nodiscard]] virtual std::string debug_print(const ast_node& node, foundation::string_view_type prepend) const = 0;
+
+			virtual void debug_print_to(foundation::string_type& dest, const ast_node& node, foundation::string_view_type prepend) const = 0;
+		};
+
+		namespace ast_detail
 		{
 			using ast_rtti_index_type = int;
 
@@ -421,12 +450,12 @@ namespace gal::lang
 				[[nodiscard]] static foundation::string_view_type nameof(const ast_rtti_index_type index) { return ast_rtti_info_[index]; }
 			};
 
-			#define GAL_AST_SET_RTTI(class_name)						\
-			constexpr static auto get_rtti_index() noexcept				\
-			{																					\
-				return common_detail::ast_rtti<class_name>::value;	\
-			}																					\
-			inline static auto ast_register_name = common_detail::ast_rtti_manager::register_ast_rtti_name(common_detail::ast_rtti<class_name>::value, #class_name);
+			#define GAL_AST_SET_RTTI(class_name)                       \
+		constexpr static auto get_rtti_index() noexcept        \
+		{                                                      \
+			return ast_detail::ast_rtti<class_name>::value; \
+		}                                                      \
+		inline static auto ast_register_name = ast_detail::ast_rtti_manager::register_ast_rtti_name(ast_detail::ast_rtti<class_name>::value, #class_name);
 
 			template<typename T>
 			concept has_rtti_index = requires(T t)
@@ -443,7 +472,7 @@ namespace gal::lang
 				friend struct ast_node_common_base;
 
 				// for ast_node::remake_node
-				friend struct lang::ast_node;
+				friend struct ast::ast_node;
 
 				using text_type = foundation::string_type;
 				using identifier_type = foundation::string_view_type;
@@ -580,9 +609,9 @@ namespace gal::lang
 					return result;
 				}
 			};
-		}
+		}// namespace ast_detail
 
-		struct ast_node : common_detail::ast_node_common_base<ast_node>
+		struct ast_node : ast_detail::ast_node_common_base<ast_node>
 		{
 			using children_type = std::vector<ast_node_ptr>;
 
@@ -590,7 +619,7 @@ namespace gal::lang
 			children_type children_;
 
 			ast_node(
-					const common_detail::ast_rtti_index_type index,
+					const ast_detail::ast_rtti_index_type index,
 					const identifier_type identifier,
 					const parse_location location,
 					children_type&& children = {})
@@ -614,10 +643,10 @@ namespace gal::lang
 			/**
 			 * @throw exception::eval_error
 			 */
-			virtual foundation::boxed_value do_eval([[maybe_unused]] const foundation::dispatcher_state& state, [[maybe_unused]] ast_visitor& visitor) { throw std::runtime_error{"un-dispatched ast_node (internal error)"}; }
+			virtual foundation::boxed_value do_eval([[maybe_unused]] const foundation::dispatcher_state& state, [[maybe_unused]] ast_visitor_base& visitor) { throw std::runtime_error{"un-dispatched ast_node (internal error)"}; }
 
 		public:
-			foundation::boxed_value eval(const foundation::dispatcher_state& state, ast_visitor& visitor);
+			foundation::boxed_value eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor);
 
 			template<typename NodeType, typename... Args>
 				requires std::is_base_of_v<ast_node, NodeType>
@@ -626,12 +655,12 @@ namespace gal::lang
 				if constexpr (std::is_constructible_v<NodeType, identifier_type, parse_location, Args...>)
 				{
 					// there are some ast_nodes that have no children
-					return lang::make_node<NodeType>(identifier_, location_, std::forward<Args>(extra_args)...);
+					return ast::make_node<NodeType>(identifier_, location_, std::forward<Args>(extra_args)...);
 				}
 				else if (std::is_constructible_v<NodeType, identifier_type, parse_location, children_type&&, Args...>)
 				{
 					// construct node with children
-					return lang::make_node<NodeType>(identifier_, location_, std::move(children_), std::forward<Args>(extra_args)...);
+					return ast::make_node<NodeType>(identifier_, location_, std::move(children_), std::forward<Args>(extra_args)...);
 				}
 				else
 				{
@@ -652,7 +681,7 @@ namespace gal::lang
 			/**
 			 * @throw eval_error
 			 */
-			static bool get_scoped_bool_condition(ast_node& node, const foundation::dispatcher_state& state, ast_visitor& visitor)
+			static bool get_scoped_bool_condition(ast_node& node, const foundation::dispatcher_state& state, ast_visitor_base& visitor)
 			{
 				foundation::scoped_scope scoped_scope{state};
 				return get_bool_condition(node.eval(state, visitor), state);
@@ -665,8 +694,7 @@ namespace gal::lang
 
 		public:
 			[[nodiscard]] children_type exchange_children(
-					children_type&& new_children = {}
-					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+					children_type&& new_children = {} GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
 							,
 							const foundation::string_view_type reason = "no reason",
 							const std_source_location& location = std_source_location::current()))
@@ -762,13 +790,12 @@ namespace gal::lang
 			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) const noexcept { return view() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 		};
 
-		struct ast_node_tracer : common_detail::ast_node_common_base<ast_node_tracer>
+		struct ast_node_tracer : ast_detail::ast_node_common_base<ast_node_tracer>
 		{
 			GAL_AST_SET_RTTI(ast_node_tracer)
 
 			using children_type = std::vector<ast_node_tracer>;
 
-		public:
 			children_type children;
 
 			explicit ast_node_tracer(const ast_node& node)
@@ -815,17 +842,6 @@ namespace gal::lang
 
 			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) const noexcept { return view() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 		};
-
-		// inline foundation::boxed_value ast_node::eval(const foundation::dispatcher_state& state, ast_visitor& visitor)
-		// {
-		// 	visitor.visit(*this);
-		// 	try { return do_eval(state, visitor); }
-		// 	catch (exception::eval_error& e)
-		// 	{
-		// 		e.stack_traces.emplace_back(*this);
-		// 		throw;
-		// 	}
-		// }
 	}
 
 	namespace exception
@@ -879,7 +895,7 @@ namespace gal::lang
 					if (const auto guard_fun = std::dynamic_pointer_cast<const foundation::dynamic_function_proxy_base>(guard);
 						guard_fun && guard_fun->has_function_body())
 					{
-						target.append(lang::keyword_function_guard_name::value);
+						target.append(foundation::keyword_function_guard_name::value);
 						guard_fun->get_function_body().pretty_format_to(target);
 					}
 				}
@@ -895,103 +911,7 @@ namespace gal::lang
 			pretty_print_to(ret);
 			return ret;
 		}
-	}
-
-	namespace parser_detail
-	{
-		class parser_base
-		{
-		public:
-			parser_base() = default;
-			virtual ~parser_base() noexcept = default;
-
-			parser_base(parser_base&&) = default;
-
-			parser_base& operator=(const parser_base&) = delete;
-			parser_base& operator=(parser_base&&) = delete;
-
-		protected:
-			parser_base(const parser_base&) = default;
-
-		public:
-			[[nodiscard]] virtual lang::ast_visitor& get_visitor() = 0;
-
-			[[nodiscard]] virtual lang::ast_node_ptr parse(foundation::string_view_type input, lang::parse_location::filename_type filename) = 0;
-
-			[[nodiscard]] virtual std::string debug_print(const lang::ast_node& node, foundation::string_view_type prepend) const = 0;
-			virtual void debug_print_to(foundation::string_type& dest, const lang::ast_node& node, foundation::string_view_type prepend) const = 0;
-		};
-	}// namespace parser_detail
-
-	// see gal/foundation/boxed_exception.hpp
-	namespace interrupt_type
-	{
-		/**
-		 * @brief Special type for returned values
-		 */
-		// struct return_value
-		// {
-		// 	constexpr static foundation::gal_type_info::flag_type return_value_flag = utils::hash_fnv1a<false>("@@internal_return_value_flag@@");
-		//
-		// 	foundation::boxed_value value;
-		// 	foundation::boxed_value type;
-		//
-		// 	[[nodiscard]] static return_value& instance(foundation::boxed_value value)
-		// 	{
-		// 		static return_value ins{.type = {return_value_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
-		//
-		// 		ins.value = std::move(value);
-		// 		return ins;
-		// 	}
-		// };
-
-
-		/**
-		 * @brief Special type indicating a call to 'break'
-		 */
-		// struct break_loop
-		// {
-		// 	constexpr static foundation::gal_type_info::flag_type break_loop_flag = utils::hash_fnv1a<false>("@@internal_break_loop_flag@@");
-		//
-		// 	foundation::boxed_value type;
-		//
-		// 	// ReSharper disable once CppNonExplicitConversionOperator
-		// 	[[nodiscard]] operator foundation::boxed_value&() noexcept { return type; }
-		//
-		// 	// ReSharper disable once CppNonExplicitConversionOperator
-		// 	[[nodiscard]] operator const foundation::boxed_value&() const noexcept { return type; }
-		//
-		// 	[[nodiscard]] static break_loop& instance()
-		// 	{
-		// 		static break_loop ins{.type = {break_loop_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
-		//
-		// 		return ins;
-		// 	}
-		// };
-
-		/**
-		 * @brief Special type indicating a call to 'continue'
-		 */
-		// struct continue_loop
-		// {
-		// 	constexpr static foundation::gal_type_info::flag_type continue_loop_flag = utils::hash_fnv1a<false>("@@internal_continue_loop_flag@@");
-		//
-		// 	foundation::boxed_value type;
-		//
-		// 	// ReSharper disable once CppNonExplicitConversionOperator
-		// 	[[nodiscard]] operator foundation::boxed_value&() noexcept { return type; }
-		//
-		// 	// ReSharper disable once CppNonExplicitConversionOperator
-		// 	[[nodiscard]] operator const foundation::boxed_value&() const noexcept { return type; }
-		//
-		// 	[[nodiscard]] static continue_loop& instance()
-		// 	{
-		// 		static continue_loop ins{.type = {continue_loop_flag, foundation::boxed_value::internal_flag_construction_tag{}}};
-		//
-		// 		return ins;
-		// 	}
-		// };
-	}
+	}// namespace exception
 }
 
-#endif // GAL_LANG_LANGUAGE_COMMON_HPP
+#endif

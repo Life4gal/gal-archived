@@ -8,15 +8,15 @@
 #include <gal/foundation/dynamic_object.hpp>
 #include <gal/foundation/function_proxy.hpp>
 #include <gal/foundation/string_pool.hpp>
-#include <gal/language/name.hpp>
+#include <gal/foundation/name.hpp>
 #include <utils/utility_base.hpp>
 
 namespace gal::lang
 {
-	namespace parser_detail
+	namespace ast
 	{
-		// see gal/language/common.hpp
-		class parser_base;
+		// see gal/foundation/ast.hpp
+		class ast_parser_base;
 	}
 
 	namespace exception
@@ -979,7 +979,7 @@ namespace gal::lang
 
 			state_type state_;
 			convertor_manager convertor_manager_;
-			std::reference_wrapper<parser_detail::parser_base> parser_;
+			std::reference_wrapper<ast::ast_parser_base> parser_;
 
 			utils::thread_storage<engine_stack> stack_;
 			mutable utils::threading::shared_mutex mutex_;
@@ -1031,9 +1031,9 @@ namespace gal::lang
 
 						if (rhs_type.bare_equal(boxed_value::class_type())) { return true; }
 
-						if (lhs_type.bare_equal(boxed_number::class_type())) { return false; }
+						if (lhs_type.bare_equal(types::number_type::class_type())) { return false; }
 
-						if (rhs_type.bare_equal(boxed_number::class_type())) { return true; }
+						if (rhs_type.bare_equal(types::number_type::class_type())) { return true; }
 
 						// otherwise, we want to sort by typeid
 						return lhs_type.before(rhs_type);
@@ -1044,7 +1044,7 @@ namespace gal::lang
 			};
 
 		public:
-			explicit dispatcher(string_pool_type& pool, parser_detail::parser_base& p)
+			explicit dispatcher(string_pool_type& pool, ast::ast_parser_base& p)
 				: borrowed_pool_{pool},
 				  parser_{p} { stack_.construct(pool); }
 
@@ -1704,7 +1704,7 @@ namespace gal::lang
 
 			[[nodiscard]] const convertor_manager& get_conversion_manager() const noexcept { return convertor_manager_; }
 
-			[[nodiscard]] parser_detail::parser_base& get_parser() const noexcept { return parser_.get(); }
+			[[nodiscard]] ast::ast_parser_base& get_parser() const noexcept { return parser_.get(); }
 		};
 
 		inline dispatcher_state::dispatcher_state(dispatcher& d)
@@ -1736,7 +1736,7 @@ namespace gal::lang
 						string_view_type reason,
 						const std_source_location& location
 						))
-			: scoped_scope{s GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, reason, location)} { s.stack().add_object_no_check(lang::object_self_type_name::value, std::move(object)); }
+			: scoped_scope{s GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, reason, location)} { s.stack().add_object_no_check(object_self_type_name::value, std::move(object)); }
 
 		inline void scoped_stack_scope::do_construct() const { data().get().stack().new_stack(GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO("scoped_stack_scope do_construct")); }
 

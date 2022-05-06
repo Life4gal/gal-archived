@@ -5,7 +5,7 @@
 
 #include <functional>
 #include <gal/foundation/boxed_value.hpp>
-#include <gal/foundation/boxed_number.hpp>
+#include <gal/types/number_type.hpp>
 
 namespace gal::lang::foundation
 {
@@ -147,19 +147,19 @@ namespace gal::lang::foundation
 		struct return_wrapper<const boxed_value&> : return_wrapper<boxed_value> { };
 
 		template<>
-		struct return_wrapper<boxed_number>
+		struct return_wrapper<types::number_type>
 		{
-			static boxed_value wrapper(const boxed_number& result) noexcept { return result.value; }
+			static boxed_value wrapper(const types::number_type& result) noexcept { return result.value; }
 		};
 
 		template<>
-		struct return_wrapper<const boxed_number> : return_wrapper<boxed_number> { };
+		struct return_wrapper<const types::number_type> : return_wrapper<types::number_type> { };
 
 		template<>
-		struct return_wrapper<boxed_number&> : return_wrapper<boxed_number> { };
+		struct return_wrapper<types::number_type&> : return_wrapper<types::number_type> { };
 
 		template<>
-		struct return_wrapper<const boxed_number&> : return_wrapper<boxed_number> { };
+		struct return_wrapper<const types::number_type&> : return_wrapper<types::number_type> { };
 
 		template<>
 		struct return_wrapper<void>

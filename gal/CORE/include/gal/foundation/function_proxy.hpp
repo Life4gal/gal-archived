@@ -7,7 +7,7 @@
 #include <gal/foundation/dynamic_object.hpp>
 #include <gal/foundation/parameters.hpp>
 #include <gal/foundation/return_wrapper.hpp>
-#include <gal/language/name.hpp>
+#include <gal/foundation/name.hpp>
 #include <gal/tools/logger.hpp>
 #include <utils/algorithm.hpp>
 #include <memory>
@@ -15,7 +15,7 @@
 
 namespace gal::lang
 {
-	namespace lang
+	namespace ast
 	{
 		struct ast_node;
 	}// namespace lang
@@ -268,7 +268,7 @@ namespace gal::lang
 						{
 							try
 							{
-								if (not(lang::dynamic_object_type_name::match(name) ||
+								if (not(dynamic_object_type_name::match(name) ||
 								        [&] { return boxed_cast<const dynamic_object&>(object, &state); }().nameof() == name)) { return {false, false}; }
 							}
 							catch (const std::bad_cast&) { return {false, false}; }
@@ -357,7 +357,7 @@ namespace gal::lang
 					type.is_undefined() ||
 					type.bare_equal(boxed_value::class_type()) ||
 					(not object.type_info().is_undefined() &&
-					 ((type.bare_equal(boxed_number::class_type()) && object.type_info().is_arithmetic()) ||
+					 ((type.bare_equal(types::number_type::class_type()) && object.type_info().is_arithmetic()) ||
 					  type.bare_equal(object.type_info()) ||
 					  object.type_info().bare_equal(function_type_info) ||
 					  state->is_convertible(object.type_info(), type)))) { return true; }
@@ -479,7 +479,7 @@ namespace gal::lang
 		class dynamic_function_proxy_base : public function_proxy_base
 		{
 		public:
-			using body_block_type = std::shared_ptr<lang::ast_node>;
+			using body_block_type = std::shared_ptr<ast::ast_node>;
 
 		private:
 			body_block_type function_body_;
@@ -999,7 +999,7 @@ namespace gal::lang
 						std::back_inserter(new_parameters),
 						[](const auto& type, const auto& param) -> boxed_value
 						{
-							if (type.is_arithmetic() && param.type_info().is_arithmetic() && param.type_info() != type) { return boxed_number{param}.as(type).value; }
+							if (type.is_arithmetic() && param.type_info().is_arithmetic() && param.type_info() != type) { return types::number_type{param}.as(type).value; }
 							return param;
 						});
 

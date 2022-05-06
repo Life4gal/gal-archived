@@ -5,7 +5,7 @@
 
 #include <gal/foundation/dynamic_object.hpp>
 #include <gal/foundation/parameters.hpp>
-#include <gal/language/name.hpp>
+#include <gal/foundation/name.hpp>
 #include <gal/boxed_cast.hpp>
 #include <optional>
 #include <utils/assert.hpp>
@@ -43,7 +43,7 @@ namespace gal::lang::foundation
 		{
 			if (object.type_info().bare_equal(object_type_))
 			{
-				try { return name == lang::dynamic_object_type_name::value || name == boxed_cast<const dynamic_object&>(object, &state).nameof(); }
+				try { return name == dynamic_object_type_name::value || name == boxed_cast<const dynamic_object&>(object, &state).nameof(); }
 				catch (const std::bad_cast&) { return false; }
 			}
 

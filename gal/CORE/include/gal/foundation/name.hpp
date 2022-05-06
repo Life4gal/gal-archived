@@ -1,11 +1,11 @@
 #pragma once
 
-#ifndef GAL_LANG_LANGUAGE_NAME_HPP
-#define GAL_LANG_LANGUAGE_NAME_HPP
+#ifndef GAL_LANG_FOUNDATION_NAME_HPP
+#define GAL_LANG_FOUNDATION_NAME_HPP
 
 #include <utils/template_string.hpp>
 
-namespace gal::lang::lang
+namespace gal::lang::foundation
 {
 	//*********************************************
 	// keyword
@@ -116,35 +116,35 @@ namespace gal::lang::lang
 	//*********************************************
 	// number type & interface
 	//*********************************************
-	using number_type_name							 = GAL_UTILS_TEMPLATE_STRING_TYPE("Number");
+	using number_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("Number");
 
-	using number_cast_interface_prefix				 = GAL_UTILS_TEMPLATE_STRING_TYPE("to_");
-	using number_int8_type_name						 = GAL_UTILS_TEMPLATE_STRING_TYPE("i8");
-	using number_uint8_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("u8");
-	using number_int16_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("i16");
-	using number_uint16_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("u16");
-	using number_int32_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("i32");
-	using number_uint32_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("u32");
-	using number_int64_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("i64");
-	using number_uint64_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("u64");
-	using number_float_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("float");
-	using number_double_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("double");
-	using number_long_double_type_name				 = GAL_UTILS_TEMPLATE_STRING_TYPE("long_double");
+	using number_cast_interface_prefix = GAL_UTILS_TEMPLATE_STRING_TYPE("to_");
+	using number_int8_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("i8");
+	using number_uint8_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("u8");
+	using number_int16_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("i16");
+	using number_uint16_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("u16");
+	using number_int32_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("i32");
+	using number_uint32_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("u32");
+	using number_int64_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("i64");
+	using number_uint64_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("u64");
+	using number_float_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("float");
+	using number_double_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("double");
+	using number_long_double_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("long_double");
 
-	using number_char_type_name						 = GAL_UTILS_TEMPLATE_STRING_TYPE("char");
-	using number_unsigned_char_type_name			 = GAL_UTILS_TEMPLATE_STRING_TYPE("uchar");
-	using number_wchar_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("wchar");
-	using number_char8_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("c8");
-	using number_char16_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("c16");
-	using number_char32_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("c32");
-	using number_short_type_name					 = GAL_UTILS_TEMPLATE_STRING_TYPE("short");
-	using number_unsigned_short_type_name			 = GAL_UTILS_TEMPLATE_STRING_TYPE("ushort");
-	using number_int_type_name						 = GAL_UTILS_TEMPLATE_STRING_TYPE("int");
-	using number_unsigned_int_type_name				 = GAL_UTILS_TEMPLATE_STRING_TYPE("uint");
-	using number_long_type_name						 = GAL_UTILS_TEMPLATE_STRING_TYPE("long");
-	using number_unsigned_long_type_name			 = GAL_UTILS_TEMPLATE_STRING_TYPE("ulong");
-	using number_long_long_type_name				 = GAL_UTILS_TEMPLATE_STRING_TYPE("long_long");
-	using number_unsigned_long_long_type_name		 = GAL_UTILS_TEMPLATE_STRING_TYPE("ulong_long");
+	using number_char_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("char");
+	using number_unsigned_char_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("uchar");
+	using number_wchar_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("wchar");
+	using number_char8_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("c8");
+	using number_char16_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("c16");
+	using number_char32_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("c32");
+	using number_short_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("short");
+	using number_unsigned_short_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("ushort");
+	using number_int_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("int");
+	using number_unsigned_int_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("uint");
+	using number_long_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("long");
+	using number_unsigned_long_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("ulong");
+	using number_long_long_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("long_long");
+	using number_unsigned_long_long_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("ulong_long");
 
 	//*********************************************
 	// dynamic object & interface
@@ -247,4 +247,4 @@ namespace gal::lang::lang
 	using container_range_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("range");
 }
 
-#endif // GAL_LANG_LANGUAGE_NAME_HPP
+#endif // GAL_LANG_FOUNDATION_NAME_HPP
