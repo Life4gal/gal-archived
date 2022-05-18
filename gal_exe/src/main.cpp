@@ -7,6 +7,12 @@
 
 void hello_cpp(double d) { std::cout << std_format::format("value: {}\n", d); }
 
+void print_and_change(int& i)
+{
+	std::cout << std_format::format("value: {}\n", i);
+	i = 1;
+}
+
 int main()
 {
 	using namespace gal;
@@ -16,8 +22,22 @@ int main()
 	engine.add_function(
 			"hello_cpp",
 			lang::fun(&hello_cpp));
+	engine.add_function(
+			"print_and_change",
+			lang::fun(&print_and_change));
 
 	try { auto result = engine.eval_file("test.gal"); }
+	catch (const std::exception& e) { std::cerr << e.what() << '\n'; }
+
+	std::cout << "================================\n";
+
+	try
+	{
+		int v42 = 42;
+		engine.add_global_mutable("v42", lang::var(std::ref(v42)));
+		[[maybe_unused]] auto result = engine.eval("print_and_change(v42)");
+		std::cout << "v42 after changed: " << v42 << '\n';
+	}
 	catch (const std::exception& e) { std::cerr << e.what() << '\n'; }
 }
 

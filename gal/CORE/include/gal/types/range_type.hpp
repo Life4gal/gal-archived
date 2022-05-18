@@ -1,0 +1,38 @@
+#pragma once
+
+#ifndef GAL_LANG_TYPES_RANGE_TYPE_HPP
+#define GAL_LANG_TYPES_RANGE_TYPE_HPP
+
+namespace gal::lang::types
+{
+	class range_type
+	{
+	public:
+		using size_type = int;
+
+		constexpr static size_type default_step = 1;
+
+	private:
+		size_type begin_;
+		size_type end_;
+		size_type step_;
+
+	public:
+		constexpr range_type(const size_type begin, const size_type end, const size_type step)
+			: begin_{begin},
+			  end_{end},
+			  step_{step} {}
+
+		constexpr explicit range_type(const size_type end)
+			: range_type{0, end, default_step} {}
+
+		constexpr range_type(const size_type begin, const size_type end)
+			: range_type{begin, end, default_step} {}
+
+		[[nodiscard]] constexpr size_type get() const noexcept { return begin_; }
+
+		[[nodiscard]] constexpr bool next() noexcept { return (begin_ += step_) > end_; }
+	};
+}
+
+#endif

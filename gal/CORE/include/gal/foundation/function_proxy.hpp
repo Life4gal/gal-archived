@@ -351,9 +351,7 @@ namespace gal::lang
 		public:
 			[[nodiscard]] static bool is_convertible(const gal_type_info& type, const boxed_value& object, const convertor_manager_state& state) noexcept
 			{
-				const auto function_type_info = make_type_info<const_function_proxies_type::value_type>();
-
-				if (
+				if (const auto function_type_info = make_type_info<const_function_proxies_type::value_type>();
 					type.is_undefined() ||
 					type.bare_equal(boxed_value::class_type()) ||
 					(not object.type_info().is_undefined() &&

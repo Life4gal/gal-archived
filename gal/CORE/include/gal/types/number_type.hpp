@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_FOUNDATION_BOXED_NUMBER_HPP
-#define GAL_LANG_FOUNDATION_BOXED_NUMBER_HPP
+#ifndef GAL_LANG_TYPES_NUMBER_TYPE_HPP
+#define GAL_LANG_TYPES_NUMBER_TYPE_HPP
 
 #include <gal/boxed_cast.hpp>
 #include <gal/boxed_value.hpp>
@@ -728,4 +728,4 @@ namespace gal::lang
 	}// namespace foundation::boxed_cast_detail
 }    // namespace gal::lang
 
-#endif// GAL_LANG_FOUNDATION_BOXED_NUMBER_HPP
+#endif// GAL_LANG_TYPES_NUMBER_TYPE_HPP

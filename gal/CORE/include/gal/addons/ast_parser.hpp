@@ -546,10 +546,10 @@ namespace gal::lang::addon
 
 		parser_detail::parse_point point_;
 
-		ast_visitor visitor_{};
-		ast_optimizer optimizer_{};
+		[[no_unique_address]] ast_visitor visitor_{};
+		[[no_unique_address]] ast_optimizer optimizer_{};
 
-		const parse_depth_type max_parse_depth_;
+		parse_depth_type max_parse_depth_;
 
 		parse_depth_type current_parse_depth_;
 

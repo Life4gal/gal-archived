@@ -4,8 +4,7 @@
 #define GAL_LANG_FOUNDATION_DYNAMIC_OBJECT_HPP
 
 #include<gal/foundation/boxed_value.hpp>
-// #include <unordered_map>
-#include <map>
+#include <unordered_map>
 
 namespace gal::lang::foundation
 {
@@ -14,9 +13,7 @@ namespace gal::lang::foundation
 	public:
 		constexpr static string_view_type missing_method_name = GAL_LANG_FUNCTION_METHOD_MISSING_NAME;
 
-		// todo: transparent!
-		// using members_type = std::unordered_map<string_type, boxed_value, std::hash<string_type>, std::equal_to<>>;
-		using members_type = std::map<string_type, boxed_value, std::less<>>;
+		using members_type = std::unordered_map<string_view_type, boxed_value, std::hash<string_view_type>, std::equal_to<>>;
 
 		static const gal_type_info& class_type() noexcept
 		{
@@ -25,7 +22,7 @@ namespace gal::lang::foundation
 		}
 
 	private:
-		string_type type_name_;
+		string_view_type type_name_;
 
 		members_type members_;
 
@@ -41,12 +38,7 @@ namespace gal::lang::foundation
 
 		[[nodiscard]] bool has_attr(const string_view_type name) const { return members_.contains(name); }
 
-		[[nodiscard]] boxed_value& get_attr(const string_view_type name)
-		{
-			// todo: transparent!
-			// return members_[name];
-			return members_.emplace(name, boxed_value{}).first->second;
-		}
+		[[nodiscard]] boxed_value& get_attr(const string_view_type name) { return members_[name]; }
 
 		[[nodiscard]] const boxed_value& get_attr(const string_view_type name) const
 		{
@@ -55,17 +47,9 @@ namespace gal::lang::foundation
 			throw std::range_error{std_format::format("Member '{}' not found and cannot be added to a const object", name)};
 		}
 
-		bool set_attr(const string_view_type name, boxed_value&& new_value)
-		{
-			// todo: transparent!
-			return members_.insert_or_assign(string_type{name}, std::move(new_value)).second;
-		}
+		bool set_attr(const string_view_type name, boxed_value&& new_value) { return members_.insert_or_assign(name, std::move(new_value)).second; }
 
-		bool set_attr(const string_view_type name, const boxed_value& new_value)
-		{
-			// todo: transparent!
-			return members_.insert_or_assign(string_type{name}, new_value).second;
-		}
+		bool set_attr(const string_view_type name, const boxed_value& new_value) { return members_.insert_or_assign(name, new_value).second; }
 
 		bool del_attr(const string_view_type name) { return members_.erase(name); }
 

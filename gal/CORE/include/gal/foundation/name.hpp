@@ -242,9 +242,9 @@ namespace gal::lang::foundation
 	using pair_second_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("second");
 
 	// a container view
-	using range_suffix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("_range");
-	using range_const_prefix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("const_");
-	using container_range_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("range");
+	using view_suffix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("_view");
+	using view_const_prefix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("const_");
+	using container_view_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("view");
 }
 
 #endif // GAL_LANG_FOUNDATION_NAME_HPP

@@ -9,6 +9,9 @@
 #include <gal/foundation/dynamic_function.hpp>
 #include <gal/function_register.hpp>
 #include <gal/foundation/boxed_exception.hpp>
+#include <gal/types/range_type.hpp>
+#include <gal/types/list_type.hpp>
+#include <gal/types/map_type.hpp>
 
 namespace gal::lang
 {
@@ -1187,40 +1190,44 @@ namespace gal::lang
 		private:
 			using location_type = foundation::dispatcher::function_cache_location_type;
 
-			mutable location_type range_location_{};
+			mutable location_type view_location_{};
 			mutable location_type empty_location_{};
 			mutable location_type front_location_{};
 			mutable location_type pop_front_location_{};
 
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
-				const auto get_function = [&state](const foundation::string_view_type name, location_type& location)
-				{
-					if (location.has_value()) { return *location; }
-
-					auto func = state->get_function(name);
-					location.emplace(func);
-					return func;
-				};
-
-				const auto call_function = [&state](const auto& function, const auto& param) { return dispatch(*function, foundation::parameters_view_type{param}, state.convertor_state()); };
-
 				const auto& loop_var_name = this->get_child(0).identifier();
 				const auto range_expression_result = this->get_child(1).eval(state, visitor);
 
-				const auto do_loop = [&loop_var_name, this, &state, &visitor](const auto& ranged)
+				// range_type
+				if (range_expression_result.type_info().bare_equal(typeid(types::range_type)))
 				{
+					auto& range = boxed_cast<types::range_type&>(range_expression_result);
+					do
+					{
+						foundation::scoped_scope scoped_scope{state};
+						state->add_local_or_throw(loop_var_name, foundation::boxed_value{range.get()});
+
+						try { (void)this->get_child(2).eval(state, visitor); }
+						catch (const interrupt_type::interrupt_continue&) { }
+					} while (range.next());
+
+					return void_var();
+				}
+
+				// list_type
+				if (range_expression_result.type_info().bare_equal(typeid(types::list_type)))
+				{
+					auto& range = boxed_cast<types::list_type&>(range_expression_result);
 					try
 					{
 						std::ranges::for_each(
-								ranged,
-								[&loop_var_name, this, &state, &visitor]<typename Var>(Var&& var)
+								range,
+								[&loop_var_name, this, &state, &visitor](const types::list_type::value_type& var)
 								{
-									// This scope push and pop might not be the best thing for perf,
-									// but we know it's 100% correct
 									foundation::scoped_scope scoped_scope{state};
-									if constexpr (std::is_same_v<Var, foundation::boxed_value>) { state->add_local_or_throw(loop_var_name, std::forward<Var>(var)); }
-									else { state->add_local_or_throw(loop_var_name, foundation::boxed_value{std::ref(var)}); }
+									state->add_local_or_throw(loop_var_name, var);
 
 									try { (void)this->get_child(2).eval(state, visitor); }
 									catch (const interrupt_type::interrupt_continue&) { }
@@ -1232,34 +1239,66 @@ namespace gal::lang
 					}
 
 					return void_var();
-				};
+				}
 
-				// todo: support for i in range(begin, end, step=1)
+				// map_type
+				if (range_expression_result.type_info().bare_equal(typeid(types::map_type)))
+				{
+					auto& range = boxed_cast<types::map_type&>(range_expression_result);
+					try
+					{
+						std::ranges::for_each(
+								range,
+								[&loop_var_name, this, &state, &visitor](const types::map_type::value_type& var)
+								{
+									foundation::scoped_scope scoped_scope{state};
+									// todo: sugar? [key, value] : map
+									state->add_local_or_throw(loop_var_name, foundation::boxed_value{std::ref(var)});
 
-				// todo: sequence format container type
-				if (range_expression_result.type_info().bare_equal(typeid(foundation::parameters_type))) { return do_loop(boxed_cast<const foundation::parameters_type&>(range_expression_result)); }
-				// todo: map format container type
-				if (range_expression_result.type_info().bare_equal(typeid(foundation::engine_stack::scope_type))) { return do_loop(boxed_cast<const foundation::engine_stack::scope_type&>(range_expression_result)); }
+									try { (void)this->get_child(2).eval(state, visitor); }
+									catch (const interrupt_type::interrupt_continue&) { }
+								});
+					}
+					catch (const interrupt_type::interrupt_break&)
+					{
+						// loop broken
+					}
+
+					return void_var();
+				}
 
 				// other container type
-				const auto range_function = get_function(foundation::container_range_interface_name::value, range_location_);
+				const auto get_function = [&state](const foundation::string_view_type name, location_type& location)
+				{
+					if (location.has_value()) { return *location; }
+
+					auto func = state->get_function(name);
+					location.emplace(func);
+					return func;
+				};
+
+				const auto call_function = [&state](const auto& function, const auto& param) { return foundation::dispatch(*function, foundation::parameters_view_type{param}, state.convertor_state()); };
+
+				// view's function, see also types/view_type.hpp => view_type
+				const auto view_function = get_function(foundation::container_view_interface_name::value, view_location_);
 				const auto empty_function = get_function(foundation::container_empty_interface_name::value, empty_location_);
 				const auto front_function = get_function(foundation::container_front_interface_name::value, front_location_);
 				const auto pop_front_function = get_function(foundation::container_pop_front_interface_name::value, pop_front_location_);
 
 				try
 				{
-					const auto ranged = call_function(range_function, range_expression_result);
+					// get the view
+					const auto ranged = call_function(view_function, range_expression_result);
+					// while view not empty
 					while (not boxed_cast<bool>(call_function(empty_function, ranged)))
 					{
 						foundation::scoped_scope scoped_scope{state};
-
 						state->add_local_or_throw(loop_var_name, call_function(front_function, ranged));
+
 						try { this->get_child(2).eval(state, visitor); }
-						catch (const interrupt_type::interrupt_continue&)
-						{
-							// continue statement hit
-						}
+						catch (const interrupt_type::interrupt_continue&) { }
+
+						// pop the front one
 						(void)call_function(pop_front_function, ranged);
 					}
 				}
