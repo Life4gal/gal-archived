@@ -1382,7 +1382,7 @@ namespace gal::lang::addon
 			if (need_validate_name) { check_object_name(text); }
 
 			switch (
-				const auto text_hash = lang::foundation::name_validator::hash_name(text);
+				const auto text_hash = foundation::name_validator::hash_name(text);
 				text_hash)
 			{
 				case foundation::name_validator::hash_name(foundation::keyword_true_name::value):
@@ -1894,17 +1894,17 @@ namespace gal::lang::addon
 		}
 
 		/**
-			 * @brief Reads a for block from input
-			 *
-			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw exception::eval_error throw from build_eol()
-			 * @throw exception::eval_error throw from build_keyword(" ")
-			 * @throw exception::eval_error throw from build_equation()
-			 * @throw exception::eval_error throw from build_block()
-			 * @throw exception::eval_error Incomplete 'for' expression
-			 * @throw exception::eval_error Incomplete 'ranged-for' expression
-			 * @throw exception::eval_error Incomplete 'for' expression, missing block
-			 */
+		 * @brief Reads a for block from input
+		 *
+		 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+		 * @throw exception::eval_error throw from build_eol()
+		 * @throw exception::eval_error throw from build_keyword(" ")
+		 * @throw exception::eval_error throw from build_equation()
+		 * @throw exception::eval_error throw from build_block()
+		 * @throw exception::eval_error Incomplete 'for' expression
+		 * @throw exception::eval_error Incomplete 'ranged-for' expression
+		 * @throw exception::eval_error Incomplete 'for' expression, missing block
+		 */
 		[[nodiscard]] bool build_for()
 		{
 			scoped_parser p{*this};
@@ -1974,8 +1974,8 @@ namespace gal::lang::addon
 		[[nodiscard]] bool build_match()
 		{
 			/**
-				 * @brief Reads a case block from input
-				 */
+			 * @brief Reads a case block from input
+			 */
 			auto build_case = [this]
 			{
 				scoped_parser c_p{*this};

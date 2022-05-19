@@ -3,6 +3,7 @@
 #ifndef GAL_LANG_PLUGIN_BOOTSTRAP_HPP
 #define GAL_LANG_PLUGIN_BOOTSTRAP_HPP
 
+#include <gal/types/number_type.hpp>
 #include <gal/foundation/operator_register.hpp>
 
 namespace gal::lang::plugin
@@ -227,7 +228,7 @@ namespace gal::lang::plugin
 
 	public:
 		/**
-		 * @brief perform all common bootstrap functions for std::string, void and POD types.
+		 * @brief perform all common bootstrap functions.
 		 */
 		static void do_bootstrap(foundation::engine_module& m)
 		{

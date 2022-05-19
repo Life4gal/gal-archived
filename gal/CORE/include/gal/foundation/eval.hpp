@@ -10,8 +10,6 @@
 #include <gal/function_register.hpp>
 #include <gal/foundation/boxed_exception.hpp>
 #include <gal/types/range_type.hpp>
-#include <gal/types/list_type.hpp>
-#include <gal/types/map_type.hpp>
 
 namespace gal::lang
 {
@@ -1192,8 +1190,8 @@ namespace gal::lang
 
 			mutable location_type view_location_{};
 			mutable location_type empty_location_{};
-			mutable location_type front_location_{};
-			mutable location_type pop_front_location_{};
+			mutable location_type star_location_{};
+			mutable location_type advance_location_{};
 
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
@@ -1216,57 +1214,6 @@ namespace gal::lang
 					return void_var();
 				}
 
-				// list_type
-				if (range_expression_result.type_info().bare_equal(typeid(types::list_type)))
-				{
-					auto& range = boxed_cast<types::list_type&>(range_expression_result);
-					try
-					{
-						std::ranges::for_each(
-								range,
-								[&loop_var_name, this, &state, &visitor](const types::list_type::value_type& var)
-								{
-									foundation::scoped_scope scoped_scope{state};
-									state->add_local_or_throw(loop_var_name, var);
-
-									try { (void)this->get_child(2).eval(state, visitor); }
-									catch (const interrupt_type::interrupt_continue&) { }
-								});
-					}
-					catch (const interrupt_type::interrupt_break&)
-					{
-						// loop broken
-					}
-
-					return void_var();
-				}
-
-				// map_type
-				if (range_expression_result.type_info().bare_equal(typeid(types::map_type)))
-				{
-					auto& range = boxed_cast<types::map_type&>(range_expression_result);
-					try
-					{
-						std::ranges::for_each(
-								range,
-								[&loop_var_name, this, &state, &visitor](const types::map_type::value_type& var)
-								{
-									foundation::scoped_scope scoped_scope{state};
-									// todo: sugar? [key, value] : map
-									state->add_local_or_throw(loop_var_name, foundation::boxed_value{std::ref(var)});
-
-									try { (void)this->get_child(2).eval(state, visitor); }
-									catch (const interrupt_type::interrupt_continue&) { }
-								});
-					}
-					catch (const interrupt_type::interrupt_break&)
-					{
-						// loop broken
-					}
-
-					return void_var();
-				}
-
 				// other container type
 				const auto get_function = [&state](const foundation::string_view_type name, location_type& location)
 				{
@@ -1279,11 +1226,10 @@ namespace gal::lang
 
 				const auto call_function = [&state](const auto& function, const auto& param) { return foundation::dispatch(*function, foundation::parameters_view_type{param}, state.convertor_state()); };
 
-				// view's function, see also types/view_type.hpp => view_type
 				const auto view_function = get_function(foundation::container_view_interface_name::value, view_location_);
-				const auto empty_function = get_function(foundation::container_empty_interface_name::value, empty_location_);
-				const auto front_function = get_function(foundation::container_front_interface_name::value, front_location_);
-				const auto pop_front_function = get_function(foundation::container_pop_front_interface_name::value, pop_front_location_);
+				const auto empty_function = get_function(foundation::container_view_empty_interface_name::value, empty_location_);
+				const auto star_function = get_function(foundation::container_view_star_interface_name::value, star_location_);
+				const auto advance_function = get_function(foundation::container_view_advance_interface_name::value, advance_location_);
 
 				try
 				{
@@ -1293,13 +1239,14 @@ namespace gal::lang
 					while (not boxed_cast<bool>(call_function(empty_function, ranged)))
 					{
 						foundation::scoped_scope scoped_scope{state};
-						state->add_local_or_throw(loop_var_name, call_function(front_function, ranged));
+						// push the value into the stack
+						state->add_local_or_throw(loop_var_name, call_function(star_function, ranged));
 
 						try { this->get_child(2).eval(state, visitor); }
 						catch (const interrupt_type::interrupt_continue&) { }
 
-						// pop the front one
-						(void)call_function(pop_front_function, ranged);
+						// advance the iterator
+						(void)call_function(advance_function, ranged);
 					}
 				}
 				catch (const interrupt_type::interrupt_break&)

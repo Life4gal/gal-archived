@@ -3,6 +3,8 @@
 #ifndef GAL_LANG_TYPES_RANGE_TYPE_HPP
 #define GAL_LANG_TYPES_RANGE_TYPE_HPP
 
+#include <gal/foundation/type_info.hpp>
+
 namespace gal::lang::types
 {
 	class range_type
@@ -11,6 +13,13 @@ namespace gal::lang::types
 		using size_type = int;
 
 		constexpr static size_type default_step = 1;
+
+		static const foundation::gal_type_info& class_type() noexcept
+		{
+			GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)
+			static foundation::gal_type_info type = foundation::make_type_info<range_type>();
+			return type;
+		}
 
 	private:
 		size_type begin_;

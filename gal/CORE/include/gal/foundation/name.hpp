@@ -203,7 +203,6 @@ namespace gal::lang::foundation
 	//*********************************************
 	// container interface
 	//*********************************************
-	using vector_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("vector");
 	using list_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("list");
 	using map_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("map");
 	using string_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("string");
@@ -215,25 +214,25 @@ namespace gal::lang::foundation
 	using container_size_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("size");
 	using container_empty_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("empty");
 	using container_clear_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("clear");
-	using container_begin_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("begin");
-	using container_end_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("end");
 	using container_front_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("front");
 	using container_back_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("back");
-	using container_resize_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("resize");
-	using container_reserve_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("reserve");
-	using container_capacity_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("capacity");
+	// using container_resize_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("resize");
+	// using container_reserve_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("reserve");
+	// using container_capacity_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("capacity");
 	using container_insert_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("insert_at");
 	// when container's value type is boxed_value
-	using container_insert_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("insert_ref_at");
+	// using container_insert_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("insert_ref_at");
 	using container_erase_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("erase_at");
 	using container_push_back_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_back");
 	// when container's value type is boxed_value
-	using container_push_back_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_back_ref");
+	// using container_push_back_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_back_ref");
 	using container_pop_back_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("pop_back");
 	using container_push_front_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_front");
 	// when container's value type is boxed_value
-	using container_push_front_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_front_ref");
+	// using container_push_front_ref_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("push_front_ref");
 	using container_pop_front_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("pop_front");
+
+	// for string
 	using container_find_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("find");
 
 	// combined with associative containers, it is used to quickly register pairs of associative containers
@@ -241,10 +240,16 @@ namespace gal::lang::foundation
 	using pair_first_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("first");
 	using pair_second_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("second");
 
-	// a container view
-	using view_suffix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("_view");
-	using view_const_prefix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("const_");
+	// a container view, see types/view_type.hpp => view_type
+	// xxx_view => string_view/list_view/map_view
+	using container_view_suffix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("_view");
+	// const_xxx_view => const_string_view/const_list_view/const_map_view
+	using container_view_const_prefix_name = GAL_UTILS_TEMPLATE_STRING_TYPE("const_");
+	// xxx.view()
 	using container_view_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("view");
+	using container_view_empty_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("empty");
+	using container_view_star_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("get");
+	using container_view_advance_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("next");
 }
 
 #endif // GAL_LANG_FOUNDATION_NAME_HPP

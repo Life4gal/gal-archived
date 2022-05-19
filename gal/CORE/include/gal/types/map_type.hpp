@@ -5,6 +5,8 @@
 
 #include <unordered_map>
 #include <utils/format.hpp>
+#include <gal/types/view_type.hpp>
+#include <gal/foundation/type_info.hpp>
 
 namespace gal::lang
 {
@@ -25,9 +27,6 @@ namespace gal::lang
 
 	namespace types
 	{
-		template<typename First, typename Second>
-		using pair_type = std::pair<First, Second>;
-
 		class map_type
 		{
 		public:
@@ -48,8 +47,28 @@ namespace gal::lang
 			using mapped_reference = mapped_type&;
 			using mapped_const_reference = const mapped_type&;
 
+			using view_type = types::view_type<container_type>;
+			using const_view_type = types::view_type<const container_type>;
+
+			static const foundation::gal_type_info& class_type() noexcept
+			{
+				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)
+				static foundation::gal_type_info type = foundation::make_type_info<map_type>();
+				return type;
+			}
+
+			static const foundation::gal_type_info& pair_class_type() noexcept
+			{
+				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)
+				static foundation::gal_type_info type = foundation::make_type_info<value_type>();
+				return type;
+			}
+
 		private:
 			container_type data_;
+
+			explicit map_type(container_type&& map)
+				: data_{std::move(map)} {}
 
 		public:
 			map_type() noexcept = default;
@@ -57,11 +76,32 @@ namespace gal::lang
 			map_type(const std::initializer_list<value_type> values)
 				: data_{values} {}
 
-			// operator[]
-			[[nodiscard]] mapped_reference get(const key_type& key) { return data_[key]; }
+			[[nodiscard]] map_type operator+(const map_type& other) const
+			{
+				auto tmp = data_;
+				tmp.insert(other.data_.begin(), other.data_.end());
+				return map_type{std::move(tmp)};
+			}
+
+			map_type& operator+=(const map_type& other)
+			{
+				data_.insert(other.data_.begin(), other.data_.end());
+				return *this;
+			}
+
+			// view interface
+			[[nodiscard]] view_type view() noexcept { return view_type{data_}; }
+			[[nodiscard]] const_view_type view() const noexcept { return const_view_type{data_}; }
+
+			//*************************************************************************
+			//*********************** BASIC INTERFACE *******************************
+			//*************************************************************************
 
 			// operator[]
-			[[nodiscard]] mapped_const_reference get(const key_type& key) const
+			[[nodiscard]] mapped_reference get(key_const_reference key) { return data_[key]; }
+
+			// operator[]
+			[[nodiscard]] mapped_const_reference get(key_const_reference key) const
 			{
 				if (const auto it = data_.find(key); it != data_.end()) { return it->second; }
 
@@ -70,13 +110,19 @@ namespace gal::lang
 
 			[[nodiscard]] size_type size() const noexcept { return data_.size(); }
 
-			[[nodiscard]] iterator begin() noexcept { return data_.begin(); }
+			[[nodiscard]] bool empty() const noexcept { return data_.empty(); }
 
-			[[nodiscard]] const_iterator begin() const noexcept { return data_.begin(); }
+			void clear() noexcept { data_.clear(); }
 
-			[[nodiscard]] iterator end() noexcept { return data_.end(); }
+			// insert is not necessary
 
-			[[nodiscard]] const_iterator end() const noexcept { return data_.end(); }
+			void erase_at(key_const_reference key) { data_.erase(key); }
+
+			//*************************************************************************
+			//*********************** EXTRA INTERFACE *******************************
+			//*************************************************************************
+
+			// todo
 		};
 	}
 }

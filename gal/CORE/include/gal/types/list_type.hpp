@@ -4,6 +4,8 @@
 #define GAL_LANG_TYPES_LIST_TYPE_HPP
 
 #include <list>
+#include <gal/types/view_type.hpp>
+#include <gal/foundation/type_info.hpp>
 
 namespace gal::lang
 {
@@ -27,8 +29,28 @@ namespace gal::lang
 			using iterator = container_type::iterator;
 			using const_iterator = container_type::const_iterator;
 
+			using view_type = types::view_type<container_type>;
+			using const_view_type = types::view_type<const container_type>;
+
+			static const foundation::gal_type_info& class_type() noexcept
+			{
+				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)
+				static foundation::gal_type_info type = foundation::make_type_info<list_type>();
+				return type;
+			}
+
 		private:
 			container_type data_;
+
+			[[nodiscard]] difference_type locate_index(const difference_type index) const noexcept
+			{
+				auto i = index % static_cast<difference_type>(data_.size());
+				if (i < 0) { i = static_cast<difference_type>(data_.size()) + i; }
+				return i;
+			}
+
+			explicit list_type(container_type&& list)
+				: data_{std::move(list)} {}
 
 		public:
 			list_type() noexcept = default;
@@ -36,28 +58,80 @@ namespace gal::lang
 			list_type(const std::initializer_list<value_type> values)
 				: data_{values} {}
 
-			// operator[]
-			[[nodiscard]] reference get(difference_type index)
+			[[nodiscard]] list_type operator+(const list_type& other) const
 			{
-				index %= static_cast<difference_type>(data_.size());
-				if (index >= 0) { return *std::ranges::next(data_.begin(), index); }
-				return *std::ranges::prev(data_.end(), -index);
+				auto tmp = data_;
+				tmp.insert(tmp.end(), other.data_.begin(), other.data_.end());
+				return list_type{std::move(tmp)};
 			}
 
-			// operator[]
-			[[nodiscard]] const_reference get(difference_type index) const
+			list_type& operator+=(const list_type& other)
 			{
-				index %= static_cast<difference_type>(data_.size());
-				if (index >= 0) { return *std::ranges::next(data_.begin(), index); }
-				return *std::ranges::prev(data_.end(), -index);
+				data_.insert(data_.end(), other.data_.begin(), other.data_.end());
+				return *this;
 			}
+
+			[[nodiscard]] list_type operator*(const size_type times) const
+			{
+				auto tmp = data_;
+				for (auto i = times; i != 0; --i) { tmp.insert(tmp.end(), data_.begin(), data_.end()); }
+				return list_type{std::move(tmp)};
+			}
+
+			list_type& operator*=(const size_type times)
+			{
+				const auto e = data_.end();
+				for (auto i = times; i != 0; --i) { data_.insert(data_.end(), data_.begin(), e); }
+				return *this;
+			}
+
+			// view interface
+			[[nodiscard]] view_type view() noexcept { return view_type{data_}; }
+			[[nodiscard]] const_view_type view() const noexcept { return const_view_type{data_}; }
+
+			//*************************************************************************
+			//*********************** BASIC INTERFACE *******************************
+			//*************************************************************************
+
+			// operator[]
+			[[nodiscard]] reference get(const difference_type index) noexcept { return *std::ranges::next(data_.begin(), locate_index(index)); }
+
+			// operator[]
+			[[nodiscard]] const_reference get(const difference_type index) const noexcept { return *std::ranges::next(data_.begin(), locate_index(index)); }
+
+			[[nodiscard]] size_type size() const noexcept { return data_.size(); }
+
+			[[nodiscard]] bool empty() const noexcept { return data_.empty(); }
+
+			void clear() noexcept { data_.clear(); }
+
+			[[nodiscard]] reference front() noexcept { return data_.front(); }
+
+			[[nodiscard]] const_reference front() const noexcept { return data_.front(); }
+
+			[[nodiscard]] reference back() noexcept { return data_.back(); }
+
+			[[nodiscard]] const_reference back() const noexcept { return data_.back(); }
+
+			void insert_at(const difference_type index, const_reference value) noexcept { data_.insert(std::ranges::next(data_.begin(), locate_index(index)), value); }
+
+			void erase_at(const difference_type index) { data_.erase(std::ranges::next(data_.begin(), locate_index(index))); }
+
+			void push_back(const_reference value) { data_.push_back(value); }
+
+			void pop_back() { data_.pop_back(); }
+
+			void push_front(const_reference value) { data_.push_front(value); }
+
+			void pop_front() { data_.pop_front(); }
+
+			//*************************************************************************
+			//*********************** EXTRA INTERFACE *******************************
+			//*************************************************************************
 
 			// operator[begin:end]
-			[[nodiscard]] auto slice(difference_type begin, difference_type end)
+			[[nodiscard]] auto slice(const difference_type begin, const difference_type end)
 			{
-				begin %= static_cast<difference_type>(data_.size());
-				end %= static_cast<difference_type>(data_.size());
-
 				// [1, 2, 3, 4, 5, 6]
 				//      ^begin = 1/-5
 				//                 ^end = 4/-2
@@ -69,26 +143,16 @@ namespace gal::lang
 				// => []
 				// todo: maybe return [5, 6, 1] ?
 
-				if (begin < 0) { begin = static_cast<difference_type>(data_.size()) + begin; }
-				if (end < 0) { end = static_cast<difference_type>(data_.size()) + end; }
+				const auto b = locate_index(begin);
+				const auto e = locate_index(end);
 
-				if (begin <= end) { return data_ | std::views::drop(begin) | std::views::take(end - begin); }
+				if (b <= e) { return data_ | std::views::drop(b) | std::views::take(e - b); }
 				return data_ | std::views::drop(0) | std::views::take(0);
 			}
 
 			[[nodiscard]] auto slice_front(const difference_type begin) { return slice(begin, data_.size()); }
 
 			[[nodiscard]] auto slice_back(const difference_type end) { return slice(0, end); }
-
-			[[nodiscard]] size_type size() const noexcept { return data_.size(); }
-
-			[[nodiscard]] iterator begin() noexcept { return data_.begin(); }
-
-			[[nodiscard]] const_iterator begin() const noexcept { return data_.begin(); }
-
-			[[nodiscard]] iterator end() noexcept { return data_.end(); }
-
-			[[nodiscard]] const_iterator end() const noexcept { return data_.end(); }
 
 			void reverse() { data_.reverse(); }
 

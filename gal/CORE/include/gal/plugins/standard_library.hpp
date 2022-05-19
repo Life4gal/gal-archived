@@ -1,14 +1,15 @@
 #pragma once
 
 #ifndef GAL_LANG_PLUGIN_STANDARD_LIBRARY_HPP
-	#define GAL_LANG_PLUGIN_STANDARD_LIBRARY_HPP
+#define GAL_LANG_PLUGIN_STANDARD_LIBRARY_HPP
 
 #include <gal/foundation/dispatcher.hpp>
 #include <gal/plugins/bootstrap.hpp>
+#include <gal/plugins/bootstrap_library.hpp>
 
 namespace gal::lang::plugin
 {
-	struct standard_library
+	class standard_library
 	{
 	public:
 		[[nodiscard]] static foundation::engine_module_type build()
@@ -16,6 +17,7 @@ namespace gal::lang::plugin
 			auto library = foundation::make_engine_module();
 
 			bootstrap::do_bootstrap(*library);
+			bootstrap_library::do_bootstrap(*library);
 
 			return library;
 		}

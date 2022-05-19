@@ -62,8 +62,8 @@ namespace gal::lang::foundation
 				  is_xvalue{is_xvalue} { }
 
 			internal_data(const internal_data&) = delete;
-			internal_data(internal_data&&) = delete;
 
+			internal_data(internal_data&&) = default;
 			internal_data& operator=(const internal_data&) = default;
 			internal_data& operator=(internal_data&&) = default;
 
@@ -181,6 +181,12 @@ namespace gal::lang::foundation
 			requires(not std::is_same_v<std::decay_t<Any>, boxed_value>)
 		explicit boxed_value(Any&& data, const bool is_xvalue = false)// NOLINT(bugprone-forwarding-reference-overload)
 			: data_{internal_data_factory::make(std::forward<Any>(data), is_xvalue)} { }
+
+		// boxed_value(const boxed_value&) = default;
+		// boxed_value& operator =(const boxed_value&) = default;
+		// boxed_value(boxed_value&&) = default;
+		// boxed_value& operator=(boxed_value&&) = default;
+		// ~boxed_value() noexcept = default;
 
 		/**
 		 * @brief Copy the values stored in other.data_ to data_.

@@ -38,12 +38,15 @@ namespace gal::lang
 	[[nodiscard]] foundation::function_proxy_type ctor() { return foundation::function_register::register_constructor<ConstructorSignature>(); }
 
 	template<typename Class>
+		requires std::is_default_constructible_v<Class>
 	[[nodiscard]] foundation::function_proxy_type default_ctor() { return ctor<Class()>(); }
 
 	template<typename Class>
+		requires std::is_copy_constructible_v<Class>
 	[[nodiscard]] foundation::function_proxy_type copy_ctor() { return ctor<Class(const Class&)>(); }
 
 	template<typename Class>
+		requires std::is_move_constructible_v<Class>
 	[[nodiscard]] foundation::function_proxy_type move_ctor() { return ctor<Class(Class&&)>(); }
 
 	/**
