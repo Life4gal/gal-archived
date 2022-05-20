@@ -8,6 +8,7 @@
 #include <gal/types/list_type.hpp>
 #include <gal/types/map_type.hpp>
 #include <gal/types/string_type.hpp>
+#include <gal/types/string_view_type.hpp>
 #include <gal/foundation/operator_register.hpp>
 
 namespace gal::lang::plugin
@@ -59,6 +60,13 @@ namespace gal::lang::plugin
 			register_default_constructible_container<types::list_type>(foundation::list_type_name::value, m);
 			register_assignable_container<types::list_type>(foundation::list_type_name::value, m);
 			register_movable_container<types::list_type>(foundation::list_type_name::value, m);
+
+			m.add_function(
+					foundation::list_type_name::value,
+					ctor<types::list_type(foundation::parameters_type&&)>());
+			m.add_function(
+					foundation::list_type_name::value,
+					ctor<types::list_type(foundation::parameters_view_type)>());
 
 			// operator+/operator+=
 			foundation::operator_register::register_plus<types::list_type>(m);
@@ -209,6 +217,25 @@ namespace gal::lang::plugin
 		{
 			m.add_type_info(foundation::string_type_name::value, types::string_type::class_type());
 
+			// foundation::string_type => string_type
+			m.add_function(
+					foundation::string_type_name::value,
+					ctor<types::string_type(const foundation::string_type&)>());
+
+			// foundation::string_view_type => string_type
+			m.add_function(
+					foundation::string_type_name::value,
+					ctor<types::string_type(foundation::string_view_type)>());
+
+			// string_type => foundation::string_type
+			m.add_convertor(make_explicit_convertor<types::string_type, foundation::string_type>([](const types::string_type& string) { return foundation::string_type{string.data()}; }));
+
+			// string_type => foundation::string_view_type
+			m.add_convertor(make_explicit_convertor<types::string_type, foundation::string_view_type>([](const types::string_type& string) { return foundation::string_view_type{string.data()}; }));
+
+			// string_type => string_view_type
+			m.add_convertor(make_explicit_convertor<types::string_type, types::string_view_type>([](const types::string_type& string) { return types::string_view_type{string.data()}; }));
+
 			register_default_constructible_container<types::string_type>(foundation::string_type_name::value, m);
 			register_assignable_container<types::string_type>(foundation::string_type_name::value, m);
 			register_movable_container<types::string_type>(foundation::string_type_name::value, m);
@@ -289,6 +316,71 @@ namespace gal::lang::plugin
 			// todo: extra interface
 		}
 
+		static void register_string_view_type(foundation::engine_module& m)
+		{
+			m.add_type_info(foundation::string_view_type_name::value, types::string_view_type::class_type());
+
+			// foundation::string_type => string_view_type
+			m.add_function(
+					foundation::string_view_type_name::value,
+					ctor<types::string_view_type(const foundation::string_type&)>());
+
+			// foundation::string_view_type => string_view_type
+			m.add_function(
+					foundation::string_view_type_name::value,
+					ctor<types::string_view_type(foundation::string_view_type)>());
+
+			// string_view_type => foundation::string_type
+			m.add_convertor(make_explicit_convertor<types::string_view_type, foundation::string_type>([](const types::string_view_type view) { return foundation::string_type{view.data()}; }));
+
+			// string_view_type => foundation::string_view_type
+			m.add_convertor(make_explicit_convertor<types::string_view_type, foundation::string_view_type>([](const types::string_view_type view) { return foundation::string_view_type{view.data()}; }));
+
+			// string_view_type => string_type
+			m.add_convertor(make_explicit_convertor<types::string_view_type, types::string_type>([](const types::string_view_type view) { return types::string_type{view.data()}; }));
+
+			register_default_constructible_container<types::string_view_type>(foundation::string_view_type_name::value, m);
+			register_assignable_container<types::string_view_type>(foundation::string_view_type_name::value, m);
+			register_movable_container<types::string_view_type>(foundation::string_view_type_name::value, m);
+
+			// ==/!=</<=/>/>=
+			register_comparison<types::string_view_type>(m);
+
+			// string.view()
+			m.add_function(
+					foundation::container_view_interface_name::value,
+					fun(&types::string_view_type::view));
+
+			// string[index]
+			m.add_function(
+					foundation::container_subscript_interface_name::value,
+					fun(&types::string_view_type::get));
+
+			// string.size()
+			m.add_function(
+					foundation::container_size_interface_name::value,
+					fun(&types::string_view_type::size));
+
+			// string.empty()
+			m.add_function(
+					foundation::container_empty_interface_name::value,
+					fun(&types::string_view_type::empty));
+
+			// string.front()
+			m.add_function(
+					foundation::container_front_interface_name::value,
+					fun(&types::string_view_type::front));
+
+			// string.back()
+			m.add_function(
+					foundation::container_back_interface_name::value,
+					fun(&types::string_view_type::back));
+
+			// todo: extra interface
+
+			// todo: allow string_view_type to do +/+=/*/*= operations with string_type?
+		}
+
 	public:
 		static void do_bootstrap(foundation::engine_module& m)
 		{
@@ -296,6 +388,7 @@ namespace gal::lang::plugin
 			register_list_type(m);
 			register_map_type(m);
 			register_string_type(m);
+			register_string_view_type(m);
 		}
 	};
 }

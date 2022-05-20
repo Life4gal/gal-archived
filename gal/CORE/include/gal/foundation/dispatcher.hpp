@@ -111,12 +111,12 @@ namespace gal::lang
 			// name <=> type_info
 			using type_infos_type = std::map<string_view_type, gal_type_info, std::less<>>;
 			// name <=> function
-			using functions_type = std::map<string_view_type, function_proxy_type, std::less<>>;
+			using functions_type = std::multimap<string_view_type, function_proxy_type, std::less<>>;
 			// name <=> "global" object
 			// note: module level object is global visible
 			using objects_type = std::map<string_view_type, boxed_value, std::less<>>;
 			// evaluation string
-			using evaluations_type = std::set<string_view_type, std::less<>>;
+			using evaluations_type = std::vector<string_view_type>;
 			// convertor
 			using convertors_type = std::set<convertor_type, std::less<>>;
 
@@ -169,17 +169,16 @@ namespace gal::lang
 							const std_source_location& location = std_source_location::current()))
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a function '{}', {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a function '{}', {}.",
 							__func__,
 							location.file_name(),
 							location.function_name(),
 							location.line(),
 							location.column(),
 							name,
-							functions_.contains(name) ? "but it was already exist" : "add successed");)
+							functions_.contains(name) ? "there are already some functions with the same name" : "this is the first function of this name");)
 
-				if (const auto it = functions_.find(name);
-					it == functions_.end()) { functions_.emplace_hint(it, pool_.append(name), std::move(function)); }
+				functions_.emplace(pool_.append(name), std::move(function));
 
 				return *this;
 			}
@@ -223,10 +222,9 @@ namespace gal::lang
 							location.line(),
 							location.column(),
 							evaluation,
-							evaluations_.contains(evaluation) ? "but it was already exist" : "add successed");)
+							std::ranges::find(evaluations_, evaluation) != evaluations_.end() ? "there is the same evaluation (still add successed)" : "add successed");)
 
-				if (const auto it = evaluations_.find(evaluation);
-					it == evaluations_.end()) { evaluations_.emplace_hint(it, pool_.append(evaluation)); }
+				evaluations_.push_back(evaluation);
 
 				return *this;
 			}
@@ -237,15 +235,19 @@ namespace gal::lang
 							,
 							const std_source_location& location = std_source_location::current()))
 			{
-				[[maybe_unused]] const auto result = convertors_.emplace(std::move(convertor)).second;
+				const auto [it, result] = convertors_.emplace(std::move(convertor));
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a convertor, {}",
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a convertor convert from '{}({})' to '{}({}), {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
 							location.line(),
 							location.column(),
-							result ? "but it was already exist" : "add successed");
+							(*it)->from().name(),
+							(*it)->from().bare_name(),
+							(*it)->to().name(),
+							(*it)->to().bare_name(),
+							not result ? "but it was already exist" : "add successed");
 						)
 
 				return *this;
@@ -358,9 +360,9 @@ namespace gal::lang
 
 				std::ranges::for_each(
 						convertors_,
-						[&dispatcher](auto&& convertor)
+						[&dispatcher]<typename Convertor>(Convertor&& convertor)
 						{
-							if constexpr (Takeover) { dispatcher.add_convertor(std::move(convertor)); }
+							if constexpr (Takeover) { dispatcher.add_convertor(std::forward<Convertor>(convertor)); }
 							else { dispatcher.add_convertor(convertor); }
 						});
 
@@ -1306,9 +1308,9 @@ namespace gal::lang
 							const std_source_location& location = std_source_location::current())) { return stack_->add_object_no_check(name, std::move(object) GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(, location)); }
 
 			/**
-				 * @brief Returns the type info for a named type.
-				 * @throw std::range_error
-				 */
+			 * @brief Returns the type info for a named type.
+			 * @throw std::range_error
+			 */
 			[[nodiscard]] gal_type_info get_type_info(
 					const string_view_type name,
 					const bool throw_if_not_exist = true
@@ -1333,6 +1335,37 @@ namespace gal::lang
 
 				if (throw_if_not_exist) { throw std::range_error{"type_info not exist"}; }
 				return {};
+			}
+
+			/**
+			 * @brief Returns the registered name of a known type_info object compares the "bare_type_info" for the broadest possible match
+			 */
+			[[nodiscard]] string_view_type get_type_name(
+					const gal_type_info& type
+					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+							,
+							const std_source_location& location = std_source_location::current())
+					) const
+			{
+				utils::threading::shared_lock lock{mutex_};
+
+				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to get type_name '{}', {}",
+							__func__,
+							location.file_name(),
+							location.function_name(),
+							location.line(),
+							location.column(),
+							type.bare_name(),
+							std::ranges::find_if(state_.types | std::views::values, [&type](const auto& t)
+								{ return t.bare_equal(type); }).base() == state_.types.end()
+							? "but it was not exist"
+							: "found it");)
+
+				if (const auto it = std::ranges::find_if(state_.types | std::views::values, [&type](const auto& t) { return t.bare_equal(type); }).base();
+					it != state_.types.end()) { return it->first; }
+
+				return type.bare_name();
 			}
 
 			/**

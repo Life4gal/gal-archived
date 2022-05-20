@@ -406,18 +406,19 @@ namespace gal::lang
 			{
 			public:
 				GAL_LANG_TYPE_INFO_DEBUG_DO(
-						string_type conversion_detail;
-						)
+						string_type conversion_detail;)
 
 			private:
 				gal_type_info from_;
 				gal_type_info to_;
 
 			protected:
-				convertor_base(const gal_type_info from, const gal_type_info to)
+				convertor_base(
+						const gal_type_info from,
+						const gal_type_info to
+						)
 					: GAL_LANG_TYPE_INFO_DEBUG_DO(
-							conversion_detail{std_format::format("convert from '{}({})' to '{}({})'", from.name(), from.bare_name(), to.name(), to.bare_name())},
-							)
+							conversion_detail{std_format::format("convert from '{}({})' to '{}({})'", from.name(), from.bare_name(), to.name(), to.bare_name())},)
 					  from_{from},
 					  to_{to} { }
 
@@ -488,7 +489,7 @@ namespace gal::lang
 			class static_convertor final : public convertor_base
 			{
 			public:
-				static_convertor()
+				explicit static_convertor()
 					: convertor_base{
 							make_type_info<Derived>(),
 							make_type_info<Base>()
@@ -505,9 +506,8 @@ namespace gal::lang
 			class dynamic_convertor final : public convertor_base
 			{
 			public:
-				dynamic_convertor()
-					: convertor_base
-					{
+				explicit dynamic_convertor()
+					: convertor_base{
 							make_type_info<Derived>(),
 							make_type_info<Base>()
 					} { }
@@ -533,12 +533,17 @@ namespace gal::lang
 						const gal_type_info to,
 						function_type function
 						)
-					: convertor_base{from, to},
+					: convertor_base{
+							  from,
+							  to
+					  },
 					  function_{std::move(function)} {}
+
+				[[nodiscard]] constexpr bool is_bidirectional_convert() const noexcept override { return false; }
 
 				[[nodiscard]] boxed_value convert(const boxed_value& from) const override { return std::invoke(function_, from); }
 
-				[[nodiscard]] boxed_value convert_down(const boxed_value& to) const override { throw exception::bad_boxed_explicit_cast{"No conversion exists"}; }
+				[[nodiscard]] boxed_value convert_down([[maybe_unused]] const boxed_value& to) const override { throw exception::bad_boxed_explicit_cast{"No conversion exists"}; }
 			};
 		}
 
@@ -641,12 +646,16 @@ namespace gal::lang
 					)
 			{
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), {}",
+						tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a convertor convert from '{}({})' to '{}({}), {}",
 							__func__,
 							location.file_name(),
 							location.function_name(),
 							location.line(),
 							location.column(),
+							convertor->from().name(),
+							convertor->from().bare_name(),
+							convertor->to().name(),
+							convertor->to().bare_name(),
 							find_bidirectional_convertor(convertor) != convertors_.end() ? "but it was already exist" : "add successed");)
 
 				utils::threading::shared_lock lock{mutex_};

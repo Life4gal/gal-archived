@@ -206,6 +206,8 @@ namespace gal::lang::foundation
 	using list_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("list");
 	using map_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("map");
 	using string_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("string");
+	// todo: should be invisible to the user
+	using string_view_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("string_view");
 	using pair_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("pair");
 
 	using array_access_interface_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("[]");
