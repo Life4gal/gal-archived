@@ -73,9 +73,6 @@ namespace gal::lang
 		public:
 			map_type() noexcept = default;
 
-			map_type(const std::initializer_list<value_type> values)
-				: data_{values} {}
-
 			[[nodiscard]] map_type operator+(const map_type& other) const
 			{
 				auto tmp = data_;

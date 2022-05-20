@@ -42,6 +42,17 @@ namespace gal::lang::types
 	public:
 		constexpr string_type() noexcept = default;
 
+		// for cast from foundation::string_type
+		constexpr explicit string_type(const foundation::string_type& string)
+			: data_{string} {}
+
+		// for cast from string_view_type/foundation::string_view_type
+		constexpr explicit string_type(const foundation::string_view_type string)
+			: data_{string} {}
+
+		// for cast to string_view_type
+		[[nodiscard]] constexpr const container_type& data() const noexcept { return data_; }
+
 		[[nodiscard]] constexpr bool operator==(const string_type& other) const noexcept { return data_ == other.data_; }
 
 		[[nodiscard]] constexpr auto operator<=>(const string_type& other) const { return data_ <=> other.data_; }

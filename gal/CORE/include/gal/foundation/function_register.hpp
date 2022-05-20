@@ -27,6 +27,7 @@ namespace gal::lang::foundation
 		}
 
 		template<typename Class, typename... Params>
+			requires std::is_constructible_v<Class, Params...>
 		[[nodiscard]] static function_proxy_type do_register_constructor(Class (*)(Params ...))
 		{
 			if constexpr (not std::is_copy_assignable_v<Class>)

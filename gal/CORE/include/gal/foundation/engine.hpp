@@ -11,10 +11,14 @@
 #include <gal/foundation/ast.hpp>
 #include <gal/plugins/binary_module_windows.hpp>
 #include <gal/foundation/string_pool.hpp>
+#include <gal/function_register.hpp>
 
 namespace gal::lang::foundation
 {
 	using binary_module_type = std::shared_ptr<plugin::binary_module>;
+
+	template<typename... Args>
+	[[nodiscard]] binary_module_type make_binary_module(Args&&... args) { return std::make_shared<plugin::binary_module>(std::forward<Args>(args)...); }
 
 	/**
 	 * @brief The main object that user will use.
@@ -29,7 +33,7 @@ namespace gal::lang::foundation
 		using loaded_modules_type = std::map<file_contents_type::key_type, binary_module_type>;
 		using active_loaded_modules = std::set<loaded_modules_type::key_type>;
 
-		using preloaded_paths_type = std::vector<foundation::string_type>;
+		using preloaded_paths_type = std::vector<string_type>;
 
 	private:
 		mutable utils::threading::shared_mutex mutex_;
@@ -96,7 +100,7 @@ namespace gal::lang::foundation
 		}
 
 		/**
-		 * @brief Evaluates the given file and looks in the 'use' paths
+		 * @brief Evaluates the given file and looks in the 'load' paths
 		 */
 		[[nodiscard]] boxed_value internal_eval_file(const string_view_type filename)
 		{
@@ -127,11 +131,165 @@ namespace gal::lang::foundation
 		}
 
 		/**
+		 * @brief Load a binary module from a dynamic library. Works on platforms that support dynamic libraries.
+		 */
+		void load_binary_module(const string_view_type module_name, const string_view_type filename)
+		{
+			utils::threading::scoped_lock lock{load_mutex_};
+
+			if (not loaded_modules_.contains(module_name))
+			{
+				const auto m = make_binary_module(module_name, filename);
+				loaded_modules_[module_name] = m;
+				active_loaded_modules_.insert(module_name);
+				borrow_module(m->module_ptr);
+			}
+			else if (not active_loaded_modules_.contains(module_name))
+			{
+				active_loaded_modules_.insert(module_name);
+				borrow_module(loaded_modules_[module_name]->module_ptr);
+			}
+		}
+
+		/**
+		 * @brief Load a binary module from a dynamic library. Works on platforms that support dynamic libraries.
+		 * @throw exception::load_module_error
+		 *
+		 * @note The module is searched for in the registered module path folders and with standard prefixes and postfixes: ("lib"|"")\<module_name\>(".dll"|".so"|".bundle"|"").
+		 * Once the file is located, the system looks for the symbol binary_module::module_load_function_prefix<module_name\>".
+		 * If no file can be found matching the search criteria and containing the appropriate entry point (the symbol mentioned above), an exception is thrown.
+		 */
+		preloaded_paths_type::value_type load_binary_module(const string_view_type module_name)
+		{
+			std::vector<exception::load_module_error> errors{};
+			auto stripped_version_module_name = module_name;
+			if (stripped_version_module_name.ends_with(build_info::version())) { stripped_version_module_name.remove_suffix(build_info::version().size()); }
+
+			constexpr std::array prefixes{
+					"lib",
+					"cyg",
+					""};
+			constexpr std::array suffixes{
+					".dll",
+					".so",
+					".bundle"};
+
+			for (const auto& path: preloaded_paths_)
+			{
+				for (auto& prefix: prefixes)
+				{
+					for (auto& suffix: suffixes)
+					{
+						try
+						{
+							auto filename = (path + prefix).append(module_name).append(suffix);
+
+							load_binary_module(stripped_version_module_name, filename);
+							return filename;
+						}
+						catch (exception::load_module_error& e) { errors.push_back(std::move(e)); }
+					}
+				}
+			}
+
+			throw exception::load_module_error{module_name, errors};
+		}
+
+		/**
 		 * @brief Builds all the requirements, including its evaluator and a run of its prelude.
 		 */
 		void build_system(engine_module_type&& library)
 		{
 			if (library) { take_module(std::move(*library)); }
+
+			dispatcher_.add_function(
+					"invokable",
+					make_dynamic_function_proxy(
+							[this](const parameters_view_type params) { return dispatcher_.invokable(params); }));
+
+			dispatcher_.add_function(
+					"invoke",
+					fun(
+							[this](const function_proxy_base& fun, const parameters_view_type param)
+							{
+								const convertor_manager_state state{dispatcher_.get_conversion_manager()};
+								return fun(param, state);
+							}));
+
+			dispatcher_.add_function(
+					"typeof",
+					fun(
+							[this](const string_view_type name, const bool throw_if_not_exist) { return dispatcher_.get_type_info(name, throw_if_not_exist); }));
+
+			dispatcher_.add_function(
+					"typeof",
+					fun(
+							[this](const string_view_type name) { return dispatcher_.get_type_info(name, true); }));
+
+			dispatcher_.add_function(
+					"nameof",
+					fun(
+							[this](const gal_type_info& type) { return dispatcher_.get_type_name(type); }));
+
+			dispatcher_.add_function(
+					"add_convertor",
+					fun(
+							[this](const gal_type_info& from, const gal_type_info& to, const std::function<boxed_value(const boxed_value&)>& func) { dispatcher_.add_convertor(make_explicit_convertor(from, to, func)); }));
+
+			dispatcher_.add_function(
+					"load_module",
+					fun(
+							[this](const string_view_type module_name, const string_view_type filename) { return load_binary_module(module_name, filename); }));
+
+			dispatcher_.add_function(
+					"load_module",
+					fun(
+							[this](const string_view_type module_name) { return load_binary_module(module_name); }));
+
+			dispatcher_.add_function(
+					"load",
+					fun(
+							[this](const string_view_type filename) { return load(filename); }));
+
+			dispatcher_.add_function(
+					"eval_file",
+					fun(
+							[this](const string_view_type filename) { return internal_eval_file(filename); }));
+
+			dispatcher_.add_function(
+					"eval",
+					fun(
+							[this](const string_view_type string) { return eval(string); }));
+
+			dispatcher_.add_function(
+					"eval",
+					fun(
+							[this](ast::ast_node& node) { return eval(node); }));
+
+			dispatcher_.add_function(
+					"parse",
+					fun(
+							[this](const string_view_type string, const bool debug_print) { return parse(string, debug_print); }));
+
+			dispatcher_.add_function(
+					"parse",
+					fun(
+							[this](const string_view_type string) { return parse(string); }));
+
+			dispatcher_.add_function(
+					"add_global",
+					fun(
+							[this](const string_view_type name, boxed_value object) { add_global(name, std::move(object)); }));
+
+			dispatcher_.add_function(
+					"add_global_mutable",
+					fun(
+							[this](const string_view_type name, boxed_value object) { add_global_mutable(name, std::move(object)); }));
+
+			dispatcher_.add_function(
+					"set_global",
+					fun(
+							[this](const string_view_type name, boxed_value object) { global_assign_or_insert(name, std::move(object)); }));
 
 			// todo: other things
 		}
@@ -281,14 +439,14 @@ namespace gal::lang::foundation
 		 * @brief Adds a constant object that is available in all contexts and to all threads
 		 *
 		 * @param name Name of the value to add
-		 * @param variable boxed_value to add as a global
+		 * @param object boxed_value to add as a global
 		 *
 		 * @throw global_mutable_error variable is not const
 		 */
-		engine_base& add_global(const string_view_type name, boxed_value variable)
+		engine_base& add_global(const string_view_type name, boxed_value object)
 		{
 			name_validator::validate_object_name(name);
-			dispatcher_.add_global(name, std::move(variable));
+			dispatcher_.add_global(name, std::move(object));
 			return *this;
 		}
 
@@ -329,12 +487,12 @@ namespace gal::lang::foundation
 		 * @brief Adds a mutable object that is available in all contexts and to all threads
 		 *
 		 * @param name Name of the value to add
-		 * @param variable boxed_value to add as a global
+		 * @param object boxed_value to add as a global
 		 */
-		engine_base& add_global_mutable(const string_view_type name, boxed_value variable)
+		engine_base& add_global_mutable(const string_view_type name, boxed_value object)
 		{
 			name_validator::validate_object_name(name);
-			dispatcher_.add_global_mutable(name, std::move(variable));
+			dispatcher_.add_global_mutable(name, std::move(object));
 			return *this;
 		}
 

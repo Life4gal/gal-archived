@@ -55,8 +55,11 @@ namespace gal::lang
 		public:
 			list_type() noexcept = default;
 
-			list_type(const std::initializer_list<value_type> values)
-				: data_{values} {}
+			explicit list_type(foundation::parameters_type&& list)
+				: data_{std::make_move_iterator(list.begin()), std::make_move_iterator(list.end())} {}
+
+			explicit list_type(const foundation::parameters_view_type list)
+				: data_{list.begin(), list.end()} {}
 
 			[[nodiscard]] list_type operator+(const list_type& other) const
 			{

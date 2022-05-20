@@ -2560,12 +2560,12 @@ namespace gal::lang::addon
 				// };
 				//
 				// return (f.decltype(f)::template operator()<Index>() || ...);
-				return (build<Index>(prev_size) || ...);
+				return (build_unary_expression_msvc_fail_10042238<Index>(prev_size) || ...);
 			}(std::make_index_sequence<std::tuple_size_v<parser_detail::operator_matcher::m10_type>>{});
 		}
 
 		template<typename T>
-		void builder(const auto prev_size)
+		void build_unary_expression_msvc_fail_10042238(const auto prev_size)
 		{
 			// we always check the unary one, skip it
 			if (not build_operator(parser_detail::operator_matcher::operators.size() - 1))
@@ -2580,12 +2580,12 @@ namespace gal::lang::addon
 		}
 
 		template<std::size_t Index>
-		bool build(const auto prev_size)
+		bool build_unary_expression_msvc_fail_10042238(const auto prev_size)
 		{
 			using type = std::tuple_element_t<Index, parser_detail::operator_matcher::m10_type>;
 			if (build_any<type>())
 			{
-				this->builder<type>(prev_size);
+				this->build_unary_expression_msvc_fail_10042238<type>(prev_size);
 				return true;
 			}
 			return false;

@@ -7,6 +7,16 @@
 
 namespace gal::lang
 {
+	namespace boxed_cast_detail
+	{
+		template<typename T>
+		[[nodiscard]] constexpr decltype(auto) type_maker()
+		{
+			if constexpr (requires { { T::class_type() } -> std::same_as<const foundation::gal_type_info&>; }) { return T::class_type(); }
+			else { return foundation::make_type_info<T>(); }
+		}
+	}
+
 	/**
 	 * @brief Used to register a to parent class relationship with GAL.
 	 * Necessary if you want automatic conversions up your inheritance hierarchy.
@@ -31,11 +41,12 @@ namespace gal::lang
 	[[nodiscard]] foundation::convertor_type make_explicit_convertor(const foundation::gal_type_info& from, const foundation::gal_type_info& to, const Callable& function) { return foundation::make_convertor<foundation::boxed_cast_detail::explicit_convertor<Callable>>(from, to, function); }
 
 	template<typename From, typename To, typename Callable>
+		requires std::is_invocable_r_v<To, Callable, const From&>
 	[[nodiscard]] foundation::convertor_type make_explicit_convertor(const Callable& function)
 	{
 		return lang::make_explicit_convertor(
-				foundation::make_type_info<From>(),
-				foundation::make_type_info<To>(),
+				boxed_cast_detail::type_maker<From>(),
+				boxed_cast_detail::type_maker<To>(),
 				[function](const foundation::boxed_value& object)
 				{
 					// not even attempting to call boxed_cast so that we don't get caught in some call recursion
@@ -71,8 +82,8 @@ namespace gal::lang
 	[[nodiscard]] foundation::convertor_type make_container_explicit_convertor(PushFunction push_function)
 	{
 		return lang::make_explicit_convertor(
-				foundation::make_type_info<Container<ValueType, AnyOther...>>(),
-				foundation::make_type_info<ValueType>(),
+				boxed_cast_detail::type_maker<Container<ValueType, AnyOther...>>(),
+				boxed_cast_detail::type_maker<ValueType>(),
 				[push_function](const foundation::boxed_value& data)
 				{
 					const auto& source = foundation::boxed_cast_detail::cast_helper<const Container<foundation::boxed_value, AnyOther...>&>::cast(data, nullptr);
@@ -105,8 +116,8 @@ namespace gal::lang
 	[[nodiscard]] foundation::convertor_type make_container_explicit_convertor(PushFunction push_function)
 	{
 		return lang::make_explicit_convertor(
-				foundation::make_type_info<Container<KeyType, MappedType, AnyOther...>>(),
-				foundation::make_type_info<MappedType>(),
+				boxed_cast_detail::type_maker<Container<KeyType, MappedType, AnyOther...>>(),
+				boxed_cast_detail::type_maker<MappedType>(),
 				[push_function](const foundation::boxed_value& data)
 				{
 					const auto& source = foundation::boxed_cast_detail::cast_helper<const Container<KeyType, foundation::boxed_value, AnyOther...>&>::cast(data, nullptr);
@@ -144,9 +155,9 @@ namespace gal::lang
 
 				~scoped_logger() { tools::logger::info(message); }
 				};
-		
+
 				scoped_logger detail{};
-				
+
 				std_format::format_to(
 					std::back_inserter(detail.message),
 					"'{}' from (file: '{}' function: '{}' position: ({}:{})).\n\tobject type is '{}({})', required type is '{}({})'",
@@ -157,13 +168,13 @@ namespace gal::lang
 					location.column(),
 					object.type_info().type_name,
 					object.type_info().bare_type_name,
-					foundation::make_type_info<T>().type_name,
-					foundation::make_type_info<T>().bare_type_name);
+					boxed_cast_detail::type_maker<T>().type_name,
+					boxed_cast_detail::type_maker<T>().bare_type_name);
 				)
 
 
 		if (not state ||
-		    object.type_info().bare_equal(foundation::make_type_info<T>()) ||
+		    object.type_info().bare_equal(boxed_cast_detail::type_maker<T>()) ||
 		    (not state->operator*().is_convertible<T>()))
 		{
 			try { return foundation::boxed_cast_detail::cast_invoker<T>::cast(object, state); }
