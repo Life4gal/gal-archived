@@ -116,7 +116,7 @@ namespace gal::lang
 			// note: module level object is global visible
 			using objects_type = std::map<string_view_type, boxed_value, std::less<>>;
 			// evaluation string
-			using evaluations_type = std::vector<string_view_type>;
+			using evaluations_type = std::vector<string_type>;
 			// convertor
 			using convertors_type = std::set<convertor_type, std::less<>>;
 
@@ -224,7 +224,7 @@ namespace gal::lang
 							evaluation,
 							std::ranges::find(evaluations_, evaluation) != evaluations_.end() ? "there is the same evaluation (still add successed)" : "add successed");)
 
-				evaluations_.push_back(evaluation);
+				evaluations_.push_back(evaluations_type::value_type{evaluation});
 
 				return *this;
 			}
@@ -493,6 +493,7 @@ namespace gal::lang
 
 		private:
 			std::reference_wrapper<string_pool_type> borrowed_pool_;
+			// block should be destructed first
 			std::vector<string_pool_type::block_borrower> borrowed_block_;
 
 		public:
@@ -979,13 +980,15 @@ namespace gal::lang
 			};
 
 		private:
+			std::reference_wrapper<ast::ast_parser_base> parser_;
+
+			// string pool should be destructed after stack
 			std::reference_wrapper<string_pool_type> borrowed_pool_;
+			utils::thread_storage<engine_stack> stack_;
 
 			state_type state_;
 			convertor_manager convertor_manager_;
-			std::reference_wrapper<ast::ast_parser_base> parser_;
 
-			utils::thread_storage<engine_stack> stack_;
 			mutable utils::threading::shared_mutex mutex_;
 			mutable function_cache_location_type method_missing_location_;
 
@@ -1049,8 +1052,8 @@ namespace gal::lang
 
 		public:
 			explicit dispatcher(string_pool_type& pool, ast::ast_parser_base& p)
-				: borrowed_pool_{pool},
-				  parser_{p} { stack_.construct(pool); }
+				: parser_{p},
+				  borrowed_pool_{pool} { stack_.construct(pool); }
 
 			void takeover_pool(string_pool_type&& pool) const { borrowed_pool_.get().takeover(std::move(pool)); }
 
@@ -1093,7 +1096,7 @@ namespace gal::lang
 			}
 
 			/**
-			 * @brief Add a new named proxy_function to the system.
+			 * @brief Add a new named function_proxy to the system.
 			 *
 			 * @throw exception::name_conflict_error if there's a function matching the given one being added.
 			 */
@@ -1641,7 +1644,7 @@ namespace gal::lang
 						}
 						catch (const exception::bad_boxed_cast&)
 						{
-							// unable to convert bv into a proxy_function_base
+							// unable to convert bv into a function_proxy_base
 							throw exception::dispatch_error{
 									ps.sub_list(num_params).to<parameters_type>(),
 									{fs.begin(), fs.end()}};

@@ -13,6 +13,8 @@
 #include <gal/foundation/string_pool.hpp>
 #include <gal/function_register.hpp>
 
+#include <gal/types/string_view_type.hpp>
+
 namespace gal::lang::foundation
 {
 	using binary_module_type = std::shared_ptr<plugin::binary_module>;
@@ -39,6 +41,8 @@ namespace gal::lang::foundation
 		mutable utils::threading::shared_mutex mutex_;
 		mutable utils::threading::recursive_mutex load_mutex_;
 
+		string_pool_type string_pool_;
+
 		file_contents_type file_contents_;
 
 		used_files_type loaded_files_;
@@ -50,8 +54,6 @@ namespace gal::lang::foundation
 		std::unique_ptr<ast::ast_parser_base> parser_;
 
 		dispatcher dispatcher_;
-
-		string_pool_type string_pool_;
 
 		[[nodiscard]] string_view_type load_file(const std::string_view filename)
 		{
@@ -203,11 +205,6 @@ namespace gal::lang::foundation
 			if (library) { take_module(std::move(*library)); }
 
 			dispatcher_.add_function(
-					"invokable",
-					make_dynamic_function_proxy(
-							[this](const parameters_view_type params) { return dispatcher_.invokable(params); }));
-
-			dispatcher_.add_function(
 					"invoke",
 					fun(
 							[this](const function_proxy_base& fun, const parameters_view_type param)
@@ -229,7 +226,32 @@ namespace gal::lang::foundation
 			dispatcher_.add_function(
 					"nameof",
 					fun(
-							[this](const gal_type_info& type) { return dispatcher_.get_type_name(type); }));
+							[this](const gal_type_info& type) { return types::string_view_type{dispatcher_.get_type_name(type)}; }));
+
+			dispatcher_.add_function(
+					"nameof",
+					fun(
+							[this](const boxed_value& object) { return types::string_view_type{dispatcher_.get_type_name(object.type_info())}; }));
+
+			dispatcher_.add_function(
+					"has_function",
+					fun(
+							[this](const string_view_type name) { return dispatcher_.has_function(name); }));
+
+			dispatcher_.add_function(
+					"get_function",
+					fun(
+							[this](const string_view_type name) { return dispatcher_.get_function(name); }));
+
+			dispatcher_.add_function(
+					"invokable",
+					make_dynamic_function_proxy(
+							[this](const parameters_view_type params) { return dispatcher_.invokable(params); }));
+
+			dispatcher_.add_function(
+					"is_typeof",
+					fun(
+							[this](const boxed_value& object, const string_view_type name) { return dispatcher_.is_typeof(name, object); }));
 
 			dispatcher_.add_function(
 					"add_convertor",
@@ -311,7 +333,7 @@ namespace gal::lang::foundation
 		[[nodiscard]] boxed_value eval(ast::ast_node& node)
 		{
 			try { return node.eval(dispatcher_state{dispatcher_}, parser_->get_visitor()); }
-			catch (const exception::eval_error& e) { throw var(e); }
+			catch (const exception::eval_error& e) { throw boxed_return_exception{var(e)}; }
 		}
 
 		/**

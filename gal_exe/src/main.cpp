@@ -37,12 +37,24 @@ int main()
 }
 
 /* test.gal
-println("hello world!")
+def print_list(l)
+{
+	for(var i in range(l.size()))
+	{
+		println(l[i])
+	}
+}
+
+# println("hello world!")
 
 global s = list()
 s.push_back("hello")
 s.push_back("world")
-print("list's size: ${s.size()}, elements: [${s[0]}, ${s[1]}]\n")
+s.push_back(42)
+
+println("${nameof(s)}'s size: ${s.size()}, elements: [${s[0]}, ${s[1]}, ${s[2]}]")
+println(s.is_typeof("list"))
+print_list(s)
 
 print("print ${range(0, 42, 2)}\n")
 for(var i in range(0, 42, 2))

@@ -1502,8 +1502,17 @@ namespace gal::lang::addon
 
 			skip_whitespace();
 
-			// todo: split?
-			if (allow_set_type) { (void)build_identifier(true); }
+			if (allow_set_type)
+			{
+				if (const auto has_colon = build_char(':'); 
+					build_identifier(true) && not has_colon)
+				{
+					throw exception::eval_error{
+							"Incomplete function type set, missing ':'",
+							filename_,
+							point_};
+				}
+			}
 
 			build_match<ast::arg_ast_node>(prev_size);
 

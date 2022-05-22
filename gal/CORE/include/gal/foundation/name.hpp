@@ -112,6 +112,11 @@ namespace gal::lang::foundation
 	using object_clone_interface_name = GAL_UTILS_TEMPLATE_STRING_TYPE("clone");
 
 	//*********************************************
+	// boolean type & interface
+	//*********************************************
+	using boolean_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("bool");
+
+	//*********************************************
 	// number type & interface
 	//*********************************************
 	using number_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("Number");

@@ -34,6 +34,27 @@ namespace gal::lang::plugin
 			foundation::operator_register::register_move_assign<ContainerType>(m);
 		}
 
+		static void register_boolean_type(foundation::engine_module& m)
+		{
+			m.add_type_info(foundation::boolean_type_name::value, foundation::make_type_info<bool>());
+
+			m.add_function(foundation::boolean_type_name::value, default_ctor<bool>());
+			m.add_function(foundation::boolean_type_name::value, copy_ctor<bool>());
+
+			foundation::operator_register::register_assign<bool>(m);
+			foundation::operator_register::register_equal<bool>(m);
+			foundation::operator_register::register_not_equal<bool>(m);
+			foundation::operator_register::register_unary_not<bool>(m);
+			m.add_function(
+					foundation::operator_to_string_name::value,
+					fun([](const bool b) -> decltype(auto)
+					{
+						static types::string_type true_name{foundation::string_view_type{foundation::keyword_true_name::value}};
+						static types::string_type false_name{foundation::string_view_type{foundation::keyword_false_name::value}};
+						return b ? true_name : false_name;
+					}));
+		}
+
 		static void register_range_type(foundation::engine_module& m)
 		{
 			m.add_type_info(foundation::range_type_name::value, types::range_type::class_type());
@@ -219,23 +240,30 @@ namespace gal::lang::plugin
 			m.add_type_info(foundation::string_type_name::value, types::string_type::class_type());
 
 			// foundation::string_type => string_type
-			m.add_function(
-					foundation::string_type_name::value,
-					ctor<types::string_type(const foundation::string_type&)>());
+			// m.add_function(
+			// 		foundation::string_type_name::value,
+			// 		ctor<types::string_type(const foundation::string_type&)>());
+			m.add_convertor(make_explicit_convertor<foundation::string_type, types::string_type>(
+					[](const foundation::string_type& string) { return types::string_type{string}; }));
 
 			// foundation::string_view_type => string_type
-			m.add_function(
-					foundation::string_type_name::value,
-					ctor<types::string_type(foundation::string_view_type)>());
+			// m.add_function(
+			// 		foundation::string_type_name::value,
+			// 		ctor<types::string_type(foundation::string_view_type)>());
+			m.add_convertor(make_explicit_convertor<foundation::string_view_type, types::string_type>(
+					[](const foundation::string_view_type string) { return types::string_type{string}; }));
 
 			// string_type => foundation::string_type
-			m.add_convertor(make_explicit_convertor<types::string_type, foundation::string_type>([](const types::string_type& string) { return foundation::string_type{string.data()}; }));
+			m.add_convertor(make_explicit_convertor<types::string_type, foundation::string_type>(
+					[](const types::string_type& string) { return foundation::string_type{string.data()}; }));
 
 			// string_type => foundation::string_view_type
-			m.add_convertor(make_explicit_convertor<types::string_type, foundation::string_view_type>([](const types::string_type& string) { return foundation::string_view_type{string.data()}; }));
+			m.add_convertor(make_explicit_convertor<types::string_type, foundation::string_view_type>(
+					[](const types::string_type& string) { return foundation::string_view_type{string.data()}; }));
 
 			// string_type => string_view_type
-			m.add_convertor(make_explicit_convertor<types::string_type, types::string_view_type>([](const types::string_type& string) { return types::string_view_type{string.data()}; }));
+			m.add_convertor(make_explicit_convertor<types::string_type, types::string_view_type>(
+					[](const types::string_type& string) { return types::string_view_type{string.data()}; }));
 
 			register_default_constructible_container<types::string_type>(foundation::string_type_name::value, m);
 			register_assignable_container<types::string_type>(foundation::string_type_name::value, m);
@@ -322,23 +350,30 @@ namespace gal::lang::plugin
 			m.add_type_info(foundation::string_view_type_name::value, types::string_view_type::class_type());
 
 			// foundation::string_type => string_view_type
-			m.add_function(
-					foundation::string_view_type_name::value,
-					ctor<types::string_view_type(const foundation::string_type&)>());
+			// m.add_function(
+			// 		foundation::string_view_type_name::value,
+			// 		ctor<types::string_view_type(const foundation::string_type&)>());
+			m.add_convertor(make_explicit_convertor<foundation::string_type, types::string_view_type>(
+					[](const foundation::string_type& string) { return types::string_view_type{string}; }));
 
 			// foundation::string_view_type => string_view_type
-			m.add_function(
-					foundation::string_view_type_name::value,
-					ctor<types::string_view_type(foundation::string_view_type)>());
+			// m.add_function(
+			// 		foundation::string_view_type_name::value,
+			// 		ctor<types::string_view_type(foundation::string_view_type)>());
+			m.add_convertor(make_explicit_convertor<foundation::string_view_type, types::string_view_type>(
+					[](const foundation::string_view_type string) { return types::string_view_type{string}; }));
 
 			// string_view_type => foundation::string_type
-			m.add_convertor(make_explicit_convertor<types::string_view_type, foundation::string_type>([](const types::string_view_type view) { return foundation::string_type{view.data()}; }));
+			m.add_convertor(make_explicit_convertor<types::string_view_type, foundation::string_type>(
+					[](const types::string_view_type view) { return foundation::string_type{view.data()}; }));
 
 			// string_view_type => foundation::string_view_type
-			m.add_convertor(make_explicit_convertor<types::string_view_type, foundation::string_view_type>([](const types::string_view_type view) { return foundation::string_view_type{view.data()}; }));
+			m.add_convertor(make_explicit_convertor<types::string_view_type, foundation::string_view_type>(
+					[](const types::string_view_type view) { return foundation::string_view_type{view.data()}; }));
 
 			// string_view_type => string_type
-			m.add_convertor(make_explicit_convertor<types::string_view_type, types::string_type>([](const types::string_view_type view) { return types::string_type{view.data()}; }));
+			m.add_convertor(make_explicit_convertor<types::string_view_type, types::string_type>(
+					[](const types::string_view_type view) { return types::string_type{view.data()}; }));
 
 			register_default_constructible_container<types::string_view_type>(foundation::string_view_type_name::value, m);
 			register_assignable_container<types::string_view_type>(foundation::string_view_type_name::value, m);
@@ -390,13 +425,24 @@ namespace gal::lang::plugin
 
 			// range
 			m.add_function(foundation::operator_to_string_name::value,
-			               fun([](const types::range_type& range) -> decltype(auto)
-			               {
-				               return types::string_type{std_format::format("range(begin={}, end={}, step={})", range.begin(), range.end(), range.step())};
-			               }));
+			               fun([](const types::range_type& range) -> decltype(auto) { return types::string_type{std_format::format("range(begin={}, end={}, step={})", range.begin(), range.end(), range.step())}; }));
 
 			// list
 			// todo: to_string(list)? need dispatcher_state!
+			// m.add_evaluation(std_format::format(
+			// 		"{} {}(l) {} is_typeof(\"list\", l)"
+			// 		"{{"
+			// 		"	var s = string()"
+			// 		"	for(var v in l)"
+			// 		"	{{"
+			// 		"		s += to_string(v)"
+			// 		"	}}"
+			// 		"	s;"
+			// 		"}}",
+			// 		foundation::keyword_define_name::value,
+			// 		foundation::operator_to_string_name::value,
+			// 		foundation::keyword_function_guard_name::value
+			// 		));
 
 			// map
 			// todo: to_string(map)? need dispatcher_state!
@@ -414,19 +460,35 @@ namespace gal::lang::plugin
 		{
 			m.add_function(
 					"print",
-					fun([](const types::string_view_type string) { std::cout << string.data(); }));
+					fun([] {}));
+
+			m.add_function(
+					"print",
+					fun([](const bool b) { std::cout << (b ? foundation::keyword_true_name::value : foundation::keyword_false_name::value); }));
 
 			m.add_function(
 					"print",
 					fun([](const types::number_type& num) { std::cout << num.to_string(); }));
 
 			m.add_function(
+					"print",
+					fun([](const types::string_view_type string) { std::cout << string.data(); }));
+
+			m.add_function(
 					"println",
-					fun([](const types::string_view_type string) { std::cout << string.data() << '\n'; }));
+					fun([] {}));
+
+			m.add_function(
+					"println",
+					fun([](const bool b) { std::cout << (b ? foundation::keyword_true_name::value : foundation::keyword_false_name::value) << '\n'; }));
 
 			m.add_function(
 					"println",
 					fun([](const types::number_type& num) { std::cout << num.to_string() << '\n'; }));
+
+			m.add_function(
+					"println",
+					fun([](const types::string_view_type string) { std::cout << string.data() << '\n'; }));
 		}
 
 	public:

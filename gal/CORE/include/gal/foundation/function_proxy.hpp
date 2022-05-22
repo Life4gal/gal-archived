@@ -456,7 +456,7 @@ namespace gal::lang
 			/**
 			 * @brief Get all overloaded function (with the same name).
 			 *
-			 * @return const_proxy_function vector
+			 * @return const_function_proxy vector
 			 */
 			[[nodiscard]] virtual const_function_proxies_type overloaded_functions() const { return {}; }
 
@@ -471,7 +471,7 @@ namespace gal::lang
 		};
 
 		/**
-		 * @brief A proxy_function implementation that is not type safe, the called
+		 * @brief A function_proxy implementation that is not type safe, the called
 		 * function is expecting a parameters_view_type that it works with how it chooses.
 		 */
 		class dynamic_function_proxy_base : public function_proxy_base
@@ -648,7 +648,7 @@ namespace gal::lang
 		};
 
 		/**
-		 * @brief An implementation of proxy_function that takes a proxy_function
+		 * @brief An implementation of function_proxy that takes a function_proxy
 		 * and substitutes bound parameters into the parameter list
 		 *  at runtime, when call() is executed.
 		 *
@@ -866,7 +866,7 @@ namespace gal::lang
 			}
 		};
 
-		namespace proxy_function_detail
+		namespace function_proxy_detail
 		{
 			[[nodiscard]] inline bool types_match_except_for_arithmetic(
 					const function_proxy_base& function,
@@ -928,7 +928,7 @@ namespace gal::lang
 
 				for (auto begin = std::ranges::begin(range); begin != end; ++begin)
 				{
-					if (proxy_function_detail::types_match_except_for_arithmetic(*begin, params, conversion))
+					if (function_proxy_detail::types_match_except_for_arithmetic(*begin, params, conversion))
 					{
 						GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
 								tools::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), types_match_except_for_arithmetic matched at the '{}'th function.",
@@ -1021,7 +1021,7 @@ namespace gal::lang
 								functions.begin(),
 								functions.end()}};
 			}
-		}// namespace proxy_function_detail
+		}// namespace function_proxy_detail
 
 		/**
 		 * @throw exception::dispatch_error
@@ -1088,7 +1088,7 @@ namespace gal::lang
 				}
 			}
 
-			return proxy_function_detail::dispatch_with_conversion(
+			return function_proxy_detail::dispatch_with_conversion(
 					ordered_functions |
 					std::views::values |
 					std::views::transform([](const std::reference_wrapper<const function_proxy_base>& f) -> const function_proxy_base& { return f.get(); }),

@@ -18,16 +18,18 @@ namespace gal::lang
 	 */
 	namespace eval_detail
 	{
-		[[nodiscard]] inline foundation::boxed_value eval_function(
+		template<typename Range>
+			requires std::is_convertible_v<std::ranges::range_value_t<Range>, ast::ast_node::identifier_type>
+		[[nodiscard]] foundation::boxed_value eval_function(
 				foundation::dispatcher& dispatcher,
 				ast::ast_node& node,
 				ast::ast_visitor_base& visitor,
 				const foundation::parameters_view_type params,
-				const foundation::name_views_view_type param_names,
+				const Range& param_names,
 				const foundation::engine_stack::scope_type& locals = {},
 				const bool is_this_capture = false)
 		{
-			gal_assert(params.size() == param_names.size());
+			gal_assert(params.size() == std::ranges::size(param_names));
 
 			foundation::dispatcher_state state{dispatcher};
 
@@ -362,14 +364,27 @@ namespace gal::lang
 					const foundation::convertor_manager_state convertor_manager_state{state->get_conversion_manager()};
 					return (*state->boxed_cast<const foundation::function_proxy_base*>(function))(params, convertor_manager_state);
 				}
-				catch (const exception::dispatch_error& e) { throw exception::eval_error{std_format::format("{} with function '{}' called", e.what(), node.front().identifier()), e.parameters, e.functions, false, *state}; }
+				catch (const exception::dispatch_error& e)
+				{
+					throw exception::eval_error{
+							std_format::format(
+									"{} with function '{}' called.",
+									e.what(),
+									node.front().identifier()),
+							e.parameters,
+							e.functions,
+							false,
+							*state};
+				}
 				catch (const exception::bad_boxed_cast&)
 				{
 					try
 					{
 						// handle the case where there is only 1 function to try to call and dispatch fails on it
 						throw exception::eval_error{
-								std_format::format("Error with function '{}' called", node.front().identifier()),
+								std_format::format(
+										"Error with function '{}' called.",
+										node.front().identifier()),
 								params,
 								foundation::const_function_proxies_view_type{state->boxed_cast<const foundation::const_function_proxy_type&>(function)},
 								false,
@@ -378,18 +393,18 @@ namespace gal::lang
 					catch (const exception::bad_boxed_cast&)
 					{
 						throw exception::eval_error{
-								std_format::format("'{}' does not evaluate to a function", node.front().pretty_print())};
+								std_format::format("'{}' does not evaluate to a function.", node.front().pretty_print())};
 					}
 				}
 				catch (const exception::arity_error& e)
 				{
 					throw exception::eval_error{
-							std_format::format("{} with function '{}' called", e.what(), node.front().identifier())};
+							std_format::format("{} with function '{}' called.", e.what(), node.front().identifier())};
 				}
 				catch (const exception::guard_error& e)
 				{
 					throw exception::eval_error{
-							std_format::format("{} with function '{}' called", e.what(), node.front().identifier())};
+							std_format::format("{} with function '{}' called.", e.what(), node.front().identifier())};
 				}
 				catch (interrupt_type::interrupt_return& ret) { return std::move(ret.value); }
 			}
@@ -553,7 +568,7 @@ namespace gal::lang
 				// 		{ ret.push_back(get_arg_name(child)); });
 				//
 				// return ret;
-				return node.view() | std::views::transform([](const auto& child) { return get_arg_name(child); });
+				return node.view() | std::views::transform([](const auto& child) { return arg_list_ast_node::get_arg_name(child); });
 			}
 
 			static foundation::parameter_type_mapper::parameter_type_mapping_type::value_type get_arg_type(const ast_node& node, const foundation::dispatcher_state& state)
@@ -869,12 +884,20 @@ namespace gal::lang
 
 				auto dispatcher = std::ref(*state);
 
-				auto guard = [this, dispatcher, num_params, &param_names, &visitor]
+				auto guard = [this, dispatcher, num_params, param_names, &visitor]
 				{
 					if (guard_node)
 					{
 						return foundation::make_dynamic_function_proxy(
-								[this, dispatcher, &param_names, &visitor](const foundation::parameters_view_type params) { return eval_detail::eval_function(dispatcher, *guard_node, visitor, params, param_names); },
+								[this, dispatcher, param_names, &visitor](const foundation::parameters_view_type params)
+								{
+									return eval_detail::eval_function(
+											dispatcher,
+											*guard_node,
+											visitor,
+											params,
+											param_names);
+								},
 								static_cast<foundation::function_proxy_base::arity_size_type>(num_params),
 								guard_node);
 					}
@@ -887,7 +910,15 @@ namespace gal::lang
 					state->add_function(
 							name,
 							foundation::make_dynamic_function_proxy(
-									[this, dispatcher, &param_names, &visitor](const foundation::parameters_view_type params) { return eval_detail::eval_function(dispatcher, *body_node, visitor, params, param_names); },
+									[this, dispatcher, param_names, &visitor](const foundation::parameters_view_type params)
+									{
+										return eval_detail::eval_function(
+												dispatcher,
+												*body_node,
+												visitor,
+												params,
+												param_names);
+									},
 									static_cast<foundation::function_proxy_base::arity_size_type>(num_params),
 									body_node,
 									std::move(param_types),
