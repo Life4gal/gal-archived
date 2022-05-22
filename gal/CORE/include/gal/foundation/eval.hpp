@@ -97,6 +97,15 @@ namespace gal::lang
 
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base&) override
 			{
+				// note: see foundation::dispatcher::object_cache_location_type
+				if (
+					// has cache
+					location_.has_value() &&
+					// the current cache is the only reference to the target variable,
+					// that is, the cached referenced variable that has been invalidated
+					location_->use_count() == 1
+				) { location_.reset(); }
+
 				try { return state->get_object(this->identifier(), location_); }
 				catch (std::exception&) { throw exception::eval_error{std_format::format("Can not find object '{}'", this->identifier())}; }
 			}
@@ -1195,7 +1204,7 @@ namespace gal::lang
 
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
 			{
-				const auto& loop_var_name = this->get_child(0).identifier();
+				const auto& loop_var_name = this->get_child(0).get_child(0).identifier();
 				const auto range_expression_result = this->get_child(1).eval(state, visitor);
 
 				// range_type
@@ -1208,7 +1217,10 @@ namespace gal::lang
 						state->add_local_or_throw(loop_var_name, foundation::boxed_value{range.get()});
 
 						try { (void)this->get_child(2).eval(state, visitor); }
-						catch (const interrupt_type::interrupt_continue&) { }
+						catch (const interrupt_type::interrupt_continue&)
+						{
+							// pass
+						}
 					} while (range.next());
 
 					return void_var();
@@ -1525,37 +1537,6 @@ namespace gal::lang
 					const parse_location location,
 					children_type&& children)
 				: ast_node{get_rtti_index(), identifier, location, std::move(children)} { gal_assert(this->size() == 2); }
-		};
-
-		struct inline_range_ast_node final : ast_node
-		{
-		private:
-			mutable foundation::dispatcher::function_cache_location_type location_{};
-
-			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base& visitor) override
-			{
-				try
-				{
-					auto& cs = this->front().front();
-
-					gal_assert(cs.size() == 2 || cs.size() == 3);
-					// range(begin,end,step=1), step is optional
-					return state->call_function(
-							foundation::keyword_inline_range_gen_name::value,
-							location_,
-							cs.view() | std::views::transform([&state, &visitor](auto& child) { return child.eval(state, visitor); }));
-				}
-				catch (const exception::dispatch_error& e) { throw exception::eval_error{std_format::format("Can not generate range vector while calling '{}'", foundation::keyword_inline_range_gen_name::value), e.parameters, e.functions, false, *state}; }
-			}
-
-		public:
-			GAL_AST_SET_RTTI(inline_range_ast_node)
-
-			inline_range_ast_node(
-					const identifier_type identifier,
-					const parse_location location,
-					children_type&& children)
-				: ast_node{get_rtti_index(), identifier, location, std::move(children)} {}
 		};
 
 		struct inline_array_ast_node final : ast_node

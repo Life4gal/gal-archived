@@ -269,9 +269,6 @@ namespace gal::lang::plugin
 			register_arithmetic<unsigned long long>(foundation::number_unsigned_long_long_type_name::value, m);
 
 			register_all_arithmetic_operators(m);
-
-			m.add_function(foundation::operator_to_string_name::value,
-			               fun(&types::number_type::to_string));
 		}
 	};
 }

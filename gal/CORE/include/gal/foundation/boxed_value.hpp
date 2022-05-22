@@ -288,6 +288,9 @@ namespace gal::lang::foundation
 		[[nodiscard]] void* get_raw() const noexcept { return data_->raw; }
 
 		[[nodiscard]] const void* get_const_raw() const noexcept { return data_->const_raw; }
+
+		// todo: boxed_value need a safe and efficient way to get its state
+		[[nodiscard]] auto use_count() const noexcept { return data_.use_count(); }
 	};
 }
 

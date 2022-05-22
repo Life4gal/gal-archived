@@ -10,7 +10,7 @@ namespace gal::lang::types
 	class range_type
 	{
 	public:
-		using size_type = int;
+		using size_type = std::ptrdiff_t;
 
 		constexpr static size_type default_step = 1;
 
@@ -38,9 +38,17 @@ namespace gal::lang::types
 		constexpr range_type(const size_type begin, const size_type end)
 			: range_type{begin, end, default_step} {}
 
+		[[nodiscard]] constexpr size_type begin() const noexcept { return begin_; }
+
+		[[nodiscard]] constexpr size_type end() const noexcept { return end_; }
+
+		[[nodiscard]] constexpr size_type step() const noexcept { return step_; }
+
 		[[nodiscard]] constexpr size_type get() const noexcept { return begin_; }
 
-		[[nodiscard]] constexpr bool next() noexcept { return (begin_ += step_) > end_; }
+		[[nodiscard]] constexpr bool next() noexcept { return (begin_ += step_) < end_; }
+
+		[[nodiscard]] constexpr size_type size() const noexcept { return (end_ - begin_) / step_; }
 	};
 }
 

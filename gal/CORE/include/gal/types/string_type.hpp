@@ -20,6 +20,8 @@ namespace gal::lang::types
 		using value_type = container_type::value_type;
 		using reference = container_type::reference;
 		using const_reference = container_type::const_reference;
+		using pointer = container_type::pointer;
+		using const_pointer = container_type::const_pointer;
 		using iterator = container_type::iterator;
 		using const_iterator = container_type::const_iterator;
 
@@ -36,11 +38,12 @@ namespace gal::lang::types
 	private:
 		container_type data_;
 
-		constexpr explicit string_type(container_type&& string)
-			: data_{std::move(string)} {}
-
 	public:
 		constexpr string_type() noexcept = default;
+
+		// internal use only, for register type->string
+		constexpr explicit string_type(container_type&& string)
+			: data_{std::move(string)} {}
 
 		// for cast from foundation::string_type
 		constexpr explicit string_type(const foundation::string_type& string)
@@ -114,6 +117,34 @@ namespace gal::lang::types
 		constexpr void push_back(const_reference value) { data_.push_back(value); }
 
 		constexpr void pop_back() { data_.pop_back(); }
+
+		// internal use only, user should use operator+= only
+		constexpr string_type& append(const const_pointer string)
+		{
+			data_.append(string);
+			return *this;
+		}
+
+		// internal use only, user should use operator+= only
+		constexpr string_type& append(const const_pointer string, const size_type count)
+		{
+			data_.append(string, count);
+			return *this;
+		}
+
+		// internal use only, user should use operator+= only
+		constexpr string_type& append(const string_type& other)
+		{
+			data_.append(other.data());
+			return *this;
+		}
+
+		// internal use only, user should use operator+= only
+		constexpr string_type& append(const string_type& other, const size_type begin, const size_type count = container_type::npos)
+		{
+			data_.append(other.data(), begin, count);
+			return *this;
+		}
 
 		//*************************************************************************
 		//*********************** EXTRA INTERFACE *******************************

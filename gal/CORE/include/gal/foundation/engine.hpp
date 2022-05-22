@@ -85,7 +85,7 @@ namespace gal::lang::foundation
 
 			auto dest = pool.borrow_raw(size);
 			file.read(dest, size);
-			return {dest, static_cast<foundation::string_view_type::size_type>(size)};
+			return {dest, static_cast<string_view_type::size_type>(size)};
 		}
 
 		/**

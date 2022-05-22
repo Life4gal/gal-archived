@@ -5,8 +5,6 @@
 #define GAL_LANG_NO_AST_VISIT_PRINT
 #include <gal/gal.hpp>
 
-void hello_cpp(double d) { std::cout << std_format::format("value: {}\n", d); }
-
 void print_and_change(int& i)
 {
 	std::cout << std_format::format("value: {}\n", i);
@@ -19,9 +17,6 @@ int main()
 
 	lang::engine engine{};
 
-	engine.add_function(
-			"hello_cpp",
-			lang::fun(&hello_cpp));
 	engine.add_function(
 			"print_and_change",
 			lang::fun(&print_and_change));
@@ -42,26 +37,37 @@ int main()
 }
 
 /* test.gal
-if var i = 21 * 2; i == 42:
-	hello_cpp(3.1415926)
-/
-else:
-	hello_cpp(2.7182818)
-/
+println("hello world!")
+
+global s = list()
+s.push_back("hello")
+s.push_back("world")
+print("list's size: ${s.size()}, elements: [${s[0]}, ${s[1]}]\n")
+
+print("print ${range(0, 42, 2)}\n")
+for(var i in range(0, 42, 2))
+{
+	print("${i} ")
+}
+print("\n")
 
 global j = 0
-while j < 10:
-	hello_cpp(j)
+while(j < 10)
+{
+	println(j)
 	
-	if j >= 4:
-		if j % 2 == 0:
-			hello_cpp(-j)
-		/
-		else:
-			hello_cpp(42)
+	if(j >= 4)
+	{
+		if(j % 2 == 0)
+		{
+			println(-j)
+		}
+		else
+		{
+			println(42)
 			break
-		/
-	/
+		}
+	}
 	j += 1
-/
+}
  */

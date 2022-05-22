@@ -3,6 +3,7 @@
 #ifndef GAL_LANG_PLUGIN_BOOTSTRAP_LIBRARY_HPP
 #define GAL_LANG_PLUGIN_BOOTSTRAP_LIBRARY_HPP
 
+#include <iostream>
 #include <gal/types/view_type.hpp>
 #include <gal/types/range_type.hpp>
 #include <gal/types/list_type.hpp>
@@ -35,21 +36,21 @@ namespace gal::lang::plugin
 
 		static void register_range_type(foundation::engine_module& m)
 		{
-			m.add_type_info(foundation::keyword_inline_range_gen_name::value, types::range_type::class_type());
+			m.add_type_info(foundation::range_type_name::value, types::range_type::class_type());
 
 			// range(begin, end, step)
 			m.add_function(
-					foundation::keyword_inline_range_gen_name::value,
+					foundation::range_type_name::value,
 					ctor<types::range_type(types::range_type::size_type, types::range_type::size_type, types::range_type::size_type)>());
 
 			// range(0, end, 1)
 			m.add_function(
-					foundation::keyword_inline_range_gen_name::value,
+					foundation::range_type_name::value,
 					ctor<types::range_type(types::range_type::size_type)>());
 
 			// range(begin, end, 1)
 			m.add_function(
-					foundation::keyword_inline_range_gen_name::value,
+					foundation::range_type_name::value,
 					ctor<types::range_type(types::range_type::size_type, types::range_type::size_type)>());
 		}
 
@@ -381,6 +382,53 @@ namespace gal::lang::plugin
 			// todo: allow string_view_type to do +/+=/*/*= operations with string_type?
 		}
 
+		static void register_type_to_string(foundation::engine_module& m)
+		{
+			// number
+			m.add_function(foundation::operator_to_string_name::value,
+			               fun([](const types::number_type& num) -> decltype(auto) { return types::string_type{num.to_string()}; }));
+
+			// range
+			m.add_function(foundation::operator_to_string_name::value,
+			               fun([](const types::range_type& range) -> decltype(auto)
+			               {
+				               return types::string_type{std_format::format("range(begin={}, end={}, step={})", range.begin(), range.end(), range.step())};
+			               }));
+
+			// list
+			// todo: to_string(list)? need dispatcher_state!
+
+			// map
+			// todo: to_string(map)? need dispatcher_state!
+
+			// string
+			m.add_function(foundation::operator_to_string_name::value,
+			               fun([](const types::string_type& string) -> decltype(auto) { return string; }));
+
+			// string_view
+			m.add_function(foundation::operator_to_string_name::value,
+			               fun([](const types::string_view_type& string) -> decltype(auto) { return string; }));
+		}
+
+		static void register_print(foundation::engine_module& m)
+		{
+			m.add_function(
+					"print",
+					fun([](const types::string_view_type string) { std::cout << string.data(); }));
+
+			m.add_function(
+					"print",
+					fun([](const types::number_type& num) { std::cout << num.to_string(); }));
+
+			m.add_function(
+					"println",
+					fun([](const types::string_view_type string) { std::cout << string.data() << '\n'; }));
+
+			m.add_function(
+					"println",
+					fun([](const types::number_type& num) { std::cout << num.to_string() << '\n'; }));
+		}
+
 	public:
 		static void do_bootstrap(foundation::engine_module& m)
 		{
@@ -389,6 +437,10 @@ namespace gal::lang::plugin
 			register_map_type(m);
 			register_string_type(m);
 			register_string_view_type(m);
+
+			register_type_to_string(m);
+
+			register_print(m);
 		}
 	};
 }

@@ -9,6 +9,7 @@
 #include <gal/addons/ast_optimizer.hpp>
 #include <utils/string_utils.hpp>
 #include <utils/enum_utils.hpp>
+#include <gal/types/string_type.hpp>
 
 namespace gal::lang::addon
 {
@@ -978,12 +979,15 @@ namespace gal::lang::addon
 		}
 
 		// todo: better char parser
-		template<typename StringType>
+		// template<typename StringType>
 		struct char_parser
 		{
-			using string_type = StringType;
-			using value_type = typename string_type::value_type;
-			using size_type = typename string_type::size_type;
+			// using string_type = StringType;
+			using string_type = types::string_type;
+			// using value_type = typename string_type::value_type;
+			using value_type = string_type::value_type;
+			// using size_type = typename string_type::size_type;
+			using size_type = string_type::size_type;
 
 			string_type& match;
 			const bool interpolation_allowed;
@@ -1002,7 +1006,8 @@ namespace gal::lang::addon
 				if (not hex_matches.empty())
 				{
 					value_type value;
-					std::from_chars(hex_matches.data(), hex_matches.data() + hex_matches.size(), value, 16);
+					// std::from_chars(hex_matches.data(), hex_matches.data() + hex_matches.size(), value, 16);
+					std::from_chars(hex_matches.data().data(), hex_matches.data().data() + hex_matches.size(), value, 16);
 					match.push_back(value);
 				}
 
@@ -1016,7 +1021,8 @@ namespace gal::lang::addon
 				if (not octal_matches.empty())
 				{
 					value_type value;
-					std::from_chars(hex_matches.data(), hex_matches.data() + hex_matches.size(), value, 8);
+					// std::from_chars(hex_matches.data(), hex_matches.data() + hex_matches.size(), value, 8);
+					std::from_chars(hex_matches.data().data(), hex_matches.data().data() + hex_matches.size(), value, 8);
 					match.push_back(value);
 				}
 
@@ -1028,7 +1034,8 @@ namespace gal::lang::addon
 			void process_unicode()
 			{
 				std::uint32_t codepoint;
-				std::from_chars(hex_matches.data(), hex_matches.data() + hex_matches.size(), codepoint, 16);
+				// std::from_chars(hex_matches.data(), hex_matches.data() + hex_matches.size(), codepoint, 16);
+				std::from_chars(hex_matches.data().data(), hex_matches.data().data() + hex_matches.size(), codepoint, 16);
 				const auto match_size = hex_matches.size();
 				hex_matches.clear();
 				is_escaped = false;
@@ -1801,17 +1808,25 @@ namespace gal::lang::addon
 			scoped_parser p{*this};
 			const auto prev_size = match_stack_.size();
 
-			if (not build_keyword(foundation::keyword_if_name::value)) { return false; }
+			if (not (build_keyword(foundation::keyword_if_name::value) && build_char('('))) { return false; }
 
 			if (not build_equation())
 			{
 				throw exception::eval_error{
-						"Incomplete 'if' expression",
+						"Incomplete 'if' expression, missing initial_statement or missing condition_statement",
 						filename_,
 						point_};
 			}
 
 			const auto is_init_if = build_eol() && build_equation();
+
+			if (not build_char(')'))
+			{
+				throw exception::eval_error{
+						"Incomplete 'if' expression, missing ')'",
+						filename_,
+						point_};
+			}
 
 			if (not build_block())
 			{
@@ -1871,12 +1886,20 @@ namespace gal::lang::addon
 			scoped_parser p{*this};
 			const auto prev_size = match_stack_.size();
 
-			if (not build_keyword(foundation::keyword_while_name::value)) { return false; }
+			if (not (build_keyword(foundation::keyword_while_name::value) && build_char('('))) { return false; }
 
 			if (not build_equation())
 			{
 				throw exception::eval_error{
-						"Incomplete 'while' expression",
+						"Incomplete 'while' expression, missing condition_statement",
+						filename_,
+						point_};
+			}
+
+			if (not build_char(')'))
+			{
+				throw exception::eval_error{
+						"Incomplete 'while' expression, missing ')'",
 						filename_,
 						point_};
 			}
@@ -1910,7 +1933,7 @@ namespace gal::lang::addon
 			scoped_parser p{*this};
 			const auto prev_size = match_stack_.size();
 
-			if (not build_keyword(foundation::keyword_for_in_name::subtype<0>::value)) { return false; }
+			if (not(build_keyword(foundation::keyword_for_in_name::subtype<0>::value) && build_char('('))) { return false; }
 
 			if (not build_equation())
 			{
@@ -1932,6 +1955,14 @@ namespace gal::lang::addon
 			{
 				throw exception::eval_error{
 						"Incomplete 'ranged-for' expression, missing iteration range",
+						filename_,
+						point_};
+			}
+
+			if (not build_char(')'))
+			{
+				throw exception::eval_error{
+						"Incomplete 'ranged-for' expression, missing ')'",
 						filename_,
 						point_};
 			}
@@ -2241,7 +2272,7 @@ namespace gal::lang::addon
 			const auto begin = point_;
 			if (read_quoted_string())
 			{
-				foundation::string_type match{};
+				types::string_type match{};
 				const auto prev_size = match_stack_.size();
 				const auto is_interpolated = [&match, &begin, prev_size, this]
 				{
@@ -2254,7 +2285,7 @@ namespace gal::lang::addon
 							if (b.peek() == '{')
 							{
 								// We've found an interpolation point
-								match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(match, begin, const_var(match)));
+								match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(match.data(), begin, const_var(match)));
 								if (p.is_interpolated)
 								{
 									// If we've seen previous interpolation, add on instead of making a new one
@@ -2314,7 +2345,7 @@ namespace gal::lang::addon
 					return p.is_interpolated;
 				}();
 
-				match_stack_.push_back(this->make_node<ast::constant_ast_node>(match, begin, const_var(match)));
+				match_stack_.push_back(this->make_node<ast::constant_ast_node>(match.data(), begin, const_var(match)));
 				if (is_interpolated) { build_match<ast::binary_operator_ast_node>(prev_size, foundation::operator_plus_name::value); }
 
 				return true;
@@ -2337,7 +2368,7 @@ namespace gal::lang::addon
 			const auto begin = point_;
 			if (read_single_quoted_string())
 			{
-				std::string match{};
+				types::string_type match{};
 				{
 					// scope for char_parser destructor
 					char_parser p{match, false};
@@ -2353,7 +2384,7 @@ namespace gal::lang::addon
 							point_};
 				}
 
-				match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(match, begin, const_var(match[0])));
+				match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(match.data(), begin, const_var(match.front())));
 				return true;
 			}
 			return false;
@@ -3024,7 +3055,7 @@ namespace gal::lang::addon
 			{
 				(void)build_statements();
 
-				if (not build_any<foundation::keyword_block_end_name>()) { throw exception::eval_error("Incomplete block, missing '/'", filename_, point_); }
+				if (not build_any<foundation::keyword_block_end_name>()) { throw exception::eval_error("Incomplete block, missing '}'", filename_, point_); }
 
 				if (match_stack_.size() == prev_size) { match_stack_.emplace_back(ast::make_node<ast::noop_ast_node>()); }
 

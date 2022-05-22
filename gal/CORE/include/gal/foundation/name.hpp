@@ -57,8 +57,6 @@ namespace gal::lang::foundation
 	using keyword_try_catch_finally_name = GAL_UTILS_MULTIPLE_TEMPLATE_STRING_TYPE_3("try", "catch", "finally");
 	// function guard -> def foo(...) requires xxx
 	using keyword_function_guard_name = GAL_UTILS_TEMPLATE_STRING_TYPE("requires");
-	// generator a range inline range(begin, end, step = 1)
-	using keyword_inline_range_gen_name = GAL_UTILS_TEMPLATE_STRING_TYPE("range");
 	// declare an operator def operator==(xxx):
 	using keyword_operator_declare_name = GAL_UTILS_TEMPLATE_STRING_TYPE("operator");
 	// number inf/nan
@@ -70,11 +68,11 @@ namespace gal::lang::foundation
 
 	// Not actually keywords below :)
 	// every block begin
-	using keyword_block_begin_name = GAL_UTILS_TEMPLATE_STRING_TYPE(":");
+	using keyword_block_begin_name = GAL_UTILS_TEMPLATE_STRING_TYPE("{");
 	// every block end
 	// todo: we currently lack a means to determine the end of a block, which would cause the following keyword (such as 'else') to be considered a variable name.
 	// todo: fix the build_statement/build_block
-	using keyword_block_end_name = GAL_UTILS_TEMPLATE_STRING_TYPE("/");
+	using keyword_block_end_name = GAL_UTILS_TEMPLATE_STRING_TYPE("}");
 	// a_class::a_attr
 	using keyword_class_accessor_name = GAL_UTILS_TEMPLATE_STRING_TYPE("::");
 	// lambda lambda_with_argument -> [](arguments) -> [capture_variable](arguments) / lambda_without_argument -> [] -> [capture_variable]
@@ -203,6 +201,7 @@ namespace gal::lang::foundation
 	//*********************************************
 	// container interface
 	//*********************************************
+	using range_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("range");
 	using list_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("list");
 	using map_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("map");
 	using string_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("string");

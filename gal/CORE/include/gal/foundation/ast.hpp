@@ -14,9 +14,9 @@ namespace gal::lang
 	{
 		struct name_validator
 		{
-			[[nodiscard]] constexpr static auto hash_name(const foundation::string_view_type name) noexcept { return utils::hash_fnv1a<false>(name); }
+			[[nodiscard]] constexpr static auto hash_name(const string_view_type name) noexcept { return utils::hash_fnv1a<false>(name); }
 
-			[[nodiscard]] static bool is_reserved_name(const foundation::string_view_type name) noexcept
+			[[nodiscard]] static bool is_reserved_name(const string_view_type name) noexcept
 			{
 				const static std::unordered_set names{
 						hash_name(keyword_define_name::value),
@@ -43,7 +43,6 @@ namespace gal::lang
 						hash_name(keyword_try_catch_finally_name::subtype<1>::value),
 						hash_name(keyword_try_catch_finally_name::subtype<2>::value),
 						hash_name(keyword_function_guard_name::value),
-						hash_name(keyword_inline_range_gen_name::value),
 						hash_name(keyword_operator_declare_name::value),
 						hash_name(keyword_number_inf_nan_name::subtype<0>::value),
 						hash_name(keyword_number_inf_nan_name::subtype<1>::value)};
@@ -51,7 +50,7 @@ namespace gal::lang
 				return names.contains(hash_name(name));
 			}
 
-			[[nodiscard]] static bool is_valid_object_name(const foundation::string_view_type name) noexcept { return not name.contains(keyword_class_accessor_name::value) && not is_reserved_name(name); }
+			[[nodiscard]] static bool is_valid_object_name(const string_view_type name) noexcept { return not name.contains(keyword_class_accessor_name::value) && not is_reserved_name(name); }
 
 			/**
 			 * @throw exception::reserved_word_error 

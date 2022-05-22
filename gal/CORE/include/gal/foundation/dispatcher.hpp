@@ -952,8 +952,10 @@ namespace gal::lang
 			friend class dispatcher_state;
 
 		public:
-			using object_cache_location_type = std::optional<std::reference_wrapper<boxed_value>>;
-			// todo: The lifetime of our cached location may be longer than the actual object (such as returning an empty smart pointer and then automatically destroying it after use)
+			// todo: the lifetime of our cached location may be longer than the actual object (such as when doing a for loop, the loop variable will be re-added to the scope each time the loop is looped (even each loop is a new scope))
+			// using object_cache_location_type = std::optional<std::reference_wrapper<boxed_value>>;
+			using object_cache_location_type = std::optional<boxed_value>;
+			// todo: the lifetime of our cached location may be longer than the actual object (such as returning an empty smart pointer and then automatically destroying it after use)
 			using function_cache_location_type = std::optional<std::shared_ptr<function_proxies_type>>;
 
 			using type_infos_type = engine_module::type_infos_type;
@@ -1456,7 +1458,7 @@ namespace gal::lang
 				if (const auto it = functions.find(name);
 					it != functions.end())
 				{
-					cache_location.emplace(std::ref(it->second.boxed));
+					cache_location.emplace(it->second.boxed);
 					return it->second.boxed;
 				}
 				throw std::range_error{"object not found"};
