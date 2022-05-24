@@ -51,7 +51,7 @@ namespace gal::lang
 			[[nodiscard]] constexpr bool empty() const noexcept { return begin_ == end_; }
 
 			[[nodiscard]] constexpr foundation::boxed_value get() noexcept
-			// requires(not is_const_container)
+				requires(not is_const_container)
 			{
 				if constexpr (std::is_same_v<value_type, foundation::boxed_value>) { return *begin_; }
 				else { return foundation::boxed_value{std::ref(*begin_)}; }

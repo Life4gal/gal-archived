@@ -49,6 +49,8 @@ namespace gal::lang::types
 		[[nodiscard]] constexpr bool next() noexcept { return (begin_ += step_) < end_; }
 
 		[[nodiscard]] constexpr size_type size() const noexcept { return (end_ - begin_) / step_; }
+
+		[[nodiscard]] constexpr bool operator==(const range_type& other) const noexcept { return begin_ == other.begin_ && end_ == other.end_ && step_ == other.step_; }
 	};
 }
 

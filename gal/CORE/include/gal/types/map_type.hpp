@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <utils/format.hpp>
 #include <gal/types/view_type.hpp>
+#include <gal/types/string_view_type.hpp>
 #include <gal/foundation/type_info.hpp>
 
 namespace gal::lang
@@ -20,8 +21,8 @@ namespace gal::lang
 		class key_not_found_error final : public std::out_of_range
 		{
 		public:
-			explicit key_not_found_error(const std::string_view key)
-				: out_of_range(std_format::format("key '{}' not found in the map", key)) {}
+			explicit key_not_found_error(const types::string_view_type key)
+				: out_of_range(std_format::format("key '{}' not found in the immutable map", key.data())) {}
 		};
 	}
 
@@ -30,7 +31,8 @@ namespace gal::lang
 		class map_type
 		{
 		public:
-			using container_type = std::unordered_map<foundation::string_view_type, foundation::boxed_value, std::hash<foundation::string_view_type>, std::equal_to<>>;
+			// key is immutable
+			using container_type = std::unordered_map<string_view_type, foundation::boxed_value, std::hash<string_view_type>, std::equal_to<>>;
 
 			using size_type = container_type::size_type;
 			using difference_type = container_type::difference_type;
@@ -114,6 +116,10 @@ namespace gal::lang
 			// insert is not necessary
 
 			void erase_at(key_const_reference key) { data_.erase(key); }
+
+			// internal use only
+			template<typename... Args>
+			decltype(auto) emplace(Args&&... args) { return data_.emplace(std::forward<Args>(args)...); }
 
 			//*************************************************************************
 			//*********************** EXTRA INTERFACE *******************************

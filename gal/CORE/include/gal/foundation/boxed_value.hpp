@@ -291,10 +291,27 @@ namespace gal::lang::foundation
 
 		// todo: boxed_value need a safe and efficient way to get its state
 		[[nodiscard]] auto use_count() const noexcept { return data_.use_count(); }
+
+		[[nodiscard]] std::size_t hash() const noexcept { return std::hash<internal_data_type>{}(data_); }
 	};
 }
 
 template<>
-struct std::hash<gal::lang::foundation::boxed_value> : std::hash<gal::lang::foundation::boxed_value::internal_data_type> {};
+struct std::hash<gal::lang::foundation::boxed_value>
+{
+	[[nodiscard]] std::size_t operator()(const gal::lang::foundation::boxed_value& object) const noexcept { return object.hash(); }
+};
+
+// internal use only
+// Do not use such comparison functions in the GAL side!
+template<>
+struct std::equal_to<gal::lang::foundation::boxed_value>
+{
+	[[nodiscard]] bool operator()(const gal::lang::foundation::boxed_value& lhs, const gal::lang::foundation::boxed_value& rhs) const noexcept
+	{
+		// todo
+		return lhs.type_match(rhs) && lhs.get_const_raw() == rhs.get_const_raw();
+	}
+};
 
 #endif// GAL_LANG_FOUNDATION_BOXED_VALUE_HPP

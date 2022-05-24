@@ -4,6 +4,7 @@
 #define GAL_LANG_PLUGIN_BOOTSTRAP_LIBRARY_HPP
 
 #include <iostream>
+#include <utils/type_traits.hpp>
 #include <gal/types/view_type.hpp>
 #include <gal/types/range_type.hpp>
 #include <gal/types/list_type.hpp>
@@ -14,6 +15,22 @@
 
 namespace gal::lang::plugin
 {
+	namespace bootstrap_library_detail
+	{
+		namespace detail
+		{
+			template<typename ContainerType>
+			using detect_view_type = typename ContainerType::view_type;
+			template<typename ContainerType>
+			using detect_const_view_type = typename ContainerType::const_view_type;
+		}
+
+		template<typename ContainerType>
+		using container_view_type = utils::detected_t<detail::detect_view_type, ContainerType>;
+		template<typename ContainerType>
+		using container_const_view_type = utils::detected_t<detail::detect_const_view_type, ContainerType>;
+	}
+
 	class bootstrap_library
 	{
 	private:
@@ -32,6 +49,71 @@ namespace gal::lang::plugin
 		{
 			m.add_function(name, move_ctor<ContainerType>());
 			foundation::operator_register::register_move_assign<ContainerType>(m);
+		}
+
+		template<typename ContainerType>
+		static void register_view_type(foundation::engine_module& m)
+		{
+			using container_type = ContainerType;
+			using view_type = bootstrap_library_detail::container_view_type<container_type>;
+			constexpr bool has_view_type = not std::is_same_v<view_type, utils::detect_nonesuch_t>;
+			using const_view_type = bootstrap_library_detail::container_const_view_type<container_type>;
+			constexpr bool has_const_view_type = not std::is_same_v<const_view_type, utils::detect_nonesuch_t>;
+
+			if constexpr (has_view_type)
+			{
+				// container.view()
+				m.add_function(
+						foundation::container_view_interface_name::value,
+						lang::fun(static_cast<view_type (container_type::*)() noexcept>(&container_type::view)));
+
+				// view.empty()
+				m.add_function(
+						foundation::container_view_empty_interface_name::value,
+						lang::fun(&view_type::empty));
+
+				// view.get()
+				m.add_function(
+						foundation::container_view_star_interface_name::value,
+						lang::fun(static_cast<foundation::boxed_value (view_type::*)() noexcept>(&view_type::get)));
+				m.add_function(
+						foundation::container_view_star_interface_name::value,
+						lang::fun(static_cast<foundation::boxed_value (view_type::*)() const noexcept>(&view_type::get)));
+
+				// view.next()
+				m.add_function(
+						foundation::container_view_advance_interface_name::value,
+						lang::fun(&view_type::advance));
+			}
+			else {}
+
+			if constexpr (has_const_view_type)
+			{
+				// container.view()
+				m.add_function(
+						foundation::container_view_interface_name::value,
+						lang::fun(static_cast<const_view_type (container_type::*)() const noexcept>(&container_type::view)));
+
+				// view.empty()
+				m.add_function(
+						foundation::container_view_empty_interface_name::value,
+						lang::fun(&const_view_type::empty));
+
+				static_assert(const_view_type::is_const_container);
+				// view.get()
+				// m.add_function(
+				// 		foundation::container_view_star_interface_name::value,
+				// 		lang::fun(&const_view_type::get));
+				m.add_function(
+						foundation::container_view_star_interface_name::value,
+						lang::fun(static_cast<foundation::boxed_value (const_view_type::*)() const noexcept>(&const_view_type::get)));
+
+				// view.next()
+				m.add_function(
+						foundation::container_view_advance_interface_name::value,
+						lang::fun(&const_view_type::advance));
+			}
+			else {}
 		}
 
 		static void register_boolean_type(foundation::engine_module& m)
@@ -73,6 +155,10 @@ namespace gal::lang::plugin
 			m.add_function(
 					foundation::range_type_name::value,
 					ctor<types::range_type(types::range_type::size_type, types::range_type::size_type)>());
+
+			// operator==/operator!=
+			foundation::operator_register::register_equal<bool>(m);
+			foundation::operator_register::register_not_equal<bool>(m);
 		}
 
 		static void register_list_type(foundation::engine_module& m)
@@ -98,12 +184,7 @@ namespace gal::lang::plugin
 			foundation::operator_register::register_multiply_assign<types::list_type>(m, &types::list_type::operator*=);
 
 			// list.view()
-			m.add_function(
-					foundation::container_view_interface_name::value,
-					fun(static_cast<types::list_type::view_type (types::list_type::*)() noexcept>(&types::list_type::view)));
-			m.add_function(
-					foundation::container_view_interface_name::value,
-					fun(static_cast<types::list_type::const_view_type (types::list_type::*)() const noexcept>(&types::list_type::view)));
+			register_view_type<types::list_type>(m);
 
 			// list[index]
 			m.add_function(
@@ -197,12 +278,7 @@ namespace gal::lang::plugin
 			foundation::operator_register::register_plus_assign<types::map_type>(m);
 
 			// map.view()
-			m.add_function(
-					foundation::container_view_interface_name::value,
-					fun(static_cast<types::map_type::view_type (types::map_type::*)() noexcept>(&types::map_type::view)));
-			m.add_function(
-					foundation::container_view_interface_name::value,
-					fun(static_cast<types::map_type::const_view_type (types::map_type::*)() const noexcept>(&types::map_type::view)));
+			register_view_type<types::map_type>(m);
 
 			// map[key]
 			m.add_function(
@@ -271,7 +347,13 @@ namespace gal::lang::plugin
 
 			// operator+/operator+=
 			foundation::operator_register::register_plus<types::string_type>(m);
+			foundation::operator_register::register_plus<types::string_type>(
+					m,
+					[](const types::string_type& string, const types::char_type other) -> decltype(auto) { return string + other; });
 			foundation::operator_register::register_plus_assign<types::string_type>(m);
+			foundation::operator_register::register_plus_assign<types::string_type>(
+					m,
+					[](types::string_type& string, const types::char_type other) -> decltype(auto) { return string += other; });
 			// operator*/operator*=
 			foundation::operator_register::register_multiply<types::string_type>(m, &types::string_type::operator*);
 			foundation::operator_register::register_multiply_assign<types::string_type>(m, &types::string_type::operator*=);
@@ -280,12 +362,7 @@ namespace gal::lang::plugin
 			register_comparison<types::string_type>(m);
 
 			// string.view()
-			m.add_function(
-					foundation::container_view_interface_name::value,
-					fun(static_cast<types::string_type::view_type (types::string_type::*)() noexcept>(&types::string_type::view)));
-			m.add_function(
-					foundation::container_view_interface_name::value,
-					fun(static_cast<types::string_type::const_view_type (types::string_type::*)() const noexcept>(&types::string_type::view)));
+			register_view_type<types::string_type>(m);
 
 			// string[index]
 			m.add_function(
@@ -383,9 +460,7 @@ namespace gal::lang::plugin
 			register_comparison<types::string_view_type>(m);
 
 			// string.view()
-			m.add_function(
-					foundation::container_view_interface_name::value,
-					fun(&types::string_view_type::view));
+			register_view_type<types::string_view_type>(m);
 
 			// string[index]
 			m.add_function(
@@ -433,11 +508,16 @@ namespace gal::lang::plugin
 			// 				R"(
 			// 		{} {}({} l)
 			// 		{{
-			// 			var s = string()
+			// 			var s = "["
 			// 			for(var v in l)
 			// 			{{
 			// 				s += to_string(v)
+			// 				s += ", "
 			// 			}}
+			// 			# erase ' '
+			// 			s.pop_back()
+			// 			# overwrite ','
+			// 			s[s.size() - 1] = ']'
 			// 			return s
 			// 		}}
 			// 	)",
@@ -485,6 +565,11 @@ namespace gal::lang::plugin
 			m.add_function(
 					"print",
 					fun([](const types::string_view_type string) { std::cout << string.data(); }));
+
+			// empty
+			m.add_function(
+					"println",
+					fun([] { std::cout << '\n'; }));
 
 			// boolean
 			m.add_function(

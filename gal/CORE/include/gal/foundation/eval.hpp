@@ -11,6 +11,8 @@
 #include <gal/foundation/boxed_exception.hpp>
 #include <gal/types/range_type.hpp>
 #include <gal/types/string_type.hpp>
+#include <gal/types/list_type.hpp>
+#include <gal/types/map_type.hpp>
 
 namespace gal::lang
 {
@@ -37,8 +39,13 @@ namespace gal::lang
 			const auto* object_this = [params, &state]() -> const foundation::boxed_value*
 			{
 				auto& scope = state.stack().recent_scope();
-				if (const auto it = scope.find(foundation::object_self_type_name::value);
-					it != scope.end()) { return &it->second; }
+				// changed since 0.5.4, see engine_stack::scope_type
+				// if (const auto it = scope.find(foundation::object_self_type_name::value);
+				// 	it != scope.end()) { return &it->second; }
+				// new code
+				if (const auto it = std::ranges::find(scope | std::views::keys, foundation::object_self_type_name::value);
+					it != std::ranges::end(scope | std::views::keys)) { return &it.base()->second; }
+
 				if (not params.empty()) { return &params.front(); }
 				return nullptr;
 			}();
@@ -100,14 +107,16 @@ namespace gal::lang
 
 			[[nodiscard]] foundation::boxed_value do_eval(const foundation::dispatcher_state& state, ast_visitor_base&) override
 			{
+				// changed since 0.5.4, see engine_stack::scope_type
+				// the following code conditions are problematic, if the reference (share) is a variable in the container, then the result is wrong (use_count is greater than 1)
 				// note: see foundation::dispatcher::object_cache_location_type
-				if (
-					// has cache
-					location_.has_value() &&
-					// the current cache is the only reference to the target variable,
-					// that is, the cached referenced variable that has been invalidated
-					location_->use_count() == 1
-				) { location_.reset(); }
+				// if (
+				// 	// has cache
+				// 	location_.has_value() &&
+				// 	// the current cache is the only reference to the target variable,
+				// 	// that is, the cached referenced variable that has been invalidated
+				// 	location_->use_count() == 1
+				// ) { location_.reset(); }
 
 				try { return state->get_object(this->identifier(), location_); }
 				catch (std::exception&) { throw exception::eval_error{std_format::format("Can not find object '{}'", this->identifier())}; }
@@ -576,14 +585,6 @@ namespace gal::lang
 
 			static foundation::parameter_type_mapper get_arg_types(const ast_node& node, const foundation::dispatcher_state& state)
 			{
-				// std::vector<decltype(get_arg_type(node, state))> ret;
-				// ret.reserve(node.size());
-				//
-				// std::ranges::for_each(
-				// 		node.view(),
-				// 		[&ret, &state](const auto& child) { ret.push_back(get_arg_type(child, state)); });
-				//
-				// return foundation::parameter_type_mapper{std::move(ret)};
 				const auto view = node.view() | std::views::transform([&state](const auto& child) { return get_arg_type(child, state); });
 
 				return foundation::parameter_type_mapper{view.begin(), view.end()};
@@ -1071,7 +1072,9 @@ namespace gal::lang
 							[&named_captures, &capture_this, &state, &visitor](auto& c)
 							{
 								auto& cf = c.front();
-								named_captures.emplace(cf.identifier(), cf.eval(state, visitor));
+								// changed since 0.5.4, see engine_stack::scope_type
+								// named_captures.emplace(cf.identifier(), cf.eval(state, visitor));
+								named_captures.emplace_back(cf.identifier(), cf.eval(state, visitor));
 								capture_this = cf.identifier() == foundation::object_self_name::value;
 							});
 
@@ -1237,15 +1240,18 @@ namespace gal::lang
 				if (range_expression_result.type_info().bare_equal(typeid(types::range_type)))
 				{
 					auto& range = boxed_cast<types::range_type&>(range_expression_result);
+
 					do
 					{
 						foundation::scoped_scope scoped_scope{state};
 						state->add_local_or_throw(loop_var_name, foundation::boxed_value{range.get()});
 
-						try { (void)this->get_child(2).eval(state, visitor); }
-						catch (const interrupt_type::interrupt_continue&)
+						try { this->get_child(2).eval(state, visitor); }
+						catch (const interrupt_type::interrupt_continue&) { }
+						catch (const interrupt_type::interrupt_break&)
 						{
-							// pass
+							// loop broken
+							break;
 						}
 					} while (range.next());
 
@@ -1269,27 +1275,25 @@ namespace gal::lang
 				const auto star_function = get_function(foundation::container_view_star_interface_name::value, star_location_);
 				const auto advance_function = get_function(foundation::container_view_advance_interface_name::value, advance_location_);
 
-				try
-				{
+				for (
 					// get the view
-					const auto ranged = call_function(view_function, range_expression_result);
+					const auto view = call_function(view_function, range_expression_result);
 					// while view not empty
-					while (not boxed_cast<bool>(call_function(empty_function, ranged)))
-					{
-						foundation::scoped_scope scoped_scope{state};
-						// push the value into the stack
-						state->add_local_or_throw(loop_var_name, call_function(star_function, ranged));
-
-						try { this->get_child(2).eval(state, visitor); }
-						catch (const interrupt_type::interrupt_continue&) { }
-
-						// advance the iterator
-						(void)call_function(advance_function, ranged);
-					}
-				}
-				catch (const interrupt_type::interrupt_break&)
+					not boxed_cast<bool>(call_function(empty_function, view));
+					// advance the iterator
+					(void)call_function(advance_function, view))
 				{
-					// loop broken
+					foundation::scoped_scope scoped_scope{state};
+					// push the value into the stack
+					state->add_local_or_throw(loop_var_name, call_function(star_function, view));
+
+					try { this->get_child(2).eval(state, visitor); }
+					catch (const interrupt_type::interrupt_continue&) { }
+					catch (const interrupt_type::interrupt_break&)
+					{
+						// loop broken
+						break;
+					}
 				}
 
 				return void_var();
@@ -1565,7 +1569,7 @@ namespace gal::lang
 				: ast_node{get_rtti_index(), identifier, location, std::move(children)} { gal_assert(this->size() == 2); }
 		};
 
-		struct inline_array_ast_node final : ast_node
+		struct inline_list_ast_node final : ast_node
 		{
 		private:
 			mutable foundation::dispatcher::function_cache_location_type location_{};
@@ -1577,13 +1581,12 @@ namespace gal::lang
 						{
 							try
 							{
-								// todo: container type
-								foundation::parameters_type result{};
+								types::list_type result{};
 
 								if (not this->empty())
 								{
 									auto& cs = this->front();
-									result.reserve(cs.size());
+									// result.reserve(cs.size());
 									std::ranges::for_each(
 											cs.view(),
 											[this, &result, &state, &visitor](auto& child) { result.push_back(eval_detail::clone_if_necessary(child.eval(state, visitor), location_, state)); });
@@ -1594,7 +1597,7 @@ namespace gal::lang
 							catch (const exception::dispatch_error& e)
 							{
 								throw exception::eval_error{
-										std_format::format("Can not find appropriate '{}' or copy constructor while insert elements into vector", foundation::object_clone_interface_name::value),
+										std_format::format("Can not find appropriate '{}' or copy constructor while insert elements into list", foundation::object_clone_interface_name::value),
 										e.parameters,
 										e.functions,
 										false,
@@ -1604,9 +1607,9 @@ namespace gal::lang
 			}
 
 		public:
-			GAL_AST_SET_RTTI(inline_array_ast_node)
+			GAL_AST_SET_RTTI(inline_list_ast_node)
 
-			inline_array_ast_node(
+			inline_list_ast_node(
 					const identifier_type identifier,
 					const parse_location location,
 					children_type&& children)
@@ -1625,8 +1628,7 @@ namespace gal::lang
 						{
 							try
 							{
-								// todo: container type
-								foundation::engine_stack::scope_type result{};
+								types::map_type result{};
 
 								std::ranges::for_each(
 										this->front().view(),

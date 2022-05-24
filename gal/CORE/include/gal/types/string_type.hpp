@@ -9,6 +9,8 @@
 
 namespace gal::lang::types
 {
+	using char_type = foundation::string_type::value_type;
+
 	// todo: better string_type
 	class string_type
 	{
@@ -62,9 +64,22 @@ namespace gal::lang::types
 
 		[[nodiscard]] constexpr string_type operator+(const string_type& other) const { return string_type{data_ + other.data_}; }
 
+		[[nodiscard]] constexpr string_type operator+(const char_type other) const
+		{
+			auto tmp = *this;
+			tmp.data_.push_back(other);
+			return tmp;
+		}
+
 		constexpr string_type& operator+=(const string_type& other)
 		{
 			data_ += other.data_;
+			return *this;
+		}
+
+		constexpr string_type& operator+=(const char_type other)
+		{
+			data_.push_back(other);
 			return *this;
 		}
 
@@ -153,5 +168,37 @@ namespace gal::lang::types
 		// todo
 	};
 }
+
+template<>
+struct std::hash<gal::lang::types::string_type>
+{
+	[[nodiscard]] std::size_t operator()(const gal::lang::types::string_type& string) const noexcept { return std::hash<gal::lang::types::string_type::container_type>{}(string.data()); }
+};
+
+template<>
+struct std::equal_to<gal::lang::types::string_type>
+{
+	using is_transparent = int;
+
+	[[nodiscard]] bool operator()(const gal::lang::types::string_type& lhs, const gal::lang::types::string_type& rhs) const noexcept { return lhs.data() == rhs.data(); }
+
+	[[nodiscard]] bool operator()(const gal::lang::types::string_view_type& lhs, const gal::lang::types::string_view_type& rhs) const noexcept { return lhs.data() == rhs.data(); }
+};
+
+template<>
+struct std::hash<gal::lang::types::string_view_type>
+{
+	[[nodiscard]] std::size_t operator()(const gal::lang::types::string_view_type& object) const noexcept { return std::hash<gal::lang::types::string_view_type::container_type>{}(object.data()); }
+};
+
+template<>
+struct std::equal_to<gal::lang::types::string_view_type>
+{
+	using is_transparent = int;
+
+	[[nodiscard]] bool operator()(const gal::lang::types::string_view_type& lhs, const gal::lang::types::string_view_type& rhs) const noexcept { return lhs.data() == rhs.data(); }
+
+	[[nodiscard]] bool operator()(const gal::lang::types::string_type& lhs, const gal::lang::types::string_type& rhs) const noexcept { return lhs.data() == rhs.data(); }
+};
 
 #endif // GAL_LANG_TYPES_STRING_TYPE_HPP

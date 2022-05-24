@@ -37,22 +37,56 @@ int main()
 }
 
 /* test.gal
-def print_list(list l)
-{
-	for(var i in range(l.size()))
-	{
-		println(l[i])
-	}
-}
-
 def to_string(list l)
 {
-	var str = string()
+	var s = "["
 	for(var v in l)
 	{
-		str += to_string(v)
+		s += to_string(v)
+		s += ", "
 	}
-	return str
+	# erase ' '
+	s.pop_back()
+	# overwrite ','
+	s[s.size() - 1] = ']'
+	return s
+}
+
+def to_string(map m)
+{
+	var s = "{"
+	for(var kv in m)
+	{
+		s += to_string(kv.first)
+		s += ": "
+		s += to_string(kv.second)
+		s += ", "
+	}
+	# erase ' '
+	s.pop_back()
+	# overwrite ','
+	s[s.size() - 1] = '}'
+	return s;
+}
+
+def print(list l)
+{
+	print(to_string(list))
+}
+
+def println(list l)
+{
+	println(to_string(l))
+}
+
+def print(map m)
+{
+	print(to_string(m))
+}
+
+def println(map m)
+{
+	println(to_string(m))
 }
 
 println("hello world!")
@@ -61,23 +95,18 @@ global s = list()
 s.push_back("hello")
 s.push_back("world")
 s.push_back(42)
-
-println("${nameof(s)}'s size: ${s.size()}, elements: [${s[0]}: ${nameof(s[0])}, ${s[1]}: ${nameof(s[1])}, ${s[2]}: ${nameof(s[2])}]")
 println(s.is_typeof("list"))
-s.print_list();
-# print(s)
-# global str = s.to_string()
+println(s)
 
 global m = map()
 m["hello"] = "world"
 m["answer"] = 42
 m["list"] := s
-# println("${nameof(m)}'s size: ${m.size()}, elements: [${m["hello"]}: ${nameof(m["hello"])}, ${m["answer"]}: ${nameof(m["answer"])}, ${m["list"]}: ${nameof(m["list"])}]")
-println("${nameof(m)}'s size: ${m.size()}, elements: [${m["hello"]}: ${nameof(m["hello"])}, ${m["answer"]}: ${nameof(m["answer"])}]")
 println("m['list'] reference to s: ${m["list"].size() == s.size()}")
 println(m.is_typeof("map"))
+#println(m)
 
-print("print ${range(0, 42, 2)}\n")
+println("print ${range(0, 42, 2)}")
 for(var i in range(0, 42, 2))
 {
 	print("${i} ")

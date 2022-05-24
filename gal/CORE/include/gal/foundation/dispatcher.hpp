@@ -483,13 +483,30 @@ namespace gal::lang
 
 		struct engine_stack
 		{
-			using scope_type = std::map<string_view_type, boxed_value, std::less<>>;
+			/**
+			 * @note In order to reduce the space occupied by caching an object, the scope type has been changed from 0.5.4 to a continuous container (temporary solution)
+			 */
+			// using scope_type = std::map<string_view_type, boxed_value, std::less<>>;
+			using scope_type = std::vector<std::pair<string_view_type, boxed_value>>;
 			using stack_type = std::vector<scope_type>;
 			using stacks_type = std::vector<stack_type>;
 
 			using parameters_list_type = std::vector<parameters_type>;
 
 			using call_depth_type = int;
+
+			using scope_location_type = std::uint_fast32_t;
+			constexpr static scope_location_type scope_location_not_exist = 0;
+
+			enum class scoped_location : scope_location_type
+			{
+				// todo: 0x0000ffff is enough?
+				local_mask = 0x0000ffff,
+				// todo: 0x0fff is enough?
+				stack_mask = 0x0fff0000,
+				located = 0x10000000,
+				is_local = 0x20000000,
+			};
 
 		private:
 			std::reference_wrapper<string_pool_type> borrowed_pool_;
@@ -664,8 +681,13 @@ namespace gal::lang
 							recent_scope().contains(name) ? "but it already exists." : "add successed");)
 
 				auto& scope = recent_scope();
-				if (const auto it = scope.find(name);
-					it == scope.end()) { return scope.emplace(recent_borrowed_block().append(name), std::move(object)).first->second; }
+
+				// changed since 0.5.4, see engine_stack::scope_type
+				// if (const auto it = scope.find(name);
+				// 	it == scope.end()) { return scope.emplace(recent_borrowed_block().append(name), std::move(object)).first->second; }
+				// new code
+				if (const auto it = std::ranges::find(scope | std::views::keys, name);
+					it == std::ranges::end(scope | std::views::keys)) { return scope.emplace_back(recent_borrowed_block().append(name), std::move(object)).second; }
 
 				throw exception::name_conflict_error{name};
 			}
@@ -703,15 +725,20 @@ namespace gal::lang
 							utils::logger::info("searching object '{}' in '{}'th scope",
 								name,
 								scope_no);)
-					if (const auto it = scope.find(name);
-						it != scope.end())
+					// changed since 0.5.4, see engine_stack::scope_type
+					// if (const auto it = scope.find(name);
+					// 	it != scope.end())
+					// new code
+					if (const auto it = std::ranges::find(scope | std::views::keys, name);
+						it != std::ranges::end(scope | std::views::keys))
 					{
 						GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
 								utils::logger::info("found object '{}' in '{}'th scope",
 									name,
 									scope_no);)
 
-						return it->second = std::move(object);
+						// return it->second = std::move(object);
+						return it.base()->second = std::move(object);
 					}
 
 					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
@@ -955,7 +982,10 @@ namespace gal::lang
 		public:
 			// todo: the lifetime of our cached location may be longer than the actual object (such as when doing a for loop, the loop variable will be re-added to the scope each time the loop is looped (even each loop is a new scope))
 			// using object_cache_location_type = std::optional<std::reference_wrapper<boxed_value>>;
-			using object_cache_location_type = std::optional<boxed_value>;
+			// changed since 0.5.4, see engine_stack::scope_type
+			// using object_cache_location_type = std::optional<boxed_value>;
+			// new code
+			using object_cache_location_type = std::atomic<engine_stack::scope_location_type>;
 			// todo: the lifetime of our cached location may be longer than the actual object (such as returning an empty smart pointer and then automatically destroying it after use)
 			using function_cache_location_type = std::optional<std::shared_ptr<function_proxies_type>>;
 
@@ -1065,7 +1095,7 @@ namespace gal::lang
 			decltype(auto) boxed_cast(const boxed_value& object) const
 			{
 				const convertor_manager_state state{convertor_manager_};
-				return gal::lang::boxed_cast<T>(object, &state);
+				return lang::boxed_cast<T>(object, &state);
 			}
 
 			/**
@@ -1387,6 +1417,50 @@ namespace gal::lang
 							,
 							const std_source_location& location = std_source_location::current()))
 			{
+				// changed since 0.5.4, see engine_stack::scope_type
+				// GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+				// 		utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to get object '{}', {}",
+				// 			__func__,
+				// 			location.file_name(),
+				// 			location.function_name(),
+				// 			location.line(),
+				// 			location.column(),
+				// 			name,
+				// 			cache_location.has_value() ? "it was already cached" : "try to find it");)
+				//
+				// if (cache_location.has_value()) { return *cache_location; }
+				//
+				// GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+				// 		int scope_no = 0;)
+				//
+				// // Is it in the stack?
+				// for (auto& stack = stack_->recent_stack();
+				//      auto& scope: stack | std::views::reverse)
+				// {
+				// 	GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+				// 			utils::logger::info("searching object '{}' in '{}'th scope",
+				// 				name,
+				// 				scope_no);)
+				//
+				// 	if (auto it = scope.find(name);
+				// 		it != scope.end())
+				// 	{
+				// 		GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+				// 				utils::logger::info("found object '{}' in '{}'th scope",
+				// 					name,
+				// 					scope_no);)
+				//
+				// 		cache_location.emplace(it->second);
+				// 		return it->second;
+				// 	}
+				//
+				// 	GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+				// 			++scope_no);
+				// }
+
+				// new code
+				object_cache_location_type::value_type location = cache_location;
+
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
 						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to get object '{}', {}",
 							__func__,
@@ -1395,37 +1469,35 @@ namespace gal::lang
 							location.line(),
 							location.column(),
 							name,
-							cache_location.has_value() ? "it was already cached" : "try to find it");)
+							location != engine_stack::scope_location_not_exist ? "it was already cached" : "try to find it");)
 
-				if (cache_location.has_value()) { return *cache_location; }
-
-				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-						int scope_no = 0;)
-
-				// Is it in the stack?
-				for (auto& stack = stack_->recent_stack();
-				     auto& scope: stack | std::views::reverse)
+				if (auto& stack = stack_->recent_stack();
+					location == engine_stack::scope_location_not_exist)
 				{
-					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-							utils::logger::info("searching object '{}' in '{}'th scope",
-								name,
-								scope_no);)
-
-					if (auto it = scope.find(name);
-						it != scope.end())
+					for (auto scope = stack.rbegin(); scope != stack.rend(); ++scope)
 					{
-						GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-								utils::logger::info("found object '{}' in '{}'th scope",
-									name,
-									scope_no);)
+						for (auto kv = scope->begin(); kv != scope->end(); ++kv)
+						{
+							if (kv->first == name)
+							{
+								GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
+										utils::logger::info("found object '{}' in '{}'th scope",
+											name,
+											std::ranges::distance(stack.rbegin(), scope));)
 
-						cache_location.emplace(it->second);
-						return it->second;
+								cache_location = static_cast<decltype(location)>(std::ranges::distance(stack.rbegin(), scope) << 16) |
+								                 static_cast<decltype(location)>(std::ranges::distance(scope->begin(), kv)) |
+								                 static_cast<decltype(location)>(engine_stack::scoped_location::located) |
+								                 static_cast<decltype(location)>(engine_stack::scoped_location::is_local);
+
+								return kv->second;
+							}
+						}
 					}
 
-					GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
-							++scope_no);
+					cache_location = static_cast<decltype(location)>(engine_stack::scoped_location::located);
 				}
+				else if (location & static_cast<decltype(location)>(engine_stack::scoped_location::is_local)) { return stack[stack.size() - 1 - ((location & static_cast<decltype(location)>(engine_stack::scoped_location::stack_mask)) >> 16)][location & static_cast<decltype(location)>(engine_stack::scoped_location::local_mask)].second; }
 
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
 						utils::logger::info("can not find local variable '{}', try to find it in global scope or function scope", name);)
@@ -1440,7 +1512,8 @@ namespace gal::lang
 							utils::logger::info("find variable '{}' in global scope", name);
 							)
 
-					cache_location.emplace(it->second);
+					// changed since 0.5.4, see engine_stack::scope_type
+					// cache_location.emplace(it->second);
 					return it->second;
 				}
 
@@ -1461,7 +1534,9 @@ namespace gal::lang
 				if (const auto it = functions.find(name);
 					it != functions.end())
 				{
-					cache_location.emplace(it->second.boxed);
+					// changed since 0.5.4, see engine_stack::scope_type
+					// cache_location.emplace(it->second.boxed);
+					(void)cache_location;
 					return it->second.boxed;
 				}
 				throw std::range_error{"object not found"};
@@ -1613,9 +1688,13 @@ namespace gal::lang
 							name,
 							params.size());)
 
-				gal_assert(not cache_location.has_value());
-				const auto& functions = get_function(name);
-				cache_location.emplace(functions);
+				decltype(get_function(name)) functions;
+				if (cache_location.has_value()) { functions = *cache_location; }
+				else
+				{
+					functions = get_function(name);
+					cache_location.emplace(functions);
+				}
 
 				const convertor_manager_state cms{convertor_manager_};
 

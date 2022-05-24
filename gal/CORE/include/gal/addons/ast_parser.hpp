@@ -1504,13 +1504,15 @@ namespace gal::lang::addon
 
 			if (allow_set_type)
 			{
-				if (not build_identifier(true))
-				{
-					throw exception::eval_error{
-							"Incomplete function type set, missing argument type",
-							filename_,
-							point_};
-				}
+				// if (not build_identifier(true))
+				// {
+				// 	throw exception::eval_error{
+				// 			"Incomplete function type set, missing argument type(format: 'type' 'name')",
+				// 			filename_,
+				// 			point_};
+				// }
+				// type is optional
+				(void)build_identifier(true);
 			}
 
 			build_match<ast::arg_ast_node>(prev_size);
@@ -2519,7 +2521,7 @@ namespace gal::lang::addon
 			}
 
 			if (prev_size != match_stack_.size() && not match_stack_.back()->empty() && match_stack_.back()->front().is<ast::map_pair_ast_node>()) { build_match<ast::inline_map_ast_node>(prev_size); }
-			else { build_match<ast::inline_array_ast_node>(prev_size); }
+			else { build_match<ast::inline_list_ast_node>(prev_size); }
 
 			return true;
 		}
