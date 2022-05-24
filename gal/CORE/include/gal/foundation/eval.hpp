@@ -10,6 +10,7 @@
 #include <gal/function_register.hpp>
 #include <gal/foundation/boxed_exception.hpp>
 #include <gal/types/range_type.hpp>
+#include <gal/types/string_type.hpp>
 
 namespace gal::lang
 {
@@ -69,7 +70,7 @@ namespace gal::lang
 				else
 				{
 					if (ti.bare_equal(typeid(bool))) { return foundation::boxed_value{*static_cast<const bool*>(incoming.get_const_raw())}; }
-					if (ti.bare_equal(typeid(foundation::string_type))) { return foundation::boxed_value{*static_cast<const foundation::string_type*>(incoming.get_const_raw())}; }
+					if (ti.bare_equal(typeid(types::string_type))) { return foundation::boxed_value{*static_cast<const types::string_type*>(incoming.get_const_raw())}; }
 				}
 				return state->call_function(foundation::object_clone_interface_name::value, location, foundation::parameters_view_type{incoming});
 			}
@@ -368,7 +369,7 @@ namespace gal::lang
 				{
 					throw exception::eval_error{
 							std_format::format(
-									"{} with function '{}' called.",
+									"dispatch_error '{}' with function '{}' called.",
 									e.what(),
 									node.front().identifier()),
 							e.parameters,
@@ -376,35 +377,40 @@ namespace gal::lang
 							false,
 							*state};
 				}
-				catch (const exception::bad_boxed_cast&)
+				catch (const exception::bad_boxed_cast& e)
 				{
 					try
 					{
 						// handle the case where there is only 1 function to try to call and dispatch fails on it
 						throw exception::eval_error{
 								std_format::format(
-										"Error with function '{}' called.",
+										"bad_boxed_cast '{}' with function '{}' called.",
+										e.what(),
 										node.front().identifier()),
 								params,
 								foundation::const_function_proxies_view_type{state->boxed_cast<const foundation::const_function_proxy_type&>(function)},
 								false,
 								*state};
 					}
-					catch (const exception::bad_boxed_cast&)
+					catch (const exception::bad_boxed_cast& ie)
 					{
 						throw exception::eval_error{
-								std_format::format("'{}' does not evaluate to a function.", node.front().pretty_print())};
+								std_format::format(
+										"bad_boxed_cast '{}', '{}' does not evaluate to a function.",
+										ie.what(),
+										node.front().pretty_print())
+						};
 					}
 				}
 				catch (const exception::arity_error& e)
 				{
 					throw exception::eval_error{
-							std_format::format("{} with function '{}' called.", e.what(), node.front().identifier())};
+							std_format::format("arity_error '{}' with function '{}' called.", e.what(), node.front().identifier())};
 				}
 				catch (const exception::guard_error& e)
 				{
 					throw exception::eval_error{
-							std_format::format("{} with function '{}' called.", e.what(), node.front().identifier())};
+							std_format::format("guard_error '{}' with function '{}' called.", e.what(), node.front().identifier())};
 				}
 				catch (interrupt_type::interrupt_return& ret) { return std::move(ret.value); }
 			}
@@ -557,24 +563,15 @@ namespace gal::lang
 				return node.get_child(1).identifier();
 			}
 
-			[[nodiscard]] static auto get_arg_names(const ast_node& node)
-			{
-				// std::vector<identifier_type> ret;
-				// ret.reserve(node.size());
-				//
-				// std::ranges::for_each(
-				// 		node.view(),
-				// 		[&ret](const auto& child)
-				// 		{ ret.push_back(get_arg_name(child)); });
-				//
-				// return ret;
-				return node.view() | std::views::transform([](const auto& child) { return arg_list_ast_node::get_arg_name(child); });
-			}
+			[[nodiscard]] static auto get_arg_names(const ast_node& node) { return node.view() | std::views::transform([](const auto& child) { return arg_list_ast_node::get_arg_name(child); }); }
 
 			static foundation::parameter_type_mapper::parameter_type_mapping_type::value_type get_arg_type(const ast_node& node, const foundation::dispatcher_state& state)
 			{
 				if (node.size() < 2) { return {}; }
-				return {node.front().identifier(), state->get_type_info(node.front().identifier(), false)};
+				return {
+						node.front().identifier(),
+						state->get_type_info(node.front().identifier(), false)
+				};
 			}
 
 			static foundation::parameter_type_mapper get_arg_types(const ast_node& node, const foundation::dispatcher_state& state)
@@ -630,9 +627,7 @@ namespace gal::lang
 					{
 						if (params[0].is_undefined())
 						{
-							if (not this->empty() &&
-							    (this->front().is<reference_ast_node>() ||
-							     (not this->front().empty() && this->front().front().is<reference_ast_node>())))
+							if (this->front().is<reference_ast_node>() || not this->front().empty() && this->front().front().is<reference_ast_node>())
 							{
 								// todo: This does not handle the case of an unassigned reference variable being assigned outside of its declaration
 								params[0].assign(params[1]).to_lvalue();
@@ -645,7 +640,7 @@ namespace gal::lang
 						catch (const exception::dispatch_error& e)
 						{
 							throw exception::eval_error{
-									std_format::format("Can not find appropriate '{}' operator", this->identifier()),
+									std_format::format("dispatch_error, can not find appropriate '{}' operator", this->identifier()),
 									e.parameters,
 									e.functions,
 									false,
@@ -655,7 +650,7 @@ namespace gal::lang
 					catch (const exception::dispatch_error& e)
 					{
 						throw exception::eval_error{
-								"Missing clone or copy constructor for right hand side of equation",
+								"dispatch_error, missing clone or copy constructor for right hand side of equation",
 								e.parameters,
 								e.functions,
 								false,
@@ -669,14 +664,14 @@ namespace gal::lang
 						params[0].assign(params[1]).to_lvalue();
 						return params[0];
 					}
-					throw exception::eval_error{"Mismatched types in equation"};
+					throw exception::eval_error{"Assign failed, mismatched types in equation"};
 				}
 
 				try { return state->call_function(this->identifier(), location_, params); }
 				catch (const exception::dispatch_error& e)
 				{
 					throw exception::eval_error{
-							std_format::format("Can not find appropriate '{}' operator", this->identifier()),
+							std_format::format("dispatch_error, can not find appropriate '{}' operator", this->identifier()),
 							e.parameters,
 							e.functions,
 							false,

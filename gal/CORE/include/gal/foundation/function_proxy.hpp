@@ -36,7 +36,7 @@ namespace gal::lang
 			size_type got;
 
 			arity_error(const size_type expected, const size_type got)
-				: std::range_error{"Function dispatch arity mismatch"},
+				: std::range_error{std_format::format("Function dispatch arity mismatch, expected: {}, got: {}.", expected, got)},
 				  expected{expected},
 				  got{got} {}
 		};
@@ -47,8 +47,8 @@ namespace gal::lang
 		class guard_error final : public std::runtime_error
 		{
 		public:
-			guard_error()
-				: std::runtime_error{"Guard evaluation failed"} {}
+			explicit guard_error(const std::string_view message = "Guard evaluation failed")
+				: runtime_error{message.data()} {}
 		};
 
 		class dispatch_error final : public std::runtime_error
@@ -170,9 +170,15 @@ namespace gal::lang
 			explicit parameter_type_mapper(Args&&... args)
 				: mapping_{std::forward<Args>(args)...} {}
 
-			[[nodiscard]] bool operator==(const parameter_type_mapper& other) const { return mapping_ == other.mapping_; }
+			[[nodiscard]] bool operator==(const parameter_type_mapper& other) const
+			{
+				return mapping_ == other.mapping_;
+			}
 
-			void add(const string_view_type name, const gal_type_info& type) { mapping_.emplace_back(name, type); }
+			void add(const string_view_type name, const gal_type_info& type)
+			{
+				mapping_.emplace_back(name, type);
+			}
 
 			void inplace_convert(
 					parameters_type& params,
@@ -595,7 +601,39 @@ namespace gal::lang
 					}
 					return function_(params);
 				}
-				throw exception::guard_error{};
+
+				auto message = std_format::format(
+						"Guard evaluation failed with '{}' params [",
+						params.size());
+				std::ranges::for_each(
+						params,
+						[&message](const auto& object)
+						{
+							std_format::format_to(
+									std::back_inserter(message),
+									"{}({}),",
+									object.type_info().name(),
+									object.type_info().bare_name());
+						});
+				message.push_back(']');
+				message.append(" with mapper {");
+				std::ranges::for_each(
+						mapper_.view(),
+						[&message](const auto& pair)
+						{
+							const auto& [name, type] = pair;
+							std_format::format_to(
+									std::back_inserter(message),
+									"{} : {}({}),",
+									name,
+									type.name(),
+									type.bare_name());
+						});
+				message.push_back('}');
+
+				throw exception::guard_error{
+						message
+				};
 			}
 
 		public:

@@ -64,7 +64,25 @@ namespace gal::lang::foundation
 		[[nodiscard]] boxed_value do_invoke(const parameters_view_type params, const convertor_manager_state& state) const override
 		{
 			if (object_name_match(params, name_, type_, state)) { return (*function_)(params, state); }
-			throw exception::guard_error{};
+
+			auto message = std_format::format(
+					"Guard {}{} evaluation failed with {} params [",
+					name_,
+					is_member_ ? "(member function)" : "",
+					params.size());
+			for (const auto& object: params)
+			{
+				std_format::format_to(
+						std::back_inserter(message),
+						"{}({}),",
+						object.type_info().name(),
+						object.type_info().bare_name());
+			}
+			message.push_back(']');
+
+			throw exception::guard_error{
+					message
+			};
 		}
 
 	public:

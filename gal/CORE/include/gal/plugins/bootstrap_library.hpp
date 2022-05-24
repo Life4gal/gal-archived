@@ -428,21 +428,22 @@ namespace gal::lang::plugin
 			               fun([](const types::range_type& range) -> decltype(auto) { return types::string_type{std_format::format("range(begin={}, end={}, step={})", range.begin(), range.end(), range.step())}; }));
 
 			// list
-			// todo: to_string(list)? need dispatcher_state!
-			// m.add_evaluation(std_format::format(
-			// 		"{} {}(l) {} is_typeof(\"list\", l)"
-			// 		"{{"
-			// 		"	var s = string()"
-			// 		"	for(var v in l)"
-			// 		"	{{"
-			// 		"		s += to_string(v)"
-			// 		"	}}"
-			// 		"	s;"
-			// 		"}}",
-			// 		foundation::keyword_define_name::value,
-			// 		foundation::operator_to_string_name::value,
-			// 		foundation::keyword_function_guard_name::value
-			// 		));
+			// m.add_evaluation(
+			// 		std_format::format(
+			// 				R"(
+			// 		{} {}({} l)
+			// 		{{
+			// 			var s = string()
+			// 			for(var v in l)
+			// 			{{
+			// 				s += to_string(v)
+			// 			}}
+			// 			return s
+			// 		}}
+			// 	)",
+			// 				foundation::keyword_define_name::value,
+			// 				foundation::operator_to_string_name::value,
+			// 				foundation::list_type_name::value));
 
 			// map
 			// todo: to_string(map)? need dispatcher_state!
@@ -458,34 +459,56 @@ namespace gal::lang::plugin
 
 		static void register_print(foundation::engine_module& m)
 		{
-			m.add_function(
-					"print",
-					fun([] {}));
-
+			// boolean
 			m.add_function(
 					"print",
 					fun([](const bool b) { std::cout << (b ? foundation::keyword_true_name::value : foundation::keyword_false_name::value); }));
 
+			// number
 			m.add_function(
 					"print",
 					fun([](const types::number_type& num) { std::cout << num.to_string(); }));
 
+			// list
+			// m.add_evaluation(
+			// 		std_format::format(
+			// 				R"(
+			// 		{} print({} l)
+			// 		{{
+			// 			print(to_string(l))
+			// 		}}
+			// 		)",
+			// 				foundation::keyword_define_name::value,
+			// 				foundation::list_type_name::value));
+
+			// string
 			m.add_function(
 					"print",
 					fun([](const types::string_view_type string) { std::cout << string.data(); }));
 
-			m.add_function(
-					"println",
-					fun([] {}));
-
+			// boolean
 			m.add_function(
 					"println",
 					fun([](const bool b) { std::cout << (b ? foundation::keyword_true_name::value : foundation::keyword_false_name::value) << '\n'; }));
 
+			// number
 			m.add_function(
 					"println",
 					fun([](const types::number_type& num) { std::cout << num.to_string() << '\n'; }));
 
+			// list
+			// m.add_evaluation(
+			// 		std_format::format(
+			// 				R"(
+			// 		{} println({} l)
+			// 		{{
+			// 			println(to_string(l))
+			// 		}}
+			// 		)",
+			// 				foundation::keyword_define_name::value,
+			// 				foundation::list_type_name::value));
+
+			// string
 			m.add_function(
 					"println",
 					fun([](const types::string_view_type string) { std::cout << string.data() << '\n'; }));
@@ -494,6 +517,7 @@ namespace gal::lang::plugin
 	public:
 		static void do_bootstrap(foundation::engine_module& m)
 		{
+			register_boolean_type(m);
 			register_range_type(m);
 			register_list_type(m);
 			register_map_type(m);

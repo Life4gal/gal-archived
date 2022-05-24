@@ -37,7 +37,7 @@ int main()
 }
 
 /* test.gal
-def print_list(l)
+def print_list(list l)
 {
 	for(var i in range(l.size()))
 	{
@@ -45,16 +45,37 @@ def print_list(l)
 	}
 }
 
-# println("hello world!")
+def to_string(list l)
+{
+	var str = string()
+	for(var v in l)
+	{
+		str += to_string(v)
+	}
+	return str
+}
+
+println("hello world!")
 
 global s = list()
 s.push_back("hello")
 s.push_back("world")
 s.push_back(42)
 
-println("${nameof(s)}'s size: ${s.size()}, elements: [${s[0]}, ${s[1]}, ${s[2]}]")
+println("${nameof(s)}'s size: ${s.size()}, elements: [${s[0]}: ${nameof(s[0])}, ${s[1]}: ${nameof(s[1])}, ${s[2]}: ${nameof(s[2])}]")
 println(s.is_typeof("list"))
-print_list(s)
+s.print_list();
+# print(s)
+# global str = s.to_string()
+
+global m = map()
+m["hello"] = "world"
+m["answer"] = 42
+m["list"] := s
+# println("${nameof(m)}'s size: ${m.size()}, elements: [${m["hello"]}: ${nameof(m["hello"])}, ${m["answer"]}: ${nameof(m["answer"])}, ${m["list"]}: ${nameof(m["list"])}]")
+println("${nameof(m)}'s size: ${m.size()}, elements: [${m["hello"]}: ${nameof(m["hello"])}, ${m["answer"]}: ${nameof(m["answer"])}]")
+println("m['list'] reference to s: ${m["list"].size() == s.size()}")
+println(m.is_typeof("map"))
 
 print("print ${range(0, 42, 2)}\n")
 for(var i in range(0, 42, 2))

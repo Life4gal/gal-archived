@@ -1504,11 +1504,10 @@ namespace gal::lang::addon
 
 			if (allow_set_type)
 			{
-				if (const auto has_colon = build_char(':'); 
-					build_identifier(true) && not has_colon)
+				if (not build_identifier(true))
 				{
 					throw exception::eval_error{
-							"Incomplete function type set, missing ':'",
+							"Incomplete function type set, missing argument type",
 							filename_,
 							point_};
 				}
