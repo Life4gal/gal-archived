@@ -133,6 +133,17 @@ namespace gal::lang
 			evaluations_type evaluations_;
 			convertors_type convertors_;
 
+			template<typename Map>
+			void reinsert_node(Map& map, typename Map::const_iterator it)
+			{
+				const auto insert_target = std::ranges::prev(it);
+				auto node = map.extract(it);
+				// put the name into the string pool
+				node.key() = pool_.append(node.key());
+				// the value of the key has not changed, so we expect the in-place insert
+				map.insert(insert_target, std::move(node));
+			}
+
 		public:
 			/**
 			 * @brief Registers a new named type.
@@ -155,8 +166,22 @@ namespace gal::lang
 							name,
 							types_.contains(name) ? "but it was already exist" : "add successed");)
 
-				if (const auto it = types_.find(name);
-					it == types_.end()) { types_.emplace_hint(it, pool_.append(name), type); }
+				// old code, changed since 0.5.5
+				// if (const auto it = types_.find(name);
+				// 	it == types_.end()) { types_.emplace_hint(it, pool_.append(name), type); }
+
+				// new code
+				if (const auto [it, inserted] = types_.emplace(name, type);
+					inserted)
+				{
+					// not exist, replace the key
+					reinsert_node(types_, it);
+				}
+				else
+				{
+					// already exist, pass
+					// should this happen? should it throw an error?
+				}
 
 				return *this;
 			}
@@ -178,7 +203,24 @@ namespace gal::lang
 							name,
 							functions_.contains(name) ? "there are already some functions with the same name" : "this is the first function of this name");)
 
-				functions_.emplace(pool_.append(name), std::move(function));
+				if (const auto it = functions_.find(name);
+					// already exist
+					it != functions_.end())
+				{
+					functions_.emplace_hint(
+							it,
+							// reuse the same name
+							it->first,
+							std::move(function));
+				}
+				else
+				{
+					// not exist
+					functions_.emplace(
+							// put the name into string pool
+							pool_.append(name),
+							std::move(function));
+				}
 
 				return *this;
 			}
@@ -202,8 +244,22 @@ namespace gal::lang
 
 				if (not object.is_const()) { throw exception::global_mutable_error{name}; }
 
-				if (const auto it = objects_.find(name);
-					it == objects_.end()) { objects_.emplace_hint(it, pool_.append(name), std::move(object)); }
+				// old code, changed since 0.5.5
+				// if (const auto it = objects_.find(name);
+				// 	it == objects_.end()) { objects_.emplace_hint(it, pool_.append(name), std::move(object)); }
+
+				// new code
+				if (const auto [it, inserted] = objects_.emplace(name, std::move(object));
+					inserted)
+				{
+					// not exist, replace the key
+					reinsert_node(objects_, it);
+				}
+				else
+				{
+					// already exist, pass
+					// should this happen? should it throw an error?
+				}
 
 				return *this;
 			}
@@ -235,7 +291,7 @@ namespace gal::lang
 							,
 							const std_source_location& location = std_source_location::current()))
 			{
-				const auto [it, result] = convertors_.emplace(std::move(convertor));
+				[[maybe_unused]] const auto [it, result] = convertors_.emplace(std::move(convertor));
 				GAL_LANG_RECODE_CALL_LOCATION_DEBUG_DO(
 						utils::logger::info("'{}' from (file: '{}' function: '{}' position: ({}:{})), try to add a convertor convert from '{}({})' to '{}({}), {}",
 							__func__,

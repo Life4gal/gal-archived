@@ -31,7 +31,7 @@ namespace gal::lang::foundation
 		// the filename is also stored in the corresponding pool
 		using file_contents_type = std::map<string_view_type, string_pool_type>;
 
-		using used_files_type = std::set<file_contents_type::key_type>;
+		using loaded_files_type = std::set<file_contents_type::key_type>;
 		using loaded_modules_type = std::map<file_contents_type::key_type, binary_module_type>;
 		using active_loaded_modules = std::set<loaded_modules_type::key_type>;
 
@@ -45,7 +45,7 @@ namespace gal::lang::foundation
 
 		file_contents_type file_contents_;
 
-		used_files_type loaded_files_;
+		loaded_files_type loaded_files_;
 		loaded_modules_type loaded_modules_;
 		active_loaded_modules active_loaded_modules_;
 
