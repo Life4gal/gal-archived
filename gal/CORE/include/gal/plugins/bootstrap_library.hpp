@@ -8,7 +8,7 @@
 #include <gal/types/view_type.hpp>
 #include <gal/types/range_type.hpp>
 #include <gal/types/list_type.hpp>
-#include <gal/types/map_type.hpp>
+#include <gal/types/dict_type.hpp>
 #include <gal/types/string_type.hpp>
 #include <gal/types/string_view_type.hpp>
 #include <gal/foundation/operator_register.hpp>
@@ -177,11 +177,11 @@ namespace gal::lang::plugin
 					ctor<types::list_type(foundation::parameters_view_type)>());
 
 			// operator+/operator+=
-			foundation::operator_register::register_plus<types::list_type>(m);
-			foundation::operator_register::register_plus_assign<types::list_type>(m);
+			// foundation::operator_register::register_plus<types::list_type>(m);
+			// foundation::operator_register::register_plus_assign<types::list_type>(m);
 			// operator*/operator*=
-			foundation::operator_register::register_multiply<types::list_type>(m, &types::list_type::operator*);
-			foundation::operator_register::register_multiply_assign<types::list_type>(m, &types::list_type::operator*=);
+			// foundation::operator_register::register_multiply<types::list_type>(m, &types::list_type::operator*);
+			// foundation::operator_register::register_multiply_assign<types::list_type>(m, &types::list_type::operator*=);
 
 			// list.view()
 			register_view_type<types::list_type>(m);
@@ -252,18 +252,18 @@ namespace gal::lang::plugin
 			// todo: extra interface
 		}
 
-		static void register_map_type(foundation::engine_module& m)
+		static void register_dict_type(foundation::engine_module& m)
 		{
-			m.add_type_info(foundation::map_type_name::value, types::map_type::class_type());
+			m.add_type_info(foundation::dict_type_name::value, types::dict_type::class_type());
 
-			register_default_constructible_container<types::map_type>(foundation::map_type_name::value, m);
-			register_assignable_container<types::map_type>(foundation::map_type_name::value, m);
-			register_movable_container<types::map_type>(foundation::map_type_name::value, m);
+			register_default_constructible_container<types::dict_type>(foundation::dict_type_name::value, m);
+			register_assignable_container<types::dict_type>(foundation::dict_type_name::value, m);
+			register_movable_container<types::dict_type>(foundation::dict_type_name::value, m);
 
 			// pair
-			using pair_type = types::map_type::value_type;
-			const auto pair_name = foundation::string_type{foundation::map_type_name::value}.append(foundation::pair_suffix_name::value);
-			m.add_type_info(pair_name, types::map_type::pair_class_type());
+			using pair_type = types::dict_type::value_type;
+			const auto pair_name = foundation::string_type{foundation::dict_type_name::value}.append(foundation::pair_suffix_name::value);
+			m.add_type_info(pair_name, types::dict_type::pair_class_type());
 			register_default_constructible_container<pair_type>(pair_name, m);
 			// register_assignable_container<pair_type>(pair_name, m);
 			m.add_function(pair_name, copy_ctor<pair_type>());
@@ -274,39 +274,39 @@ namespace gal::lang::plugin
 			m.add_function(foundation::pair_second_interface_name::value, fun(&pair_type::second));
 
 			// operator+/operator+=
-			foundation::operator_register::register_plus<types::map_type>(m);
-			foundation::operator_register::register_plus_assign<types::map_type>(m);
+			// foundation::operator_register::register_plus<types::dict_type>(m);
+			// foundation::operator_register::register_plus_assign<types::dict_type>(m);
 
-			// map.view()
-			register_view_type<types::map_type>(m);
+			// dict.view()
+			register_view_type<types::dict_type>(m);
 
-			// map[key]
+			// dict[key]
 			m.add_function(
 					foundation::container_subscript_interface_name::value,
-					fun(static_cast<types::map_type::mapped_reference (types::map_type::*)(types::map_type::key_const_reference)>(&types::map_type::get)));
+					fun(static_cast<types::dict_type::mapped_reference (types::dict_type::*)(types::dict_type::key_const_reference)>(&types::dict_type::get)));
 			m.add_function(
 					foundation::container_subscript_interface_name::value,
-					fun(static_cast<types::map_type::mapped_const_reference (types::map_type::*)(types::map_type::key_const_reference) const>(&types::map_type::get)));
+					fun(static_cast<types::dict_type::mapped_const_reference (types::dict_type::*)(types::dict_type::key_const_reference) const>(&types::dict_type::get)));
 
-			// map.size()
+			// dict.size()
 			m.add_function(
 					foundation::container_size_interface_name::value,
-					fun(&types::map_type::size));
+					fun(&types::dict_type::size));
 
-			// map.empty()
+			// dict.empty()
 			m.add_function(
 					foundation::container_empty_interface_name::value,
-					fun(&types::map_type::empty));
+					fun(&types::dict_type::empty));
 
-			// map.clear()
+			// dict.clear()
 			m.add_function(
 					foundation::container_clear_interface_name::value,
-					fun(&types::map_type::clear));
+					fun(&types::dict_type::clear));
 
-			// map.erase_at(key)
+			// dict.erase_at(key)
 			m.add_function(
 					foundation::container_erase_interface_name::value,
-					fun(&types::map_type::erase_at));
+					fun(&types::dict_type::erase_at));
 
 			// todo: extra interface
 		}
@@ -525,8 +525,8 @@ namespace gal::lang::plugin
 			// 				foundation::operator_to_string_name::value,
 			// 				foundation::list_type_name::value));
 
-			// map
-			// todo: to_string(map)? need dispatcher_state!
+			// dict
+			// todo: to_string(dict)? need dispatcher_state!
 
 			// string
 			m.add_function(foundation::operator_to_string_name::value,
@@ -562,6 +562,11 @@ namespace gal::lang::plugin
 			// 				foundation::list_type_name::value));
 
 			// string
+			// m.add_function(
+			// 		"print",
+			// 		fun([](const types::string_type& string) { std::cout << string.data(); }));
+
+			// string_view
 			m.add_function(
 					"print",
 					fun([](const types::string_view_type string) { std::cout << string.data(); }));
@@ -594,6 +599,11 @@ namespace gal::lang::plugin
 			// 				foundation::list_type_name::value));
 
 			// string
+			// m.add_function(
+			// 		"println",
+			// 		fun([](const types::string_type& string) { std::cout << string.data() << '\n'; }));
+
+			// string_view
 			m.add_function(
 					"println",
 					fun([](const types::string_view_type string) { std::cout << string.data() << '\n'; }));
@@ -605,7 +615,7 @@ namespace gal::lang::plugin
 			register_boolean_type(m);
 			register_range_type(m);
 			register_list_type(m);
-			register_map_type(m);
+			register_dict_type(m);
 			register_string_type(m);
 			register_string_view_type(m);
 

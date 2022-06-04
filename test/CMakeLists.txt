@@ -17,6 +17,7 @@ set(
 		test_utils/test_string_pool.cpp
 		test_utils/test_template_string.cpp
 		test_utils/test_function_signature.cpp
+		test_utils/test_proxy.cpp
 )
 
 set(

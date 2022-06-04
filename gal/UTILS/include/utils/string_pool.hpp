@@ -135,6 +135,8 @@ namespace gal::utils
 		using value_type = typename block_type::value_type;
 		using size_type = typename block_type::size_type;
 
+		constexpr static size_type default_capacity = 8196;
+
 	private:
 		pool_type pool_;
 		size_type capacity_;
@@ -163,7 +165,7 @@ namespace gal::utils
 
 			constexpr void break_promise() noexcept { need_return_ = false; }
 
-			explicit constexpr block_borrower(string_pool& pool) noexcept
+			constexpr explicit block_borrower(string_pool& pool) noexcept
 				: pool_{pool} {}
 
 			constexpr block_borrower(const block_borrower&) = delete;
@@ -310,7 +312,7 @@ namespace gal::utils
 		}
 
 	public:
-		constexpr explicit string_pool(size_type capacity = 8196) noexcept(std::is_nothrow_default_constructible_v<pool_type>)
+		constexpr explicit string_pool(size_type capacity = default_capacity) noexcept(std::is_nothrow_default_constructible_v<pool_type>)
 			: capacity_(capacity) {}
 
 		template<std::same_as<string_pool>... Pools>
@@ -347,7 +349,7 @@ namespace gal::utils
 		/**
 		 * @brief Borrow a block of memory to the pool, users can directly write strings in this memory area without worrying about its invalidation.
 		 */
-		[[nodiscard]] constexpr value_type* borrow_raw(const size_type size) { return this->borrow_raw_memory(size, this->find_or_create_block(size)); }
+		[[nodiscard]] constexpr value_type* borrow_raw(const size_type size = default_capacity) { return this->borrow_raw_memory(size, this->find_or_create_block(size)); }
 
 		/**
 		 * @brief User needs to temporarily use some memory area to store the string and return it later

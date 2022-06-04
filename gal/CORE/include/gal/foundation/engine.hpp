@@ -28,12 +28,16 @@ namespace gal::lang::foundation
 	class engine_base
 	{
 	public:
-		// the filename is also stored in the corresponding pool
-		using file_contents_type = std::map<string_view_type, string_pool_type>;
+		// a temporary buffer is generally used to read the content of the file and then hand it over to the parser for parsing.
+		// the parser is responsible for saving the required content, and then the buffer will release the saved content.
+		using file_content_type = string_type;
+		constexpr static string_view_type file_not_found_content{"FILE_NOT_FOUND"};
 
-		using loaded_files_type = std::set<file_contents_type::key_type>;
-		using loaded_modules_type = std::map<file_contents_type::key_type, binary_module_type>;
-		using active_loaded_modules = std::set<loaded_modules_type::key_type>;
+		using loaded_file_name_type = string_view_type;
+		using loaded_file_names_type = std::set<loaded_file_name_type>;
+		using loaded_module_name_type = loaded_file_name_type;
+		using loaded_modules_type = std::map<loaded_file_name_type, binary_module_type>;
+		using active_modules_type = std::set<loaded_module_name_type>;
 
 		using preloaded_paths_type = std::vector<string_type>;
 
@@ -43,26 +47,20 @@ namespace gal::lang::foundation
 
 		string_pool_type string_pool_;
 
-		file_contents_type file_contents_;
-
-		loaded_files_type loaded_files_;
+		loaded_file_names_type loaded_files_;
 		loaded_modules_type loaded_modules_;
-		active_loaded_modules active_loaded_modules_;
+		active_modules_type active_modules_;
 
 		preloaded_paths_type preloaded_paths_;
 
 		std::unique_ptr<ast::ast_parser_base> parser_;
-
 		dispatcher dispatcher_;
 
-		[[nodiscard]] string_view_type load_file(const std::string_view filename)
+		[[nodiscard]] static file_content_type load_file(const std::string_view filename)
 		{
-			auto& pool = file_contents_[filename];
-			pool.append(filename);
-
 			std::ifstream file{filename.data(), std::ios::in | std::ios::ate | std::ios::binary};
 
-			if (not file.is_open()) { throw exception::file_not_found_error{filename}; }
+			if (not file.is_open()) { return file_content_type{file_not_found_content}; }
 
 			auto size = file.tellg();
 			gal_assert(size >= 0);
@@ -85,9 +83,16 @@ namespace gal::lang::foundation
 
 			if (size == 0) { return {}; }
 
-			auto dest = pool.borrow_raw(size);
-			file.read(dest, size);
-			return {dest, static_cast<string_view_type::size_type>(size)};
+			file_content_type data{};
+			data.resize_and_overwrite(
+					size,
+					[&file](auto* buffer, const auto count)
+					{
+						file.read(buffer, count);
+						return count;
+					});
+
+			return data;
 		}
 
 		/**
@@ -108,15 +113,12 @@ namespace gal::lang::foundation
 		{
 			for (const auto& path: preloaded_paths_)
 			{
-				try
-				{
-					const auto real_path = string_type{path}.append(filename);
-					return do_internal_eval(load_file(filename), filename);
-				}
-				catch (const exception::file_not_found_error&)
-				{
-					// failed to load, try the next path
-				}
+				const auto real_path = string_type{path}.append(filename);
+				const auto file_content = load_file(filename);
+
+				if (file_content == file_not_found_content) { continue; }
+
+				try { return do_internal_eval(file_content, filename); }
 				catch (const exception::eval_error& e) { throw boxed_return_exception{var(e)}; }
 			}
 
@@ -143,12 +145,12 @@ namespace gal::lang::foundation
 			{
 				const auto m = make_binary_module(module_name, filename);
 				loaded_modules_[module_name] = m;
-				active_loaded_modules_.insert(module_name);
+				active_modules_.insert(module_name);
 				borrow_module(m->module_ptr);
 			}
-			else if (not active_loaded_modules_.contains(module_name))
+			else if (not active_modules_.contains(module_name))
 			{
-				active_loaded_modules_.insert(module_name);
+				active_modules_.insert(module_name);
 				borrow_module(loaded_modules_[module_name]->module_ptr);
 			}
 		}
@@ -361,7 +363,13 @@ namespace gal::lang::foundation
 		 */
 		[[nodiscard]] boxed_value eval_file(
 				const string_view_type filename,
-				const exception_handler_type& handler = {}) { return eval(load_file(filename), handler, filename); }
+				const exception_handler_type& handler = {})
+		{
+			const auto file_content = load_file(filename);
+			if (file_content == file_not_found_content) { throw exception::file_not_found_error{filename}; }
+
+			return eval(file_content, handler, filename);
+		}
 
 		/**
 		 * @brief Loads the file specified by filename, evaluates it, and returns the result.

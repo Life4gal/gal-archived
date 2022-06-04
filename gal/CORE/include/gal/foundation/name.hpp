@@ -208,7 +208,7 @@ namespace gal::lang::foundation
 	//*********************************************
 	using range_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("range");
 	using list_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("list");
-	using map_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("map");
+	using dict_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("dict");
 	using string_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("string");
 	// todo: should be invisible to the user
 	using string_view_type_name = GAL_UTILS_TEMPLATE_STRING_TYPE("string_view");

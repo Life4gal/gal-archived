@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef GAL_LANG_TYPES_MAP_TYPE_HPP
-#define GAL_LANG_TYPES_MAP_TYPE_HPP
+#ifndef GAL_LANG_TYPES_DICT_TYPE_HPP
+	#define GAL_LANG_TYPES_DICT_TYPE_HPP
 
 #include <unordered_map>
 #include <utils/format.hpp>
@@ -22,13 +22,13 @@ namespace gal::lang
 		{
 		public:
 			explicit key_not_found_error(const types::string_view_type key)
-				: out_of_range(std_format::format("key '{}' not found in the immutable map", key.data())) {}
+				: out_of_range(std_format::format("key '{}' not found in the immutable dict", key.data())) {}
 		};
 	}
 
 	namespace types
 	{
-		class map_type
+		class dict_type
 		{
 		public:
 			// key is immutable
@@ -55,7 +55,7 @@ namespace gal::lang
 			static const foundation::gal_type_info& class_type() noexcept
 			{
 				GAL_LANG_TYPE_INFO_DEBUG_DO_OR(constexpr,)
-				static foundation::gal_type_info type = foundation::make_type_info<map_type>();
+				static foundation::gal_type_info type = foundation::make_type_info<dict_type>();
 				return type;
 			}
 
@@ -69,24 +69,24 @@ namespace gal::lang
 		private:
 			container_type data_;
 
-			explicit map_type(container_type&& map)
+			explicit dict_type(container_type&& map)
 				: data_{std::move(map)} {}
 
 		public:
-			map_type() noexcept = default;
+			dict_type() noexcept = default;
 
-			[[nodiscard]] map_type operator+(const map_type& other) const
-			{
-				auto tmp = data_;
-				tmp.insert(other.data_.begin(), other.data_.end());
-				return map_type{std::move(tmp)};
-			}
-
-			map_type& operator+=(const map_type& other)
-			{
-				data_.insert(other.data_.begin(), other.data_.end());
-				return *this;
-			}
+			// [[nodiscard]] map_type operator+(const map_type& other) const
+			// {
+			// 	auto tmp = data_;
+			// 	tmp.insert(other.data_.begin(), other.data_.end());
+			// 	return map_type{std::move(tmp)};
+			// }
+			//
+			// map_type& operator+=(const map_type& other)
+			// {
+			// 	data_.insert(other.data_.begin(), other.data_.end());
+			// 	return *this;
+			// }
 
 			// view interface
 			[[nodiscard]] view_type view() noexcept { return view_type{data_}; }
@@ -130,4 +130,4 @@ namespace gal::lang
 	}
 }
 
-#endif // GAL_LANG_TYPES_MAP_TYPE_HPP
+#endif // GAL_LANG_TYPES_DICT_TYPE_HPP

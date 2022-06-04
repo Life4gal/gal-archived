@@ -5,6 +5,7 @@
 
 #include <gal/foundation/string.hpp>
 #include <gal/foundation/eval.hpp>
+#include <gal/foundation/string_pool.hpp>
 #include <gal/addons/ast_visitor.hpp>
 #include <gal/addons/ast_optimizer.hpp>
 #include <utils/string_utils.hpp>
@@ -550,12 +551,16 @@ namespace gal::lang::addon
 		[[no_unique_address]] ast_visitor visitor_{};
 		[[no_unique_address]] ast_optimizer optimizer_{};
 
+		foundation::string_pool_type file_contents_pool_;
+
 		parse_depth_type max_parse_depth_;
 
 		parse_depth_type current_parse_depth_;
 
 		foundation::string_view_type filename_;
 		ast::ast_node::children_type match_stack_;
+
+		GAL_LANG_DEBUG_DO(std::map<foundation::string_view_type,foundation::string_type> file_contents_;)
 
 		/**
 		 * @throw exception::eval_error if is not a valid object name
@@ -570,6 +575,8 @@ namespace gal::lang::addon
 						point_};
 			}
 		}
+
+		[[nodiscard]] foundation::string_view_type cache_string(const foundation::string_view_type string) { return file_contents_pool_.append(string); }
 
 	public:
 		[[nodiscard]] ast::ast_visitor_base& get_visitor() override { return visitor_; }
@@ -1388,100 +1395,110 @@ namespace gal::lang::addon
 
 			if (need_validate_name) { check_object_name(text); }
 
-			switch (
-				const auto text_hash = foundation::name_validator::hash_name(text);
-				text_hash)
+			// special case
+			if (const auto text_hash = foundation::name_validator::hash_name(text);
+				text_hash == foundation::name_validator::hash_name(foundation::keyword_operator_declare_name::value))
 			{
-				case foundation::name_validator::hash_name(foundation::keyword_true_name::value):
-				{
-					match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(true)));
-					break;
-				}
-				case foundation::name_validator::hash_name(foundation::keyword_false_name::value):
-				{
-					match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(false)));
-					break;
-				}
-				case foundation::name_validator::hash_name(foundation::keyword_operator_declare_name::value):
-				{
-					// since our operators are not keyword/identifiers, read_identifier will stop when they are read, so we can safely read them again.
-					const auto operator_begin = point_;
-					[[maybe_unused]] const auto result = read_operator();
-					gal_assert(result);
-					text = operator_begin.str(point_);
-					match_stack_.emplace_back(this->make_node<ast::id_ast_node>(text, begin));
-					break;
-				}
-				case foundation::name_validator::hash_name(foundation::keyword_number_inf_nan_name::subtype<0>::value):
-				{
-					match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(std::numeric_limits<double>::infinity())));
-					break;
-				}
-				case foundation::name_validator::hash_name(foundation::keyword_function_argument_placeholder_name::value):
-				{
-					match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(std::make_shared<foundation::function_argument_placeholder>())));
-					break;
-				}
-				case foundation::name_validator::hash_name(foundation::keyword_number_inf_nan_name::subtype<1>::value):
-				{
-					match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(std::numeric_limits<double>::quiet_NaN())));
-					break;
-				}
-				case foundation::name_validator::hash_name(foundation::keyword_magic_line_name::value):
-				{
-					match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(begin.point.line)));
-					break;
-				}
-				case foundation::name_validator::hash_name(foundation::keyword_magic_file_name::value):
-				{
-					match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(filename_)));
-					break;
-				}
-				case foundation::name_validator::hash_name(foundation::keyword_magic_function_name::value):
-				{
-					for (bool find_arg = false; const auto& node: match_stack_ | std::views::reverse)
-					{
-						if (node->is<ast::arg_list_ast_node>() && not find_arg) { find_arg = true; }
-						else if (node->is<ast::id_ast_node>() && find_arg)
-						{
-							match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(node->identifier())));
-							return true;
-						}
-						else { find_arg = false; }
-					}
+				// since our operators are not keyword/identifiers, read_identifier will stop when they are read, so we can safely read them again.
+				const auto operator_begin = point_;
+				[[maybe_unused]] const auto result = read_operator();
+				gal_assert(result);
+				text = operator_begin.str(point_);
+				match_stack_.emplace_back(
+						this->make_node<ast::id_ast_node>(
+								// cache the real operator
+								cache_string(text),
+								begin));
+			}
+			else
+			{
+				// cache it directly
+				text = cache_string(text);
 
-					match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(decltype(std::declval<ast::ast_node::children_type::value_type>()->identifier()){foundation::keyword_function_not_found_name::value})));
-					break;
-				}
-				case foundation::name_validator::hash_name(foundation::keyword_magic_class_name::value):
+				// default case
+				switch (text_hash)
 				{
-					for (bool find_arg = false, find_id = false; const auto& node: match_stack_ | std::views::reverse)
+					case foundation::name_validator::hash_name(foundation::keyword_true_name::value):
 					{
-						if (node->is<ast::arg_list_ast_node>() && not find_arg) { find_arg = true; }
-						else if (node->is<ast::id_ast_node>() && find_arg)
+						match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(true)));
+						break;
+					}
+					case foundation::name_validator::hash_name(foundation::keyword_false_name::value):
+					{
+						match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(false)));
+						break;
+					}
+					case foundation::name_validator::hash_name(foundation::keyword_number_inf_nan_name::subtype<0>::value):
+					{
+						match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(std::numeric_limits<double>::infinity())));
+						break;
+					}
+					case foundation::name_validator::hash_name(foundation::keyword_function_argument_placeholder_name::value):
+					{
+						match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(std::make_shared<foundation::function_argument_placeholder>())));
+						break;
+					}
+					case foundation::name_validator::hash_name(foundation::keyword_number_inf_nan_name::subtype<1>::value):
+					{
+						match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(std::numeric_limits<double>::quiet_NaN())));
+						break;
+					}
+					case foundation::name_validator::hash_name(foundation::keyword_magic_line_name::value):
+					{
+						match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(begin.point.line)));
+						break;
+					}
+					case foundation::name_validator::hash_name(foundation::keyword_magic_file_name::value):
+					{
+						match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(filename_)));
+						break;
+					}
+					case foundation::name_validator::hash_name(foundation::keyword_magic_function_name::value):
+					{
+						for (bool find_arg = false; const auto& node: match_stack_ | std::views::reverse)
 						{
-							if (find_id)
+							if (node->is<ast::arg_list_ast_node>() && not find_arg) { find_arg = true; }
+							else if (node->is<ast::id_ast_node>() && find_arg)
 							{
 								match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(node->identifier())));
 								return true;
 							}
-							find_id = true;
+							else { find_arg = false; }
 						}
-						else
-						{
-							find_arg = false;
-							find_id = false;
-						}
-					}
 
-					match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(decltype(std::declval<ast::ast_node::children_type::value_type>()->identifier()){foundation::keyword_class_not_found_name::value})));
-					break;
-				}
-				// todo: other internal magic name?
-				default:
-				{
-					match_stack_.emplace_back(this->make_node<ast::id_ast_node>(text, begin));
-					break;
+						match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(decltype(std::declval<ast::ast_node::children_type::value_type>()->identifier()){foundation::keyword_function_not_found_name::value})));
+						break;
+					}
+					case foundation::name_validator::hash_name(foundation::keyword_magic_class_name::value):
+					{
+						for (bool find_arg = false, find_id = false; const auto& node: match_stack_ | std::views::reverse)
+						{
+							if (node->is<ast::arg_list_ast_node>() && not find_arg) { find_arg = true; }
+							else if (node->is<ast::id_ast_node>() && find_arg)
+							{
+								if (find_id)
+								{
+									match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(node->identifier())));
+									return true;
+								}
+								find_id = true;
+							}
+							else
+							{
+								find_arg = false;
+								find_id = false;
+							}
+						}
+
+						match_stack_.emplace_back(this->make_node<ast::constant_ast_node>(text, begin, const_var(decltype(std::declval<ast::ast_node::children_type::value_type>()->identifier()){foundation::keyword_class_not_found_name::value})));
+						break;
+					}
+					// todo: other internal magic name?
+					default:
+					{
+						match_stack_.emplace_back(this->make_node<ast::id_ast_node>(text, begin));
+						break;
+					}
 				}
 			}
 
@@ -3107,10 +3124,10 @@ namespace gal::lang::addon
 
 	private:
 		/**
-			 * @brief Parses the given input string, tagging parsed ast_nodes with the given filename.
-			 *
-			 * @throw exception::eval_error throw from build_statements(true)
-			 */
+		 * @brief Parses the given input string, tagging parsed ast_nodes with the given filename.
+		 *
+		 * @throw exception::eval_error throw from build_statements(true)
+		 */
 		[[nodiscard]] ast::ast_node_ptr parse_internal(const foundation::string_view_type input, const foundation::string_view_type filename)
 		{
 			const auto begin = input.empty() ? nullptr : input.data();
@@ -3137,8 +3154,8 @@ namespace gal::lang::addon
 		}
 
 		/**
-			 * @throw exception::eval_error throw from parse_internal(" ")
-			 */
+		 * @throw exception::eval_error throw from parse_internal(" ")
+		 */
 		[[nodiscard]] ast::ast_node_ptr parse_instruct_eval(const foundation::string_view_type input)
 		{
 			const auto last_point = point_;
@@ -3161,8 +3178,11 @@ namespace gal::lang::addon
 
 		[[nodiscard]] ast::ast_node_ptr parse(const foundation::string_view_type input, const foundation::string_view_type filename) override
 		{
-			ast_parser p{};
-			return p.parse_internal(input, filename);
+			// ast_parser p{};
+			// return p.parse_internal(input, filename);
+
+			GAL_LANG_DEBUG_DO(file_contents_.emplace(filename, input);)
+			return parse_internal(input, filename);
 		}
 	};
 }

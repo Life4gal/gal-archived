@@ -61,32 +61,32 @@ namespace gal::lang
 			explicit list_type(const foundation::parameters_view_type list)
 				: data_{list.begin(), list.end()} {}
 
-			[[nodiscard]] list_type operator+(const list_type& other) const
-			{
-				auto tmp = data_;
-				tmp.insert(tmp.end(), other.data_.begin(), other.data_.end());
-				return list_type{std::move(tmp)};
-			}
-
-			list_type& operator+=(const list_type& other)
-			{
-				data_.insert(data_.end(), other.data_.begin(), other.data_.end());
-				return *this;
-			}
-
-			[[nodiscard]] list_type operator*(const size_type times) const
-			{
-				auto tmp = data_;
-				for (auto i = times; i != 0; --i) { tmp.insert(tmp.end(), data_.begin(), data_.end()); }
-				return list_type{std::move(tmp)};
-			}
-
-			list_type& operator*=(const size_type times)
-			{
-				const auto e = data_.end();
-				for (auto i = times; i != 0; --i) { data_.insert(data_.end(), data_.begin(), e); }
-				return *this;
-			}
+			// [[nodiscard]] list_type operator+(const list_type& other) const
+			// {
+			// 	auto tmp = data_;
+			// 	tmp.insert(tmp.end(), other.data_.begin(), other.data_.end());
+			// 	return list_type{std::move(tmp)};
+			// }
+			//
+			// list_type& operator+=(const list_type& other)
+			// {
+			// 	data_.insert(data_.end(), other.data_.begin(), other.data_.end());
+			// 	return *this;
+			// }
+			//
+			// [[nodiscard]] list_type operator*(const size_type times) const
+			// {
+			// 	auto tmp = data_;
+			// 	for (auto i = times; i != 0; --i) { tmp.insert(tmp.end(), data_.begin(), data_.end()); }
+			// 	return list_type{std::move(tmp)};
+			// }
+			//
+			// list_type& operator*=(const size_type times)
+			// {
+			// 	const auto e = data_.end();
+			// 	for (auto i = times; i != 0; --i) { data_.insert(data_.end(), data_.begin(), e); }
+			// 	return *this;
+			// }
 
 			// view interface
 			[[nodiscard]] view_type view() noexcept { return view_type{data_}; }

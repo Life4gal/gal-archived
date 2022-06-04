@@ -12,7 +12,7 @@
 #include <gal/types/range_type.hpp>
 #include <gal/types/string_type.hpp>
 #include <gal/types/list_type.hpp>
-#include <gal/types/map_type.hpp>
+#include <gal/types/dict_type.hpp>
 
 namespace gal::lang
 {
@@ -1628,7 +1628,7 @@ namespace gal::lang
 						{
 							try
 							{
-								types::map_type result{};
+								types::dict_type result{};
 
 								std::ranges::for_each(
 										this->front().view(),
