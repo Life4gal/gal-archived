@@ -52,10 +52,10 @@ def to_string(list l)
 	return s
 }
 
-def to_string(map m)
+def to_string(dict d)
 {
 	var s = "{"
-	for(var kv in m)
+	for(var kv in d)
 	{
 		s += to_string(kv.first)
 		s += ": "
@@ -79,14 +79,14 @@ def println(list l)
 	println(to_string(l))
 }
 
-def print(map m)
+def print(dict d)
 {
-	print(to_string(m))
+	print(to_string(d))
 }
 
-def println(map m)
+def println(dict d)
 {
-	println(to_string(m))
+	println(to_string(d))
 }
 
 println("hello world!")
@@ -98,13 +98,13 @@ s.push_back(42)
 println(s.is_typeof("list"))
 println(s)
 
-global m = map()
-m["hello"] = "world"
-m["answer"] = 42
-m["list"] := s
-println("m['list'] reference to s: ${m["list"].size() == s.size()}")
-println(m.is_typeof("map"))
-#println(m)
+global d = dict()
+d["hello"] = "world"
+d["answer"] = 42
+d["list"] := s
+println("d['list'] reference to s: ${d["list"].size() == s.size()}")
+println(d.is_typeof("dict"))
+# println(d)
 
 println("print ${range(0, 42, 2)}")
 for(var i in range(0, 42, 2))

@@ -1,17 +1,20 @@
 #include <gtest/gtest.h>
 
+#define GAL_LANG_NO_RECODE_CALL_LOCATION_DEBUG
+#define GAL_LANG_NO_AST_VISIT_PRINT
 #include <string>
 #include <fstream>
 #include <iostream>
 #include <utils/format.hpp>
 #include <utils/source_location.hpp>
 #include <gal/boxed_cast.hpp>
-#include <gal/foundation/boxed_number.hpp>
+#include <gal/types/number_type.hpp>
 
 #define ONLY_RECORD_CAST_EXPECT_SUCCEED_BUT_NOT
 
 using namespace gal::lang;
 using namespace foundation;
+using namespace types;
 
 template<typename T>
 void consume(T) {}
@@ -159,14 +162,14 @@ bool do_cast(
 	check_passed(run_cast<const std::reference_wrapper<const To>>(object, const_wrapped_const_ref_t));
 	check_passed(run_cast<const std::reference_wrapper<To>&>(object, const_wrapped_ref_ref_t));//
 	check_passed(run_cast<const std::reference_wrapper<const To>&>(object, const_wrapped_const_ref_ref_t));
-	check_passed(run_cast<boxed_number>(object, number_t));
-	check_passed(run_cast<const boxed_number>(object, const_number_t));
-	check_passed(run_cast<boxed_number&>(object, false));
-	check_passed(run_cast<const boxed_number&>(object, const_number_ref_t));
-	check_passed(run_cast<boxed_number*>(object, false));
-	check_passed(run_cast<const boxed_number*>(object, false));
-	check_passed(run_cast<boxed_number*const>(object, false));
-	check_passed(run_cast<const boxed_number*const>(object, false));
+	check_passed(run_cast<number_type>(object, number_t));
+	check_passed(run_cast<const number_type>(object, const_number_t));
+	check_passed(run_cast<number_type&>(object, false));
+	check_passed(run_cast<const number_type&>(object, const_number_ref_t));
+	check_passed(run_cast<number_type*>(object, false));
+	check_passed(run_cast<const number_type*>(object, false));
+	check_passed(run_cast<number_type* const>(object, false));
+	check_passed(run_cast<const number_type* const>(object, false));
 
 	if (not passed) { std::cerr << std_format::format("Errors above called from (Line: {}, Function: {})\n", location.line(), location.function_name()); }
 

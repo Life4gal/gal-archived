@@ -85,7 +85,7 @@ namespace gal::lang::foundation
 
 			file_content_type data{};
 			data.resize_and_overwrite(
-					size,
+					static_cast<std::string::size_type>(size),
 					[&file](auto* buffer, const auto count)
 					{
 						file.read(buffer, count);

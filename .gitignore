@@ -2,6 +2,10 @@
 /cmake-build-release/
 /build/
 /out/
+/ms_build/
+/ninja_build/
+/ms_install/
+/ninja_install/
 /.idea/
 /.vs/
 *.user

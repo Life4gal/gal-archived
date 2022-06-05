@@ -19,7 +19,7 @@ TEST(TestStringUtils, TestSplitInserter)
 	std::vector<std::string_view> vec{};
 	split("*"sv, bits, std::back_inserter(vec));
 
-	ASSERT_EQ(vec.size(), 5);
+	ASSERT_EQ(vec.size(), static_cast<decltype(vec.size())>(5));
 	ASSERT_EQ(vec[0], "https:");
 	ASSERT_EQ(vec[1], "//");
 	ASSERT_EQ(vec[2], "cppreference");
@@ -34,7 +34,7 @@ TEST(TestStringUtils, TestSplitContainer)
 	std::vector<std::string_view> vec{};
 	split("*"sv, bits, vec);
 
-	ASSERT_EQ(vec.size(), 5);
+	ASSERT_EQ(vec.size(), static_cast<decltype(vec.size())>(5));
 	ASSERT_EQ(vec[0], "https:");
 	ASSERT_EQ(vec[1], "//");
 	ASSERT_EQ(vec[2], "cppreference");
