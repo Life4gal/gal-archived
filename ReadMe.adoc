@@ -1,4 +1,4 @@
-= gal
+= GAL
 :toc:
 :toc-placement!:
 
@@ -6,13 +6,31 @@ toc::[]
 
 == Introduction
 
-gal language (WIP)
+**GAL** language is one of the embedded scripting language designed from the ground up to directly target C++ and take advantage of modern C++ development techniques, working with the developer how they would expect it to work. Being a native C++ application, it has some advantages over existing embedded scripting languages:
+
+. It uses a header-only approach, which makes it easy to integrate with existing projects. +
+. It maintains type safety between your C++ application and the user scripts. +
+. It supports a variety of C++ techniques including callbacks, overloaded functions, class methods, and stl containers. +
+
+== Note
+
+If you are looking for a scripting language that has always been very efficient, then GAL may not be the best choice for you. The purpose of GAL is to join the C++ coder project development in the simplest and lightest manner, reduce its development difficulty and increase the project's maintainability.
 
 == Requirements
 
-- [*] CMake v3.13+ (v3.20 for MSVC)
-- [*] A cxx compiler (defaults to MSVC)
+The GAL is written based on the pass:[C++20] standard (maybe with part of the pass:[C++23] standard code, which is difficult to change for some reason). The code for the GAL is currently only tested on MSVC, and other compilers currently (probably) fail to compile.
 
-== My Environment
+== Installation
 
-- [*] VS2022 Preview
+todo
+
+== Usage
+
+todo
+
+== Examples
+
+todo
+
+
+
