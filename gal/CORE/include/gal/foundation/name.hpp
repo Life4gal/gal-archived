@@ -79,7 +79,7 @@ namespace gal::lang::foundation
 	using keyword_lambda_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("[]");
 	// pair split {1 : "A"}, {2 : "b"}
 	using keyword_pair_splitter_name = GAL_UTILS_TEMPLATE_STRING_TYPE(":");
-	// generate a container inline [] -> empty vector / [1, 2, 3, "a", "b", "c"] -> boxed_value vector / [{1 : "A"}, {2 : "b"}] -> map
+	// generate a container inline [] -> empty list / [1, 2, 3, "a", "b", "c"] -> boxed_value list / [{1 : "A"}, {2 : "b"}] -> map
 	using keyword_inline_container_gen_name = GAL_UTILS_SYMMETRY_TEMPLATE_STRING_TYPE("[]");
 	// default result name of keyword_magic_function_name if no function found
 	using keyword_function_not_found_name = GAL_UTILS_TEMPLATE_STRING_TYPE("NOT_A_VALID_FUNCTION");

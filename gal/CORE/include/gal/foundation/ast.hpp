@@ -56,7 +56,7 @@ namespace gal::lang
 			 * @throw exception::reserved_word_error 
 			 * @throw exception::illegal_name_error
 			 */
-			static void validate_object_name(const foundation::string_view_type name)
+			static void validate_object_name(const string_view_type name)
 			{
 				if (is_reserved_name(name)) { throw exception::reserved_word_error{name}; }
 
@@ -471,7 +471,7 @@ namespace gal::lang
 				friend struct ast_node_common_base;
 
 				// for ast_node::remake_node
-				friend struct ast::ast_node;
+				friend struct ast_node;
 
 				using text_type = foundation::string_type;
 				using identifier_type = foundation::string_view_type;
@@ -493,23 +493,13 @@ namespace gal::lang
 				[[nodiscard]] constexpr bool is_any() const noexcept { return ((class_index_ == TargetNode::get_rtti_index()) || ...); }
 
 				template<has_rtti_index TargetNode>
-				[[nodiscard]] constexpr TargetNode* as() noexcept { return class_index_ == TargetNode::get_rtti_index() ? static_cast<TargetNode*>(this) : nullptr; }
+				[[nodiscard]] constexpr decltype(auto) as(this auto&& self) noexcept { return std::forward<decltype(self)>(self).class_index_ == TargetNode::get_rtti_index() ? static_cast<TargetNode*>(&std::forward<decltype(self)>(self)) : nullptr; }
 
 				template<has_rtti_index TargetNode>
-				[[nodiscard]] constexpr const TargetNode* as() const noexcept { return class_index_ == TargetNode::get_rtti_index() ? static_cast<const TargetNode*>(this) : nullptr; }
-
-				template<has_rtti_index TargetNode>
-				[[nodiscard]] constexpr TargetNode* as_no_check() noexcept
+				[[nodiscard]] constexpr decltype(auto) as_no_check(this auto&& self) noexcept
 				{
-					gal_assert(is<TargetNode>());
-					return static_cast<TargetNode*>(this);
-				}
-
-				template<has_rtti_index TargetNode>
-				[[nodiscard]] constexpr const TargetNode* as_no_check() const noexcept
-				{
-					gal_assert(is<TargetNode>());
-					return static_cast<const TargetNode*>(this);
+					gal_assert(std::forward<decltype(self)>(self).template is<TargetNode>());
+					return static_cast<TargetNode*>(&std::forward<decltype(self)>(self));
 				}
 
 				[[nodiscard]] constexpr identifier_type identifier() const noexcept { return identifier_; }
@@ -687,9 +677,7 @@ namespace gal::lang
 			}
 
 		private:
-			[[nodiscard]] constexpr auto get_unwrapped_children() { return children_ | std::views::transform([](auto& ptr) -> ast_node& { return *ptr; }); }
-
-			[[nodiscard]] constexpr auto get_unwrapped_children() const { return children_ | std::views::transform([](const auto& ptr) -> const ast_node& { return *ptr; }); }
+			[[nodiscard]] constexpr auto get_unwrapped_children(this auto&& self) { return std::forward<decltype(self)>(self).children_ | std::views::transform([](auto& ptr) -> ast_node& { return *ptr; }); }
 
 		public:
 			[[nodiscard]] children_type exchange_children(
@@ -715,78 +703,37 @@ namespace gal::lang
 
 			[[nodiscard]] constexpr bool empty() const noexcept { return children_.empty(); }
 
-			[[nodiscard]] constexpr ast_node_ptr& get_child_ptr(const children_type::size_type index) noexcept { return children_[index]; }
+			[[nodiscard]] constexpr decltype(auto) get_child_ptr(this auto&& self, const children_type::size_type index) noexcept { return std::forward<decltype(self)>(self).children_[index]; }
 
-			[[nodiscard]] constexpr const ast_node_ptr& get_child_ptr(const children_type::size_type index) const noexcept { return const_cast<ast_node&>(*this).get_child_ptr(index); }
+			[[nodiscard]] [[deprecated("Use 'get_child_ptr' to specify a more explicit meaning")]] constexpr ast_node_ptr& front_ptr(this auto&& self) noexcept { return std::forward<decltype(self)>(self).children_.front(); }
 
-			[[nodiscard]] constexpr ast_node_ptr& front_ptr() noexcept { return children_.front(); }
+			[[nodiscard]] constexpr decltype(auto) back_ptr(this auto&& self) noexcept { return std::forward<decltype(self)>(self).children_.back(); }
 
-			[[nodiscard]] constexpr const ast_node_ptr& front_ptr() const noexcept { return children_.front(); }
+			[[nodiscard]] constexpr auto view_ptr(this auto&& self) noexcept { return std::forward<decltype(self)>(self).children_ | std::views::all; }
 
-			[[nodiscard]] constexpr ast_node_ptr& back_ptr() noexcept { return children_.back(); }
+			[[nodiscard]] constexpr auto sub_view_ptr(this auto&& self, const children_type::difference_type begin, const children_type::difference_type count) noexcept { return std::forward<decltype(self)>(self).view_ptr() | std::views::drop(begin) | std::views::take(count); }
 
-			[[nodiscard]] constexpr const ast_node_ptr& back_ptr() const noexcept { return children_.back(); }
+			[[nodiscard]] constexpr auto sub_view_ptr(this auto&& self, const children_type::difference_type begin) noexcept { return std::forward<decltype(self)>(self).view_ptr() | std::views::drop(begin); }
 
-			[[nodiscard]] constexpr auto view_ptr() noexcept { return children_ | std::views::all; }
+			[[nodiscard]] constexpr auto front_view_ptr(this auto&& self, const children_type::difference_type count) noexcept { return std::forward<decltype(self)>(self).sub_view_ptr(0, count); }
 
-			[[nodiscard]] constexpr auto view_ptr() const noexcept { return children_ | std::views::all; }
+			[[nodiscard]] constexpr auto back_view_ptr(this auto&& self, const children_type::difference_type count) noexcept { return std::forward<decltype(self)>(self).view_ptr() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 
-			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin, const children_type::difference_type count) noexcept { return view_ptr() | std::views::drop(begin) | std::views::take(count); }
+			[[nodiscard]] constexpr decltype(auto) get_child(this auto&& self, const children_type::difference_type index) noexcept { return std::forward<decltype(self)>(self).get_unwrapped_children().operator[](index); }
 
-			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin, const children_type::difference_type count) const noexcept { return view_ptr() | std::views::drop(begin) | std::views::take(count); }
+			[[nodiscard]] [[deprecated("Use 'get_child' to specify a more explicit meaning")]] constexpr decltype(auto) front(this auto&& self) noexcept { return std::forward<decltype(self)>(self).get_unwrapped_children().front(); }
 
-			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin) noexcept { return view_ptr() | std::views::drop(begin); }
+			[[nodiscard]] constexpr decltype(auto) back(this auto&& self) noexcept { return std::forward<decltype(self)>(self).get_unwrapped_children().back(); }
 
-			[[nodiscard]] constexpr auto sub_view_ptr(const children_type::difference_type begin) const noexcept { return view_ptr() | std::views::drop(begin); }
+			[[nodiscard]] constexpr auto view(this auto&& self) noexcept { return std::forward<decltype(self)>(self).get_unwrapped_children(); }
 
-			[[nodiscard]] constexpr auto front_view_ptr(const children_type::difference_type count) noexcept { return sub_view_ptr(0, count); }
+			[[nodiscard]] constexpr auto sub_view(this auto&& self, const children_type::difference_type begin, const children_type::difference_type count) noexcept { return std::forward<decltype(self)>(self).view() | std::views::drop(begin) | std::views::take(count); }
 
-			[[nodiscard]] constexpr auto front_view_ptr(const children_type::difference_type count) const noexcept { return sub_view_ptr(0, count); }
+			[[nodiscard]] constexpr auto sub_view(this auto&& self, const children_type::difference_type begin) noexcept { return std::forward<decltype(self)>(self).view() | std::views::drop(begin); }
 
-			[[nodiscard]] constexpr auto back_view_ptr(const children_type::difference_type count) noexcept { return view_ptr() | std::views::reverse | std::views::take(count) | std::views::reverse; }
+			[[nodiscard]] constexpr auto front_view(this auto&& self, const children_type::difference_type count) noexcept { return std::forward<decltype(self)>(self).sub_view(0, count); }
 
-			[[nodiscard]] constexpr auto back_view_ptr(const children_type::difference_type count) const noexcept { return view_ptr() | std::views::reverse | std::views::take(count) | std::views::reverse; }
-
-			[[nodiscard]] constexpr ast_node& get_child(const children_type::difference_type index) noexcept { return get_unwrapped_children().operator[](index); }
-
-			[[nodiscard]] constexpr const ast_node& get_child(const children_type::difference_type index) const noexcept { return const_cast<ast_node&>(*this).get_child(index); }
-
-			[[nodiscard]] constexpr ast_node& front() noexcept { return get_unwrapped_children().front(); }
-
-			[[nodiscard]] constexpr const ast_node& front() const noexcept { return const_cast<ast_node&>(*this).front(); }
-
-			[[nodiscard]] constexpr ast_node& back() noexcept { return get_unwrapped_children().back(); }
-
-			[[nodiscard]] constexpr const ast_node& back() const noexcept { return const_cast<ast_node&>(*this).back(); }
-
-			// todo: begin/end returns a `new` view's begin/end each time, so comparing them will generate an error
-			// [[nodiscard]] [[deprecated("use view instead")]] constexpr auto begin() noexcept { return get_unwrapped_children().begin(); }
-
-			// [[nodiscard]] [[deprecated("use view instead")]] constexpr auto begin() const noexcept { return get_unwrapped_children().begin(); }
-
-			// [[nodiscard]] [[deprecated("use view instead")]] constexpr auto end() noexcept { return get_unwrapped_children().end(); }
-
-			// [[nodiscard]] [[deprecated("use view instead")]] constexpr auto end() const noexcept { return get_unwrapped_children().end(); }
-
-			[[nodiscard]] constexpr auto view() noexcept { return get_unwrapped_children(); }
-
-			[[nodiscard]] constexpr auto view() const noexcept { return get_unwrapped_children(); }
-
-			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin, const children_type::difference_type count) noexcept { return view() | std::views::drop(begin) | std::views::take(count); }
-
-			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin, const children_type::difference_type count) const noexcept { return view() | std::views::drop(begin) | std::views::take(count); }
-
-			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin) noexcept { return view() | std::views::drop(begin); }
-
-			[[nodiscard]] constexpr auto sub_view(const children_type::difference_type begin) const noexcept { return view() | std::views::drop(begin); }
-
-			[[nodiscard]] constexpr auto front_view(const children_type::difference_type count) noexcept { return sub_view(0, count); }
-
-			[[nodiscard]] constexpr auto front_view(const children_type::difference_type count) const noexcept { return sub_view(0, count); }
-
-			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) noexcept { return view() | std::views::reverse | std::views::take(count) | std::views::reverse; }
-
-			[[nodiscard]] constexpr auto back_view(const children_type::difference_type count) const noexcept { return view() | std::views::reverse | std::views::take(count) | std::views::reverse; }
+			[[nodiscard]] constexpr auto back_view(this auto&& self, const children_type::difference_type count) noexcept { return std::forward<decltype(self)>(self).view() | std::views::reverse | std::views::take(count) | std::views::reverse; }
 		};
 
 		struct ast_node_tracer : ast_detail::ast_node_common_base<ast_node_tracer>

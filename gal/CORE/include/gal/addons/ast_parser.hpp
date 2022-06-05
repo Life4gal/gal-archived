@@ -11,6 +11,7 @@
 #include <utils/string_utils.hpp>
 #include <utils/enum_utils.hpp>
 #include <gal/types/string_type.hpp>
+#include <gal/grammar.hpp>
 
 namespace gal::lang::addon
 {
@@ -560,7 +561,7 @@ namespace gal::lang::addon
 		foundation::string_view_type filename_;
 		ast::ast_node::children_type match_stack_;
 
-		GAL_LANG_DEBUG_DO(std::map<foundation::string_view_type,foundation::string_type> file_contents_;)
+		GAL_LANG_DEBUG_DO(std::map<foundation::string_view_type, foundation::string_type> file_contents_;)
 
 		/**
 		 * @throw exception::eval_error if is not a valid object name
@@ -1884,12 +1885,26 @@ namespace gal::lang::addon
 			}
 
 			if (const auto children_size = match_stack_.size() - prev_size;
-				(is_init_if && children_size == 3) || (not is_init_if && children_size == 2)) { match_stack_.emplace_back(ast::make_node<ast::noop_ast_node>()); }
+				// just init + cond + body
+				(is_init_if && children_size == 3) ||
+				// just cond + body
+				(not is_init_if && children_size == 2)
+			)
+			{
+				// fill a noop as 'else'
+				match_stack_.emplace_back(ast::make_node<ast::noop_ast_node>());
+			}
 
-			if (not is_init_if) { build_match<ast::if_ast_node>(prev_size); }
+			if (not is_init_if)
+			{
+				// cond + body + else
+				build_match<ast::if_ast_node>(prev_size);
+			}
 			else
 			{
+				//  cond + body + else
 				build_match<ast::if_ast_node>(prev_size + 1);
+				// init
 				build_match<ast::block_ast_node>(prev_size);
 			}
 
@@ -2095,7 +2110,7 @@ namespace gal::lang::addon
 			if (not build_any<foundation::keyword_block_begin_name>())
 			{
 				throw exception::eval_error{
-						"Incomplete 'match' expression, missing ':'",
+						"Incomplete 'match' expression, missing '{'",
 						filename_,
 						point_};
 			}
@@ -2106,6 +2121,14 @@ namespace gal::lang::addon
 			{
 				// just eat it
 				while (build_eol()) {}
+			}
+
+			if (not build_any<foundation::keyword_block_end_name>())
+			{
+				throw exception::eval_error{
+						"Incomplete 'match' expression, missing '}'",
+						filename_,
+						point_};
 			}
 
 			build_match<ast::match_ast_node>(prev_size);
@@ -2191,13 +2214,17 @@ namespace gal::lang::addon
 
 				const auto catch_prev_size = match_stack_.size();
 
-				if (not build_argument())
+				if (build_char('('))
 				{
-					throw exception::eval_error{
-							"Incomplete 'try-catch' expression",
-							filename_,
-							point_};
+					if (not(build_argument() && build_char(')')))
+					{
+						throw exception::eval_error{
+								"Incomplete 'try-catch' expression",
+								filename_,
+								point_};
+					}
 				}
+				// if no argument is required then the catch branch must be executed.
 
 				if (not build_block())
 				{
@@ -2480,7 +2507,7 @@ namespace gal::lang::addon
 			scoped_parser p{*this};
 			const auto prev_size = match_stack_.size();
 
-			if (build_symbol("&"))
+			if (build_char('&'))
 			{
 				if (not build_identifier(true)) { throw exception::eval_error{"Incomplete '&'(aka reference) expression", filename_, point_}; }
 
@@ -2514,12 +2541,12 @@ namespace gal::lang::addon
 		}
 
 		/**
-			 * @brief Reads, and identifies, a short-form container initialization from input
-			 *
-			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw exception::eval_error throw from build_container_argument_list()
-			 * @throw exception::eval_error Incomplete inline container initializer, missing closing bracket
-			 */
+		 * @brief Reads, and identifies, a short-form container initialization from input
+		 *
+		 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+		 * @throw exception::eval_error throw from build_container_argument_list()
+		 * @throw exception::eval_error Incomplete inline container initializer, missing closing bracket
+		 */
 		[[nodiscard]] bool build_inline_container()
 		{
 			scoped_parser p{*this};
@@ -2537,19 +2564,34 @@ namespace gal::lang::addon
 						point_};
 			}
 
-			if (prev_size != match_stack_.size() && not match_stack_.back()->empty() && match_stack_.back()->front().is<ast::map_pair_ast_node>()) { build_match<ast::inline_map_ast_node>(prev_size); }
-			else { build_match<ast::inline_list_ast_node>(prev_size); }
+			if (
+				// has elements as parameters
+				prev_size != match_stack_.size() &&
+				// arg_list is not empty
+				not match_stack_.back()->empty() &&
+				// the type of the elements of arg_list is pair
+				match_stack_.back()->back().is<ast::map_pair_ast_node>()
+			)
+			{
+				// build map
+				build_match<ast::inline_map_ast_node>(prev_size);
+			}
+			else
+			{
+				// build list, constructs an empty list if there are no elements.
+				build_match<ast::inline_list_ast_node>(prev_size);
+			}
 
 			return true;
 		}
 
 		/**
-			 * @brief Reads a pair of values used to create a map initialization from input
-			 *
-			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw exception::eval_error throw from build_operator()
-			 * @throw exception::eval_error Incomplete map pair, missing the second
-			 */
+		 * @brief Reads a pair of values used to create a map initialization from input
+		 *
+		 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+		 * @throw exception::eval_error throw from build_operator()
+		 * @throw exception::eval_error Incomplete map pair, missing the second
+		 */
 		[[nodiscard]] bool build_map_pair()
 		{
 			scoped_parser p{*this};
@@ -2578,14 +2620,14 @@ namespace gal::lang::addon
 		}
 
 		/**
-			 * @brief Reads a unary prefixed expression from input
-			 *
-			 * @todo need to be optimized
-			 *
-			 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
-			 * @throw exception::eval_error throw from build_operator(group_id)
-			 * @throw exception::eval_error Incomplete unary prefix expression
-			 */
+		 * @brief Reads a unary prefixed expression from input
+		 *
+		 * @todo need to be optimized
+		 *
+		 * @throw exception::eval_error throw from build_char(' ') || build_symbol(" ")
+		 * @throw exception::eval_error throw from build_operator(group_id)
+		 * @throw exception::eval_error Incomplete unary prefix expression
+		 */
 		[[nodiscard]] bool build_unary_expression()
 		{
 			scoped_parser p{*this};
@@ -2683,7 +2725,7 @@ namespace gal::lang::addon
 					}
 
 					build_match<ast::fun_call_ast_node>(prev_size);
-					// todo: Workaround for method calls until we have a better solution
+					// todo: Workaround for method calls until we have a better solution.
 					if (match_stack_.empty())
 					{
 						throw exception::eval_error{
@@ -2692,51 +2734,88 @@ namespace gal::lang::addon
 								point_};
 					}
 
-					if (auto& back = match_stack_.back();
-						back->empty())
+					// the newly generated fun_call_ast_node
+					if (const auto& check_fun_call = match_stack_.back();
+						check_fun_call->empty())
 					{
 						throw exception::eval_error{
-								"Incomplete dot access fun call",
+								"Incomplete dot access fun call, empty fun_call_ast_node",
 								filename_,
 								point_};
 					}
-					else if (back->front().is<ast::dot_access_ast_node>())
+					else if (const auto& check_dot_access = check_fun_call->get_child(grammar::fun_call_ast_node::function_index);
+						check_dot_access.is<ast::dot_access_ast_node>())
 					{
-						if (back->front().empty())
+						if (check_dot_access.empty())
 						{
 							throw exception::eval_error{
-									"Incomplete dot access fun call",
+									"Incomplete dot access fun call, empty dot_access_ast_node",
 									filename_,
 									point_};
 						}
 
-						auto dot_access = std::move(back->front_ptr());
-						auto fun_call = std::move(back);
+						// at this point, the workaround begins
+
+						/**
+						 * fun_call_ast_node =>
+						 *	0: dot_access_ast_node =>
+						 *		0: TARGET, the taget at the left of the dot('.')
+						 *		1: FUNCTION, the function at the right of the dot('.') 
+						 *	1: arg_list_ast_node	
+						 */
+
+						// extract dot_access from the newly generated fun_call_ast_node
+						auto dot_access = std::move(match_stack_.back()->get_child_ptr(grammar::fun_call_ast_node::function_index));
+						gal_assert(dot_access->size() == 2, "dot_access size unrecognized");
+						// extract the newly generated fun_call_ast_node
+						auto fun_call = std::move(match_stack_.back());
+						// pop out the moved fun_call_ast_node
 						match_stack_.pop_back();
 
 						ast::ast_node::children_type dot_access_children = dot_access->exchange_children();
 						ast::ast_node::children_type fun_call_children = fun_call->exchange_children();
 
-						fun_call_children.front().swap(dot_access_children.back());
+						// dot_access's function is the function we want to call
+						// so, swap the call
+						gal_assert(dot_access_children.size() == 2, "dot_access_children size unrecognized");
+						fun_call_children[grammar::fun_call_ast_node::function_index].swap(dot_access_children[grammar::dot_access_ast_node::function_index]);
 						dot_access_children.pop_back();
 
+						/**
+						 * fun_call_ast_node =>
+						 *	0: FUNCTION, the function at the right of the dot('.') 
+						 *	1: arg_list_ast_node
+						 *
+						 * dot_access_ast_node =>
+						 *	0: TARGET, the taget at the left of the dot('.')
+						 */
+
+						// swap the fun_call_children back
 						[[maybe_unused]] const auto ef = fun_call->exchange_children(std::move(fun_call_children));
 						gal_assert(ef.empty());
+
+						// dot_access takes over fun_call
 						dot_access_children.push_back(std::move(fun_call));
+						// swap the dot_access_children back
 						[[maybe_unused]] const auto ed = dot_access->exchange_children(std::move(dot_access_children));
 						gal_assert(ed.empty());
 
-						if (dot_access->size() != 2)
-						{
-							throw exception::eval_error{
-									"Incomplete dot access fun call",
-									filename_,
-									point_};
-						}
+						/**
+						 * dot_access_ast_node =>
+						 *	0: TARGET, the taget at the left of the dot('.')
+						 *	1: fun_call_ast_node =>
+						 *		0: FUNCTION, the function at the right of the dot('.')
+						 *		1: arg_list_ast_node
+						 */
+
+						gal_assert(dot_access->size() == 2, "dot_access size unrecognized");
+
+						// push back
 						match_stack_.emplace_back(std::move(dot_access));
 					}
 				}
 				// arr[index]
+				// todo: maybe not just index, but arg_list?
 				else if (build_any<foundation::array_access_interface_name::left_type>())
 				{
 					if (not(build_operator() && build_any<foundation::array_access_interface_name::right_type>()))
@@ -2938,7 +3017,7 @@ namespace gal::lang::addon
 			{
 				using operator_name_type = parser_detail::operator_matcher::operator_name_type;
 
-				for (constexpr std::array operators{
+				for (constexpr static std::array operators{
 						     operator_name_type{foundation::operator_assign_name::value},
 						     operator_name_type{foundation::operator_reference_assign_name::value},
 						     operator_name_type{foundation::operator_plus_assign_name::value},
@@ -2971,7 +3050,7 @@ namespace gal::lang::addon
 		/**
 		 * @brief Top level parser, starts parsing of all known parses
 		 *
-		 * @throw exception::eval_error throw from build_def() || build_if() || build_while() || build_for() || build_switch() || build_class(class_allowed) || build_try()
+		 * @throw exception::eval_error throw from build_def() || build_if() || build_while() || build_for() || build_match() || build_class(class_allowed) || build_try()
 		 * @throw exception::eval_error throw from build_equation() || build_return() || build_break() || build_continue()
 		 * @throw exception::eval_error throw from build_block() || build_eol()
 		 */

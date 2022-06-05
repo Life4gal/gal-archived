@@ -18,7 +18,7 @@ If you are looking for a scripting language that has always been very efficient,
 
 == Requirements
 
-The GAL is written based on the pass:[C++20] standard (maybe with part of the pass:[C++23] standard code, which is difficult to change for some reason). The code for the GAL is currently only tested on MSVC, and other compilers currently (probably) fail to compile.
+The GAL is written based on the pass:[C++23] standard. The code for the GAL is currently only tested on MSVC, and other compilers currently (probably) fail to compile.
 
 == Installation
 

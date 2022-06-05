@@ -20,19 +20,11 @@ add_library(
 		${PROJECT_NAME}
 )
 
-if(MSVC)
-	target_compile_features(
+target_compile_features(
 			${PROJECT_NAME}
 			INTERFACE 
 			cxx_std_23
-	)
-else()
-	target_compile_features(
-			${PROJECT_NAME}
-			INTERFACE 
-			cxx_std_20
-	)
-endif(MSVC)
+)
 
 target_link_libraries(
 			${PROJECT_NAME}

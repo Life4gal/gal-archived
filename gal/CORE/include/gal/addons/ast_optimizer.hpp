@@ -4,7 +4,7 @@
 #define GAL_LANG_EXTRA_OPTIMIZER_HPP
 
 #include <gal/foundation/ast.hpp>
-#include <vector>
+#include <gal/grammar.hpp>
 
 namespace gal::lang::addon
 {
@@ -76,20 +76,23 @@ namespace gal::lang::addon
 			{
 				if (p->is_any<ast::def_ast_node, ast::lambda_ast_node>() && not p->empty())
 				{
-					if (auto& back = p->back();
-						back.is<ast::block_ast_node>())
+					if (auto& body = p->back();
+						body.is<ast::block_ast_node>())
 					{
-						if (back.back().is<ast::return_ast_node>())
+						if (auto& ret = body.back();
+							ret.is<ast::return_ast_node>())
 						{
-							if (back.back().size() == 1)
+							// return with an operation
+							if (ret.size() == 1)
 							{
-								auto children = back.exchange_children();
+								auto children = body.exchange_children();
 
-								auto bb = std::move(back.back().front_ptr());
+								// extract this operation directly into the children of the current body (the last statement will automatically return)
+								auto bb = std::move(ret.get_child_ptr(grammar::return_ast_node::operation_index));
 								children.pop_back();
 								children.emplace_back(std::move(bb));
 
-								[[maybe_unused]] const auto result = back.exchange_children(std::move(children));
+								[[maybe_unused]] const auto result = body.exchange_children(std::move(children));
 								gal_assert(result.empty());
 							}
 						}
@@ -151,7 +154,7 @@ namespace gal::lang::addon
 				{
 					auto children = p->exchange_children();
 
-					for (decltype(children.size()) i = 0; i < children.size(); ++i) { if (children[i]->is<ast::fun_call_ast_node>()) { children[i] = std::move(*children[i]).remake_node<ast::unused_return_fun_call_ast_node>(); } }
+					for (auto& i: children) { if (i->is<ast::fun_call_ast_node>()) { i = std::move(*i).remake_node<ast::unused_return_fun_call_ast_node>(); } }
 
 					[[maybe_unused]] const auto result = p->exchange_children(std::move(children));
 					gal_assert(result.empty());
@@ -191,11 +194,11 @@ namespace gal::lang::addon
 					p->is<ast::equation_ast_node>() &&
 					p->identifier() == foundation::operator_assign_name::value &&
 					p->size() == 2 &&
-					p->front().is<ast::var_decl_ast_node>())
+					p->get_child(grammar::equation_ast_node::lhs_index).is<ast::var_decl_ast_node>())
 				{
 					auto children = p->exchange_children();
 
-					children[0] = std::move(children[0]->front_ptr());
+					children[grammar::equation_ast_node::lhs_index] = std::move(children[grammar::equation_ast_node::lhs_index]->get_child_ptr(grammar::var_decl_ast_node::index));
 
 					[[maybe_unused]] const auto result = p->exchange_children(std::move(children));
 					gal_assert(result.empty());
@@ -214,13 +217,15 @@ namespace gal::lang::addon
 				if (
 					p->is<ast::if_ast_node>() &&
 					p->size() >= 2 &&
-					p->front().is<ast::constant_ast_node>())
+					p->get_child(grammar::if_ast_node::condition_index).is<ast::constant_ast_node>())
 				{
-					if (const auto& condition = dynamic_cast<ast::constant_ast_node&>(p->front()).value;
+					if (const auto& condition = dynamic_cast<ast::constant_ast_node&>(p->get_child(grammar::if_ast_node::condition_index)).value;
+						// todo: maybe not just boolean?
 						condition.type_info().bare_equal(typeid(bool)))
 					{
-						if (boxed_cast<bool>(condition)) { return std::move(p->get_child_ptr(1)); }
-						if (p->size() == 3) { return std::move(p->get_child_ptr(2)); }
+						if (boxed_cast<bool>(condition)) { return std::move(p->get_child_ptr(grammar::if_ast_node::true_branch_index)); }
+						// condition evaluates to false
+						if (p->size() == 3) { return std::move(p->get_child_ptr(grammar::if_ast_node::false_branch_index)); }
 					}
 				}
 
@@ -235,14 +240,14 @@ namespace gal::lang::addon
 				if (
 					p->is<ast::binary_operator_ast_node>() &&
 					p->size() == 2 &&
-					not p->front().is<ast::constant_ast_node>() &&
-					p->back().is<ast::constant_ast_node>()
+					not p->get_child(grammar::binary_operator_ast_node::lhs_index).is<ast::constant_ast_node>() &&
+					p->get_child(grammar::binary_operator_ast_node::rhs_index).is<ast::constant_ast_node>()
 				)
 				{
 					if (const auto parsed = foundation::algebraic_operation(p->identifier());
 						parsed != foundation::algebraic_operations::unknown)
 					{
-						if (const auto& rhs = dynamic_cast<ast::constant_ast_node&>(p->back()).value;
+						if (const auto& rhs = dynamic_cast<ast::constant_ast_node&>(p->get_child(grammar::binary_operator_ast_node::rhs_index)).value;
 							rhs.type_info().is_arithmetic()) { return std::move(*p).remake_node<ast::fold_right_binary_operator_ast_node>(rhs); }
 					}
 				}
@@ -260,11 +265,11 @@ namespace gal::lang::addon
 				if (
 					p->is<ast::unary_operator_ast_node>() &&
 					p->size() == 1 &&
-					p->front().is<ast::constant_ast_node>()
+					p->get_child(grammar::unary_operator_ast_node::index).is<ast::constant_ast_node>()
 				)
 				{
 					const auto parsed = foundation::algebraic_operation(p->identifier(), true);
-					const auto& lhs = dynamic_cast<const ast::constant_ast_node&>(p->front()).value;
+					const auto& lhs = dynamic_cast<const ast::constant_ast_node&>(p->get_child(grammar::unary_operator_ast_node::index)).value;
 					// const auto	match  = ast::ast_node::text_type{p->identifier()}.append(p->front().identifier());
 
 					if (
@@ -279,12 +284,13 @@ namespace gal::lang::addon
 				else if (
 					p->is_any<ast::logical_and_ast_node, ast::logical_or_ast_node>() &&
 					p->size() == 2 &&
-					p->front().is<ast::constant_ast_node>() &&
-					p->back().is<ast::constant_ast_node>()
+					p->get_child(grammar::logical_and_ast_node::lhs_index).is<ast::constant_ast_node>() &&
+					p->get_child(grammar::logical_and_ast_node::rhs_index).is<ast::constant_ast_node>()
 				)
 				{
-					const auto& lhs = dynamic_cast<const ast::constant_ast_node&>(p->front()).value;
-					const auto& rhs = dynamic_cast<const ast::constant_ast_node&>(p->back()).value;
+					const auto& lhs = dynamic_cast<const ast::constant_ast_node&>(p->get_child(grammar::logical_and_ast_node::lhs_index)).value;
+					const auto& rhs = dynamic_cast<const ast::constant_ast_node&>(p->get_child(grammar::logical_and_ast_node::rhs_index)).value;
+					// todo: maybe not just boolean?
 					if (lhs.type_info().bare_equal(typeid(bool)) && rhs.type_info().bare_equal(typeid(bool)))
 					{
 						// const auto match = ast::ast_node::text_type{p->front().identifier()}.append(" ").append(p->identifier()).append(" ").append(p->back().identifier());
@@ -300,15 +306,15 @@ namespace gal::lang::addon
 				else if (
 					p->is<ast::binary_operator_ast_node>() &&
 					p->size() == 2 &&
-					p->front().is<ast::constant_ast_node>() &&
-					p->back().is<ast::constant_ast_node>()
+					p->get_child(grammar::binary_operator_ast_node::lhs_index).is<ast::constant_ast_node>() &&
+					p->get_child(grammar::binary_operator_ast_node::rhs_index).is<ast::constant_ast_node>()
 				)
 				{
 					const auto parsed = foundation::algebraic_operation(p->identifier());
 					if (parsed != foundation::algebraic_operations::unknown)
 					{
-						const auto& lhs = dynamic_cast<const ast::constant_ast_node&>(p->front()).value;
-						const auto& rhs = dynamic_cast<const ast::constant_ast_node&>(p->back()).value;
+						const auto& lhs = dynamic_cast<const ast::constant_ast_node&>(p->get_child(grammar::binary_operator_ast_node::lhs_index)).value;
+						const auto& rhs = dynamic_cast<const ast::constant_ast_node&>(p->get_child(grammar::binary_operator_ast_node::rhs_index)).value;
 						if (lhs.type_info().is_arithmetic() && rhs.type_info().is_arithmetic())
 						{
 							// const auto match = ast::ast_node::text_type{p->front().identifier()}.append(" ").append(p->identifier()).append(" ").append(p->back().identifier());
@@ -317,21 +323,22 @@ namespace gal::lang::addon
 						}
 					}
 				}
+				// conversion of numeric literals
 				else if (
 					p->is<ast::fun_call_ast_node>() &&
 					p->size() == 2 &&
-					p->front().is<ast::id_ast_node>() &&
-					p->back().is<ast::arg_list_ast_node>() &&
-					p->back().size() == 1 &&
-					p->back().front().is<ast::constant_ast_node>()
+					// p->get_child(grammar::fun_call_ast_node::function_name_index).is<ast::id_ast_node>() &&
+					// p->get_child(grammar::fun_call_ast_node::arg_list_index).is<ast::arg_list_ast_node>() &&
+					p->get_child(grammar::fun_call_ast_node::arg_list_index).size() == 1 &&
+					p->get_child(grammar::fun_call_ast_node::arg_list_index).get_child(0).is<ast::constant_ast_node>()
 				)
 				{
-					if (const auto& arg = dynamic_cast<const ast::constant_ast_node&>(p->back().front()).value;
+					if (const auto& arg = dynamic_cast<const ast::constant_ast_node&>(p->get_child(grammar::fun_call_ast_node::arg_list_index).get_child(0)).value;
 						arg.type_info().is_arithmetic())
 					{
 						// const auto match = ast::ast_node::text_type{p->front().identifier()}.append("(").append(p->back().front().identifier()).append(")");
 
-						if (const auto& name = p->front().identifier();
+						if (const auto& name = p->get_child(grammar::fun_call_ast_node::function_index).identifier();
 							name == "double") { return std::move(*p).remake_node<ast::constant_ast_node>(const_var(types::number_type{arg}.as<double>())); }
 						else if (name == "int") { return std::move(*p).remake_node<ast::constant_ast_node>(const_var(types::number_type{arg}.as<int>())); }
 						// todo: more type
