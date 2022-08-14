@@ -8,4 +8,4 @@ toc::[]
 
 The GIT record for this library is a mess, with too many ideas that shouldn't be in a commit (or don't want to be in a commit) in the record.
 
-The contents of this library will be moved to another "clean" link:https://github.com/Life4gal/gal-lang[place] to "re" start writing. :)
+The contents of this library will be moved to another "clean" link:https://github.com/Life4gal/gal-script-lang[place] to "re" start writing. :)
